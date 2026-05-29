@@ -384,21 +384,36 @@ code{font-size:11px;background:#f3f4f6;padding:2px 5px;border-radius:4px;font-fa
         <label>Hero Product</label>
         <select id="khs-hero" onchange="onKHSHeroChange()">
           <option value="">— เลือก Hero Product —</option>
-          <option value="Private Class">Private Class</option>
-          <option value="Discussion Class">Discussion Class</option>
-          <option value="Speedy English">Speedy English</option>
-          <option value="GB+:AI">GB+:AI</option>
-          <option value="GB+:LI">GB+:LI</option>
-          <option value="Engoo Standard">Engoo Standard</option>
-          <option value="Engoo Premium Lite">Engoo Premium Lite</option>
-          <option value="VPA">VPA</option>
-          <option value="VPA+">VPA+</option>
-          <option value="GECB 2 Skills">GECB 2 Skills</option>
-          <option value="GECB 4 Skills">GECB 4 Skills</option>
-          <option value="Workshop">Workshop</option>
-          <option value="Master Class">Master Class</option>
-          <option value="Business Simulation">Business Simulation</option>
-          <option value="Business Group Class">Business Group Class</option>
+          <optgroup label="── Private / Discussion / Speedy ──">
+            <option value="Private Class">Private Class [PVTK]</option>
+            <option value="Discussion Class">Discussion Class [DC]</option>
+            <option value="Speedy English">Speedy English [SPD]</option>
+          </optgroup>
+          <optgroup label="── GB+ ──">
+            <option value="GB+:AI">GB+:AI [VXAI]</option>
+            <option value="GB+:LI">GB+:LI [VXNT]</option>
+          </optgroup>
+          <optgroup label="── Engoo ──">
+            <option value="Engoo Standard">Engoo Standard [ENSD]</option>
+            <option value="Engoo Premium Lite">Engoo Premium Lite [ENPL]</option>
+          </optgroup>
+          <optgroup label="── Assessment ──">
+            <option value="VPA">VPA [VPA0]</option>
+            <option value="VPA+">VPA+ [VPA1]</option>
+            <option value="GECB 2 Skills">GECB 2 Skills [GECB]</option>
+            <option value="GECB 4 Skills">GECB 4 Skills [GECB]</option>
+          </optgroup>
+          <optgroup label="── Workshop ──">
+            <option value="Workshop Online">Workshop Online [WSOL]</option>
+            <option value="Workshop Onsite">Workshop Onsite [WSOS]</option>
+          </optgroup>
+          <optgroup label="── Class Programs ──">
+            <option value="Master Class">Master Class [MSTC]</option>
+            <option value="Business Group Class Online">Business Group Class Online [BGOL]</option>
+            <option value="Business Group Class Onsite">Business Group Class Onsite [BGOS]</option>
+            <option value="Business Simulation Online">Business Simulation Online [BSOL]</option>
+            <option value="Business Simulation Onsite">Business Simulation Onsite [BSOS]</option>
+          </optgroup>
         </select>
       </div>
       <div class="fg">
@@ -413,9 +428,19 @@ code{font-size:11px;background:#f3f4f6;padding:2px 5px;border-radius:4px;font-fa
         </select>
       </div>
     </div>
-    <div class="row c2" style="margin-bottom:0">
-      <div class="fg"><label>Qty (จำนวนคาบ / session)</label><input type="number" id="khs-qty" placeholder="18" min="1" oninput="onKHSQtyDurChange()"></div>
-      <div class="fg"><label>Duration (เดือน)</label><input type="number" id="khs-dur" placeholder="3" min="1" oninput="onKHSQtyDurChange()"></div>
+    <!-- Standard qty+dur (hidden for BGC/BizSim heroes) -->
+    <div id="khs-qty-group">
+      <div class="row c2" style="margin-bottom:0">
+        <div class="fg"><label>Qty (จำนวนคาบ / session)</label><input type="number" id="khs-qty" placeholder="18" min="1" oninput="onKHSQtyDurChange()"></div>
+        <div class="fg"><label>Duration (เดือน)</label><input type="number" id="khs-dur" placeholder="3" min="1" oninput="onKHSQtyDurChange()"></div>
+      </div>
+    </div>
+    <!-- Split Online + Onsite qty (for BGC/BizSim heroes) -->
+    <div id="khs-qty-split-group" style="display:none">
+      <div class="row c2" style="margin-bottom:0">
+        <div class="fg"><label>Qty Online (คาบ)</label><input type="number" id="khs-qty-ol" placeholder="10" min="0" value="0" oninput="onKHSQtyDurChange()"></div>
+        <div class="fg"><label>Qty Onsite (คาบ)</label><input type="number" id="khs-qty-os" placeholder="0" min="0" value="0" oninput="onKHSQtyDurChange()"></div>
+      </div>
     </div>
   </div>
 
@@ -515,19 +540,35 @@ code{font-size:11px;background:#f3f4f6;padding:2px 5px;border-radius:4px;font-fa
           <label>Hero Product *</label>
           <select id="n-hero" onchange="onAddHeroChange()">
             <option value="">— เลือก Hero Product —</option>
-            <option value="Private Class">Private Class</option>
-            <option value="Discussion Class">Discussion Class</option>
-            <option value="Speedy English">Speedy English</option>
-            <option value="GB+: AI">GB+: AI</option>
-            <option value="GB+: LI">GB+: LI</option>
-            <option value="Engoo Standard">Engoo Standard</option>
-            <option value="Engoo Premium Lite">Engoo Premium Lite</option>
-            <option value="VPA">VPA</option>
-            <option value="VPA+">VPA+</option>
-            <option value="GECB">GECB</option>
-            <option value="Workshop">Workshop</option>
-            <option value="Master Class">Master Class</option>
-            <option value="Business Group Class">Business Group Class</option>
+            <optgroup label="── Private / Discussion / Speedy ──">
+              <option value="Private Class">Private Class [PVTK]</option>
+              <option value="Discussion Class">Discussion Class [DC]</option>
+              <option value="Speedy English">Speedy English [SPD]</option>
+            </optgroup>
+            <optgroup label="── GB+ ──">
+              <option value="GB+: AI">GB+: AI [VXAI]</option>
+              <option value="GB+: LI">GB+: LI [VXNT]</option>
+            </optgroup>
+            <optgroup label="── Engoo ──">
+              <option value="Engoo Standard">Engoo Standard [ENSD]</option>
+              <option value="Engoo Premium Lite">Engoo Premium Lite [ENPL]</option>
+            </optgroup>
+            <optgroup label="── Assessment ──">
+              <option value="VPA">VPA [VPA0]</option>
+              <option value="VPA+">VPA+ [VPA1]</option>
+              <option value="GECB">GECB [GECB]</option>
+            </optgroup>
+            <optgroup label="── Workshop ──">
+              <option value="Workshop Online">Workshop Online [WSOL]</option>
+              <option value="Workshop Onsite">Workshop Onsite [WSOS]</option>
+            </optgroup>
+            <optgroup label="── Class Programs ──">
+              <option value="Master Class">Master Class [MSTC]</option>
+              <option value="Business Group Class Online">Business Group Class Online [BGOL]</option>
+              <option value="Business Group Class Onsite">Business Group Class Onsite [BGOS]</option>
+              <option value="Business Simulation Online">Business Simulation Online [BSOL]</option>
+              <option value="Business Simulation Onsite">Business Simulation Onsite [BSOS]</option>
+            </optgroup>
           </select>
         </div>
         <div class="fg">
@@ -542,12 +583,22 @@ code{font-size:11px;background:#f3f4f6;padding:2px 5px;border-radius:4px;font-fa
           </select>
         </div>
       </div>
-      <div class="row c2" style="margin-bottom:8px">
-        <div class="fg"><label>Qty (จำนวนคาบ)</label><input type="number" id="n-qty" placeholder="18" min="1" oninput="onAddHeroChange()"></div>
-        <div class="fg"><label>Duration (เดือน)</label><input type="number" id="n-dur" placeholder="3" min="0" oninput="onAddHeroChange()"></div>
+      <!-- Standard qty/dur (hidden for BGC/BizSim heroes) -->
+      <div id="n-qty-group">
+        <div class="row c2" style="margin-bottom:8px">
+          <div class="fg"><label>Qty (จำนวนคาบ)</label><input type="number" id="n-qty" placeholder="18" min="1" oninput="onAddHeroChange()"></div>
+          <div class="fg"><label>Duration (เดือน)</label><input type="number" id="n-dur" placeholder="3" min="0" oninput="onAddHeroChange()"></div>
+        </div>
+      </div>
+      <!-- Split Online + Onsite qty (for BGC/BizSim heroes) -->
+      <div id="n-qty-split-group" style="display:none">
+        <div class="row c2" style="margin-bottom:8px">
+          <div class="fg"><label>Qty Online (คาบ)</label><input type="number" id="n-qty-ol" placeholder="10" min="0" value="0" oninput="onAddHeroChange()"></div>
+          <div class="fg"><label>Qty Onsite (คาบ)</label><input type="number" id="n-qty-os" placeholder="0" min="0" value="0" oninput="onAddHeroChange()"></div>
+        </div>
       </div>
       <div class="row c1" style="margin-bottom:8px">
-        <div class="fg"><label>Supplement / รายละเอียด</label><input type="text" id="n-supp" placeholder="เช่น +DC / Onsite (Thai Coach) / 60 นาที ..."></div>
+        <div class="fg"><label>Supplement / รายละเอียด</label><input type="text" id="n-supp" placeholder="เช่น +DC / 60 นาที / ..."></div>
       </div>
 
       <!-- ② Key.S Supplementary -->
@@ -740,9 +791,9 @@ const DEFAULT_PACKAGES = [
 {id:'SPD-06-72',         hero:'Speedy English', coach:'Global',   qty:72, dur:6,  supp:'None',                band:'s', p:[6200,6200,6200,5900,5600,5300,5000],         ass:'Speedy Test: Receptive',     keyHS:'Speedy English-72-6-Asian, European and Native/72-6-0-0-HERO-0-0-0-0-0-0-0-0-0-0-0'},
 {id:'SPD-03-60-AI',      hero:'Speedy English', coach:'Global',   qty:60, dur:3,  supp:'+GB+: AI',            band:'s', p:[6900,6900,6900,6600,6300,6000,5700],         ass:'Speedy Test: Receptive',     keyHS:'Speedy English-60-3-Asian, European and Native/60-3-0-0-HERO-TRUE-0-0-0-0-0-0-0-0-0-0'},
 // ── GB+: AI ──────────────────────────────────
-{id:'VXAI-03',           hero:'GB+: AI',        coach:'None',     qty:1,  dur:3,  supp:'AI 3 เดือน',          band:'s', p:[1600,1600,1500,1500,1400,1400,1300],         ass:'VPA',                        keyHS:'GB+: AI-1-3-None/1-3-0-0-0-HERO-0-0-0-0-0-0-0-0-0-0'},
-{id:'VXAI-06',           hero:'GB+: AI',        coach:'None',     qty:1,  dur:6,  supp:'AI 6 เดือน',          band:'s', p:[2900,2900,2700,2700,2500,2500,2300],         ass:'VPA',                        keyHS:'GB+: AI-1-6-None/1-6-0-0-0-HERO-0-0-0-0-0-0-0-0-0-0'},
-{id:'VXAI-12',           hero:'GB+: AI',        coach:'None',     qty:1,  dur:12, supp:'AI 12 เดือน',         band:'s', p:[5600,5600,5200,5200,4800,4800,4200],         ass:'VPA',                        keyHS:'GB+: AI-1-12-None/1-12-0-0-0-HERO-0-0-0-0-0-0-0-0-0-0'},
+{id:'VXAI-03',           hero:'GB+: AI',        coach:'None',     qty:1,  dur:3,  supp:'None',                band:'s', p:[1600,1600,1500,1500,1400,1400,1300],         ass:'VPA',                        keyHS:'GB+: AI-1-3-None/1-3-0-0-0-HERO-0-0-0-0-0-0-0-0-0-0'},
+{id:'VXAI-06',           hero:'GB+: AI',        coach:'None',     qty:1,  dur:6,  supp:'None',                band:'s', p:[2900,2900,2700,2700,2500,2500,2300],         ass:'VPA',                        keyHS:'GB+: AI-1-6-None/1-6-0-0-0-HERO-0-0-0-0-0-0-0-0-0-0'},
+{id:'VXAI-12',           hero:'GB+: AI',        coach:'None',     qty:1,  dur:12, supp:'None',                band:'s', p:[5600,5600,5200,5200,4800,4800,4200],         ass:'VPA',                        keyHS:'GB+: AI-1-12-None/1-12-0-0-0-HERO-0-0-0-0-0-0-0-0-0-0'},
 // ── VPA ──────────────────────────────────────
 {id:'VPA',               hero:'VPA',             coach:'None',     qty:1,  dur:0,  supp:'Assessment',          band:'s', p:[800,800,800,700,700,600,600],               ass:'-',                          keyHS:'VPA-1-0-None/1-0-0-0-0-0-0-0-0-HERO-0-0-0-0-0-0'},
 // ── VPA+ ─────────────────────────────────────
@@ -751,19 +802,19 @@ const DEFAULT_PACKAGES = [
 {id:'GECB-02',           hero:'GECB',            coach:'None',     qty:1,  dur:0,  supp:'2 Skills (Receptive)', band:'s', p:[500,500,400,400,350,350,300],               ass:'-',                          keyHS:'GECB 2 Skills: Receptive-1-0-None/1-0-0-0-0-0-0-0-0-0-0-HERO-0-0-0-0'},
 {id:'GECB-04',           hero:'GECB',            coach:'None',     qty:1,  dur:0,  supp:'4 Skills (R+P)',       band:'s', p:[900,900,800,800,750,750,700],               ass:'-',                          keyHS:'GECB 4 Skills: Receptive and Productive-1-0-None/1-0-0-0-0-0-0-0-0-0-0-0-HERO-0-0-0'},
 // ── Business Group Class Onsite ──────────────
-{id:'BGOS-10', hero:'Business Group Class', coach:'Thai', qty:10, dur:0, supp:'Onsite 10 คาบ',            band:'b', p:[7800,7500,6500,6200,5700,5400,4900], ass:'PBA Onsite',      keyHS:'Business Group Class Onsite-10-0-Thai/10-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0'},
-{id:'BGOS-11', hero:'Business Group Class', coach:'Thai', qty:11, dur:0, supp:'Onsite 11 คาบ',            band:'b', p:[8500,8200,7200,6900,6400,6100,5600], ass:'PBA Onsite',      keyHS:'Business Group Class Onsite-11-0-Thai/11-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0'},
-{id:'BGOS-12', hero:'Business Group Class', coach:'Thai', qty:12, dur:0, supp:'Onsite 12 คาบ',            band:'b', p:[9000,8700,7700,7400,6900,6600,6100], ass:'PBA Onsite',      keyHS:'Business Group Class Onsite-12-0-Thai/12-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0'},
-{id:'BGOS-13', hero:'Business Group Class', coach:'Thai', qty:13, dur:0, supp:'Onsite 13 คาบ',            band:'b', p:[9300,9000,8000,7700,7200,6900,6400], ass:'PBA Onsite',      keyHS:'Business Group Class Onsite-13-0-Thai/13-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0'},
-{id:'BGOS-14', hero:'Business Group Class', coach:'Thai', qty:14, dur:0, supp:'Onsite 14 คาบ',            band:'b', p:[9500,9200,8200,7900,7400,7100,6600], ass:'PBA Onsite',      keyHS:'Business Group Class Onsite-14-0-Thai/14-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0'},
-{id:'BGOS-15', hero:'Business Group Class', coach:'Thai', qty:15, dur:0, supp:'Onsite 15 คาบ',            band:'b', p:[9900,9600,8600,8300,7800,7500,7000], ass:'PBA Onsite',      keyHS:'Business Group Class Onsite-15-0-Thai/15-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0'},
+{id:'BGOS-10', hero:'Business Group Class', coach:'Thai', qty:10, dur:0, supp:'None',                    band:'b', p:[7800,7500,6500,6200,5700,5400,4900], ass:'PBA Onsite',      keyHS:'Business Group Class Onsite-10-0-Thai/10-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0'},
+{id:'BGOS-11', hero:'Business Group Class', coach:'Thai', qty:11, dur:0, supp:'None',                    band:'b', p:[8500,8200,7200,6900,6400,6100,5600], ass:'PBA Onsite',      keyHS:'Business Group Class Onsite-11-0-Thai/11-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0'},
+{id:'BGOS-12', hero:'Business Group Class', coach:'Thai', qty:12, dur:0, supp:'None',                    band:'b', p:[9000,8700,7700,7400,6900,6600,6100], ass:'PBA Onsite',      keyHS:'Business Group Class Onsite-12-0-Thai/12-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0'},
+{id:'BGOS-13', hero:'Business Group Class', coach:'Thai', qty:13, dur:0, supp:'None',                    band:'b', p:[9300,9000,8000,7700,7200,6900,6400], ass:'PBA Onsite',      keyHS:'Business Group Class Onsite-13-0-Thai/13-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0'},
+{id:'BGOS-14', hero:'Business Group Class', coach:'Thai', qty:14, dur:0, supp:'None',                    band:'b', p:[9500,9200,8200,7900,7400,7100,6600], ass:'PBA Onsite',      keyHS:'Business Group Class Onsite-14-0-Thai/14-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0'},
+{id:'BGOS-15', hero:'Business Group Class', coach:'Thai', qty:15, dur:0, supp:'None',                    band:'b', p:[9900,9600,8600,8300,7800,7500,7000], ass:'PBA Onsite',      keyHS:'Business Group Class Onsite-15-0-Thai/15-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0'},
 // ── Business Group Class Online ──────────────
-{id:'BGOL-10', hero:'Business Group Class', coach:'Thai', qty:10, dur:0, supp:'Online 10 คาบ',            band:'b', p:[3900,3600,2600,2400,1900,1700,1500], ass:'PBA Online',      keyHS:'Business Group Class Online-10-0-Thai/10-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0'},
-{id:'BGOL-11', hero:'Business Group Class', coach:'Thai', qty:11, dur:0, supp:'Online 11 คาบ',            band:'b', p:[4200,3900,2900,2700,2200,2000,1800], ass:'PBA Online',      keyHS:'Business Group Class Online-11-0-Thai/11-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0'},
-{id:'BGOL-12', hero:'Business Group Class', coach:'Thai', qty:12, dur:0, supp:'Online 12 คาบ',            band:'b', p:[4600,4300,3300,3100,2600,2400,2200], ass:'PBA Online',      keyHS:'Business Group Class Online-12-0-Thai/12-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0'},
-{id:'BGOL-13', hero:'Business Group Class', coach:'Thai', qty:13, dur:0, supp:'Online 13 คาบ',            band:'b', p:[4900,4600,3600,3400,2900,2700,2500], ass:'PBA Online',      keyHS:'Business Group Class Online-13-0-Thai/13-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0'},
-{id:'BGOL-14', hero:'Business Group Class', coach:'Thai', qty:14, dur:0, supp:'Online 14 คาบ',            band:'b', p:[5300,5000,4000,3800,3300,3100,2900], ass:'PBA Online',      keyHS:'Business Group Class Online-14-0-Thai/14-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0'},
-{id:'BGOL-15', hero:'Business Group Class', coach:'Thai', qty:15, dur:0, supp:'Online 15 คาบ',            band:'b', p:[5600,5300,4300,4100,3600,3400,2900], ass:'PBA Online',      keyHS:'Business Group Class Online-15-0-Thai/15-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0'},
+{id:'BGOL-10', hero:'Business Group Class', coach:'Thai', qty:10, dur:0, supp:'None',                    band:'b', p:[3900,3600,2600,2400,1900,1700,1500], ass:'PBA Online',      keyHS:'Business Group Class Online-10-0-Thai/10-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0'},
+{id:'BGOL-11', hero:'Business Group Class', coach:'Thai', qty:11, dur:0, supp:'None',                    band:'b', p:[4200,3900,2900,2700,2200,2000,1800], ass:'PBA Online',      keyHS:'Business Group Class Online-11-0-Thai/11-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0'},
+{id:'BGOL-12', hero:'Business Group Class', coach:'Thai', qty:12, dur:0, supp:'None',                    band:'b', p:[4600,4300,3300,3100,2600,2400,2200], ass:'PBA Online',      keyHS:'Business Group Class Online-12-0-Thai/12-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0'},
+{id:'BGOL-13', hero:'Business Group Class', coach:'Thai', qty:13, dur:0, supp:'None',                    band:'b', p:[4900,4600,3600,3400,2900,2700,2500], ass:'PBA Online',      keyHS:'Business Group Class Online-13-0-Thai/13-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0'},
+{id:'BGOL-14', hero:'Business Group Class', coach:'Thai', qty:14, dur:0, supp:'None',                    band:'b', p:[5300,5000,4000,3800,3300,3100,2900], ass:'PBA Online',      keyHS:'Business Group Class Online-14-0-Thai/14-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0'},
+{id:'BGOL-15', hero:'Business Group Class', coach:'Thai', qty:15, dur:0, supp:'None',                    band:'b', p:[5600,5300,4300,4100,3600,3400,2900], ass:'PBA Online',      keyHS:'Business Group Class Online-15-0-Thai/15-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0'},
 // ── Business Group Class Hybrid ───────────────
 {id:'BGHB-5+5',  hero:'Business Group Class', coach:'Thai', qty:10, dur:0, supp:'Hybrid OL5+OS5 (10 คาบ)',  band:'b', p:[6200,5900,4900,4600,4100,3800,3500], ass:'PBA Online+Onsite', keyHS:'Business Group Class Hybrid OL5+OS5-10-0-Thai/10-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0'},
 {id:'BGHB-12+3', hero:'Business Group Class', coach:'Thai', qty:15, dur:0, supp:'Hybrid OL12+OS3 (15 คาบ)', band:'b', p:[6900,6600,5600,5300,4800,4500,4200], ass:'PBA Online+Onsite', keyHS:'Business Group Class Hybrid OL12+OS3-15-0-Thai/15-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0'},
@@ -807,6 +858,7 @@ const PROD_TYPES = [
   {k:'GECB',                 ico:'📝', lbl:'GECB',                  sub:'Assessment'},
   {k:'VPA',                  ico:'📋', lbl:'VPA',                   sub:'Assessment'},
   {k:'VPA+',                 ico:'📊', lbl:'VPA+',                  sub:'Placement Test'},
+  {k:'Business Simulation',  ico:'💼', lbl:'Business Simulation',   sub:'Simulation Class'},
 ];
 
 const BADGE = {
@@ -1339,27 +1391,48 @@ function renderPkgList() {
 function editPkg(id) {
   const pkg = PKGS.find(p => p.id === id);
   if (!pkg) return;
+  const isPerClass = pkg.unit === 'per class';
   const bands = pkg.band === 'b' ? BB : BS;
   document.getElementById('edit-modal-title').textContent = `✏️ แก้ไขราคา: ${pkg.id}`;
+
+  const priceSection = isPerClass ? `
+    <div style="font-size:12px;font-weight:600;color:var(--gray-700);margin-bottom:8px">
+      ราคา per class &amp; จำนวนผู้เรียน
+    </div>
+    <div class="price-grid">
+      <div class="fg" style="grid-column:span 4">
+        <label>ราคา / class (฿)</label>
+        <input type="number" id="edit-p-flat" value="${pkg.p[0]||0}">
+      </div>
+      <div class="fg" style="grid-column:span 2">
+        <label>Min Learner (คน)</label>
+        <input type="number" id="edit-p-min" value="${pkg.minN||''}" placeholder="ไม่กำหนด" min="1">
+      </div>
+      <div class="fg" style="grid-column:span 2">
+        <label>Max Learner (คน)</label>
+        <input type="number" id="edit-p-max" value="${pkg.maxN||''}" placeholder="ไม่กำหนด" min="1">
+      </div>
+    </div>` : `
+    <div style="font-size:12px;font-weight:600;color:var(--gray-700);margin-bottom:8px">
+      ราคาตาม Pricing Band (${bands.map(b => `${b}+`).join(' / ')})
+    </div>
+    <div class="price-grid">
+      ${bands.map((b, i) => `
+        <div class="fg">
+          <label>${b}+ คน</label>
+          <input type="number" id="edit-p-${i}" value="${pkg.p[i]||0}">
+        </div>`).join('')}
+    </div>`;
+
   document.getElementById('edit-modal-body').innerHTML = `
     <input type="hidden" id="edit-pkg-id" value="${pkg.id}">
     <div class="info" style="margin-bottom:14px">
-      <strong>${pkg.hero}</strong> · ${pkg.supp} · Coach: ${pkg.coach}
-      ${pkg.unit === 'per class' ? ' · <span class="badge b-perclass">per class</span>' : ''}
+      <strong>${pkg.hero}</strong> · ${pkg.supp} · Coach: ${pkg.coach}${isPerClass ? ' · <span class="badge b-perclass">per class</span>' : ''}
     </div>
     <div class="warn" style="margin-bottom:14px;font-size:12px">
       💡 แก้ไขได้เฉพาะ<strong>ราคา</strong> — หากต้องการแก้ข้อมูลอื่น ให้ <strong>Export JSON → แก้ไข → Import</strong> กลับเข้าระบบ
     </div>
-    <div style="font-size:12px;font-weight:600;color:var(--gray-700);margin-bottom:8px">
-      ราคาตาม Pricing Band (${bands.map((b,i) => `${b}+`).join(' / ')})
-    </div>
-    <div class="price-grid">
-      ${bands.map((b,i) => `
-        <div class="fg">
-          <label>${b}+${pkg.band==='b'?' คน':' คน'}</label>
-          <input type="number" id="edit-p-${i}" value="${pkg.p[i]||0}">
-        </div>`).join('')}
-    </div>`;
+    ${priceSection}`;
   document.getElementById('edit-modal').style.display = 'flex';
 }
 
@@ -1371,9 +1444,19 @@ function saveEdit() {
   const id  = document.getElementById('edit-pkg-id').value;
   const pkg = PKGS.find(p => p.id === id);
   if (!pkg) return;
-  // Price only
-  const bands = pkg.band === 'b' ? BB : BS;
-  pkg.p = bands.map((_, i) => parseInt(document.getElementById(`edit-p-${i}`)?.value) || 0);
+
+  if (pkg.unit === 'per class') {
+    const flat = parseInt(document.getElementById('edit-p-flat')?.value) || 0;
+    pkg.p = Array(7).fill(flat);
+    const minN = parseInt(document.getElementById('edit-p-min')?.value) || 0;
+    const maxN = parseInt(document.getElementById('edit-p-max')?.value) || 0;
+    if (minN) pkg.minN = minN; else delete pkg.minN;
+    if (maxN) pkg.maxN = maxN; else delete pkg.maxN;
+  } else {
+    const bands = pkg.band === 'b' ? BB : BS;
+    pkg.p = bands.map((_, i) => parseInt(document.getElementById(`edit-p-${i}`)?.value) || 0);
+  }
+
   closeEditModal();
   renderPkgList();
   renderStats();
@@ -1456,14 +1539,43 @@ function initSurchargeCfgInputs() {
   });
 }
 
-// Hero → Key.S position for the Add Package form (uses actual hero names from PKGS data)
+// ─── Add Package Form Constants ───────────────────────────────────────────────
+
+// Hero display name (dropdown value) → Key.S position (null = no HERO slot)
 const ADD_HERO_POS = {
   'Private Class':2, 'Discussion Class':3, 'Speedy English':4,
   'GB+: AI':5, 'GB+: LI':6, 'Engoo Standard':7, 'Engoo Premium Lite':8,
   'VPA':9, 'VPA+':10, 'GECB':11,
-  'Workshop':13, 'Master Class':14,
-  'Business Group Class':null
+  'Workshop Online':13, 'Workshop Onsite':13, 'Master Class':14,
+  'Business Group Class Online':null, 'Business Group Class Onsite':null,
+  'Business Simulation Online':15, 'Business Simulation Onsite':15,
 };
+
+// Hero display name → Package ID prefix code
+const HERO_CODE = {
+  'Private Class':'PVTK', 'Discussion Class':'DC', 'Speedy English':'SPD',
+  'GB+: AI':'VXAI', 'GB+: LI':'VXNT',
+  'Engoo Standard':'ENSD', 'Engoo Premium Lite':'ENPL',
+  'VPA':'VPA0', 'VPA+':'VPA1', 'GECB':'GECB',
+  'Workshop Online':'WSOL', 'Workshop Onsite':'WSOS', 'Master Class':'MSTC',
+  'Business Group Class Online':'BGOL', 'Business Group Class Onsite':'BGOS',
+  'Business Simulation Online':'BSOL', 'Business Simulation Onsite':'BSOS',
+};
+
+// Hero display name → hero value stored in PKGS
+const HERO_DATA_NAME = {
+  'Workshop Online':'Workshop', 'Workshop Onsite':'Workshop',
+  'Business Group Class Online':'Business Group Class',
+  'Business Group Class Onsite':'Business Group Class',
+  'Business Simulation Online':'Business Simulation',
+  'Business Simulation Onsite':'Business Simulation',
+};
+
+// Hero groups for special behavior
+const WS_HEROES  = new Set(['Workshop Online','Workshop Onsite']);
+const BGC_HEROES = new Set(['Business Group Class Online','Business Group Class Onsite',
+                             'Business Simulation Online','Business Simulation Onsite']);
+const PER_CLASS_FORCE = new Set(['Workshop Online','Workshop Onsite','Master Class']);
 
 // Derive coach label from region string
 const REGION_TO_COACH = {
@@ -1471,11 +1583,53 @@ const REGION_TO_COACH = {
   'None':'None', 'Thai':'Thai', 'Asian':'Asian', 'Native':'Native'
 };
 
+function _setAddFieldLocked(id, locked, val) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (locked) { el.value = val !== undefined ? val : el.value; el.disabled = true; }
+  else        { el.disabled = false; }
+}
+
 function onAddHeroChange() {
   const hero    = document.getElementById('n-hero')?.value || '';
   const heroPos = (hero !== '' && Object.prototype.hasOwnProperty.call(ADD_HERO_POS, hero))
                   ? ADD_HERO_POS[hero] : -1;
-  // HERO badges for [2]–[15]
+
+  const isWS          = WS_HEROES.has(hero);
+  const isBGC         = BGC_HEROES.has(hero);
+  const isPerClassFrc = PER_CLASS_FORCE.has(hero);
+
+  // ── Lock Coach Region to Thai for WS / BGC heroes ──
+  const regionEl = document.getElementById('n-region');
+  if (regionEl) {
+    if (isWS || isBGC) { regionEl.value = 'Thai'; regionEl.disabled = true; }
+    else               { regionEl.disabled = false; }
+  }
+
+  // ── Show standard qty+dur group vs split online+onsite group ──
+  const qtyGroup  = document.getElementById('n-qty-group');
+  const splitGroup = document.getElementById('n-qty-split-group');
+  if (qtyGroup)   qtyGroup.style.display   = isBGC ? 'none' : '';
+  if (splitGroup) splitGroup.style.display = isBGC ? ''     : 'none';
+
+  // ── Lock qty=1, dur=0 for WS heroes ──
+  if (isWS) {
+    _setAddFieldLocked('n-qty', true, 1);
+    _setAddFieldLocked('n-dur', true, 0);
+  } else if (!isBGC) {
+    _setAddFieldLocked('n-qty', false);
+    _setAddFieldLocked('n-dur', false);
+  }
+
+  // ── Lock unit selector based on hero type ──
+  const unitEl = document.getElementById('n-unit');
+  if (unitEl) {
+    if (isPerClassFrc) { unitEl.value = 'per class'; unitEl.disabled = true; }
+    else if (isBGC)    { unitEl.value = '';           unitEl.disabled = true; }
+    else               { unitEl.disabled = false; }
+  }
+
+  // ── HERO badges for Key.S positions [2]–[15] ──
   for (let i = 2; i <= 15; i++) {
     const inp   = document.getElementById(`n-ks-${i}`);
     const badge = document.getElementById(`n-ks-h-${i}`);
@@ -1483,33 +1637,69 @@ function onAddHeroChange() {
     if (heroPos === i) { inp.style.display = 'none'; badge.style.display = ''; }
     else               { inp.style.display = '';     badge.style.display = 'none'; }
   }
+
+  // ── Auto-fill Package ID ──
+  _autoFillPkgId(hero);
+
   updateAddPkgPriceGrid();
   buildAddPkgKHS();
 }
 
-function updateAddPkgPriceGrid() {
-  const hero  = document.getElementById('n-hero')?.value || '';
-  const unit  = document.getElementById('n-unit')?.value || '';
-  const isBGC = hero === 'Business Group Class';
-  const grid  = document.getElementById('n-price-grid');
-  const lbl   = document.getElementById('n-price-band-label');
+function _autoFillPkgId(hero) {
+  const idEl = document.getElementById('n-id');
+  if (!idEl || !hero) return;
+  const code = HERO_CODE[hero] || '';
+  if (!code) return;
 
-  if (unit === 'per class') {
-    if (lbl) lbl.innerHTML = '💡 กรอกราคาต่อคลาสและจำนวนผู้เรียน Min / Max';
+  if (WS_HEROES.has(hero)) {
+    idEl.value = `${code}-NULL-1`;
+    return;
+  }
+
+  if (BGC_HEROES.has(hero)) {
+    const ol       = parseInt(document.getElementById('n-qty-ol')?.value) || 0;
+    const os       = parseInt(document.getElementById('n-qty-os')?.value) || 0;
+    const isBizSim = hero.startsWith('Business Simulation');
+    const pfxOL    = isBizSim ? 'BSOL' : 'BGOL';
+    const pfxOS    = isBizSim ? 'BSOS' : 'BGOS';
+    const pfxHB    = isBizSim ? 'BSHB' : 'BGHB';
+    if (ol > 0 && os > 0)     idEl.value = `${pfxHB}-NULL-${ol}+${os}`;
+    else if (ol > 0)          idEl.value = `${pfxOL}-NULL-${ol}`;
+    else if (os > 0)          idEl.value = `${pfxOS}-NULL-${os}`;
+    else                      idEl.value = `${code}-NULL-0`;
+    return;
+  }
+
+  // Standard hero: [code]-[dur 2-digit]-[qty]
+  const dur = parseInt(document.getElementById('n-dur')?.value) || 0;
+  const qty = parseInt(document.getElementById('n-qty')?.value) || 0;
+  const durStr = String(dur).padStart(2, '0');
+  idEl.value = `${code}-${durStr}-${qty}`;
+}
+
+function updateAddPkgPriceGrid() {
+  const hero       = document.getElementById('n-hero')?.value || '';
+  const unit       = document.getElementById('n-unit')?.value || '';
+  const isPerCls   = PER_CLASS_FORCE.has(hero) || unit === 'per class';
+  const isBGC      = BGC_HEROES.has(hero);
+  const grid       = document.getElementById('n-price-grid');
+  const lbl        = document.getElementById('n-price-band-label');
+  if (!grid) return;
+
+  if (isPerCls) {
+    if (lbl) lbl.innerHTML = '💡 กรอกราคาต่อคลาส และจำนวนผู้เรียน Min / Max';
     grid.innerHTML = `
       <div class="fg"><label>ราคา / class (฿)</label><input type="number" id="np-flat" placeholder="28000" min="0" oninput="buildAddPkgKHS()"></div>
       <div class="fg"><label>Min Learner</label><input type="number" id="np-min" placeholder="5" min="1" oninput="buildAddPkgKHS()"></div>
       <div class="fg"><label>Max Learner</label><input type="number" id="np-max" placeholder="30" min="1" oninput="buildAddPkgKHS()"></div>`;
   } else if (isBGC) {
-    const bands = BB; // [10,15,20,25,30,35,40]
-    if (lbl) lbl.innerHTML = `💡 BGC Pricing Band — Min Learner: ${bands.join(' · ')}`;
-    grid.innerHTML = bands.map(b =>
+    if (lbl) lbl.innerHTML = `💡 BGC/BizSim Pricing Band (BB) — Min Learner: ${BB.join(' · ')}`;
+    grid.innerHTML = BB.map(b =>
       `<div class="fg"><label>${b}+ คน</label><input type="number" id="np-${b}" placeholder="0" min="0" oninput="buildAddPkgKHS()"></div>`
     ).join('');
   } else {
-    const bands = BS; // [5,11,21,51,101,201,501]
-    if (lbl) lbl.innerHTML = `💡 Standard Pricing Band — Min Learner: ${bands.join(' · ')}`;
-    grid.innerHTML = bands.map(b =>
+    if (lbl) lbl.innerHTML = `💡 Standard Pricing Band (BS) — Min Learner: ${BS.join(' · ')}`;
+    grid.innerHTML = BS.map(b =>
       `<div class="fg"><label>${b}+ คน</label><input type="number" id="np-${b}" placeholder="0" min="0" oninput="buildAddPkgKHS()"></div>`
     ).join('');
   }
@@ -1517,26 +1707,34 @@ function updateAddPkgPriceGrid() {
 }
 
 function buildAddPkgKHS() {
-  const hero   = document.getElementById('n-hero')?.value   || '';
-  const region = document.getElementById('n-region')?.value || '';
-  const qty    = document.getElementById('n-qty')?.value    || '0';
-  const dur    = document.getElementById('n-dur')?.value    || '0';
+  const hero    = document.getElementById('n-hero')?.value   || '';
+  const region  = document.getElementById('n-region')?.value || '';
   const preview = document.getElementById('n-khs-preview');
   if (!hero || !preview) return;
 
+  const isBGC  = BGC_HEROES.has(hero);
   const heroPos = (hero !== '' && Object.prototype.hasOwnProperty.call(ADD_HERO_POS, hero))
                   ? ADD_HERO_POS[hero] : -1;
+
+  let ol = 0, os = 0, qty, dur;
+  if (isBGC) {
+    ol  = parseInt(document.getElementById('n-qty-ol')?.value) || 0;
+    os  = parseInt(document.getElementById('n-qty-os')?.value) || 0;
+    qty = ol + os; dur = 0;
+  } else {
+    qty = parseInt(document.getElementById('n-qty')?.value) || 0;
+    dur = parseInt(document.getElementById('n-dur')?.value) || 0;
+  }
+
   const ks = [qty, dur];
   for (let i = 2; i <= 15; i++) {
     if (heroPos === i) { ks.push('HERO'); continue; }
     const el = document.getElementById(`n-ks-${i}`);
-    const v  = el ? el.value.trim() : '';
-    ks.push(v !== '' ? v : '0');
+    ks.push(el ? (el.value.trim() || '0') : '0');
   }
-  const matchId = `${hero}-${qty}-${dur}-${region}`;
-  const keyS    = ks.join('-');
-  const keyHS   = `${matchId}/${keyS}`;
 
+  const matchId = `${_matchHeroLabel(hero, ol, os)}-${qty}-${dur}-${region}`;
+  const keyHS   = `${matchId}/${ks.join('-')}`;
   preview.innerHTML = `
     <div class="khs-output-box" style="padding:9px 11px">
       <div class="khs-output-label" style="font-size:9px">🔑 Key.H.S Preview</div>
@@ -1549,48 +1747,62 @@ function initPriceGrid() {
 }
 
 function addPkg() {
-  const id    = document.getElementById('n-id').value.trim();
-  const hero  = document.getElementById('n-hero').value;
+  const id     = document.getElementById('n-id').value.trim();
+  const hero   = document.getElementById('n-hero').value;
   const region = document.getElementById('n-region')?.value || 'Asian, European and Native';
-  const dur   = parseInt(document.getElementById('n-dur').value) || 0;
-  const qty   = parseInt(document.getElementById('n-qty').value) || 1;
-  const supp  = document.getElementById('n-supp').value.trim() || 'None';
-  const ass   = document.getElementById('n-assess').value.trim() || '-';
-  const unit  = document.getElementById('n-unit')?.value || '';
-  const coach = REGION_TO_COACH[region] || 'Global';
-  const isBGC = hero === 'Business Group Class';
-  const band  = isBGC ? 'b' : 's';
+  const supp   = document.getElementById('n-supp').value.trim() || 'None';
+  const ass    = document.getElementById('n-assess').value.trim() || '-';
+  const unit   = document.getElementById('n-unit')?.value || '';
+  const coach  = REGION_TO_COACH[region] || 'Global';
 
   if (!id)  { toast('❌ กรุณากรอก Package ID'); return; }
   if (!hero){ toast('❌ กรุณาเลือก Hero Product'); return; }
   if (PKGS.find(p => p.id === id)) { toast('❌ Package ID นี้มีอยู่แล้ว'); return; }
 
-  // Build price array
-  let prices = [];
-  if (unit === 'per class') {
-    const flat = parseInt(document.getElementById('np-flat')?.value) || 0;
-    prices = [flat, flat, flat, flat, flat, flat, flat];
+  const isWS          = WS_HEROES.has(hero);
+  const isBGC         = BGC_HEROES.has(hero);
+  const isPerClassFrc = PER_CLASS_FORCE.has(hero);
+  const heroDataName  = HERO_DATA_NAME[hero] || hero;
+  const heroPos       = (hero !== '' && Object.prototype.hasOwnProperty.call(ADD_HERO_POS, hero))
+                        ? ADD_HERO_POS[hero] : -1;
+  const band          = isBGC ? 'b' : 's';
+
+  let ol = 0, os = 0, qty, dur;
+  if (isBGC) {
+    ol  = parseInt(document.getElementById('n-qty-ol')?.value) || 0;
+    os  = parseInt(document.getElementById('n-qty-os')?.value) || 0;
+    qty = ol + os; dur = 0;
   } else {
-    const bands = isBGC ? BB : BS;
-    prices = bands.map(b => parseInt(document.getElementById('np-' + b)?.value) || 0);
+    dur = parseInt(document.getElementById('n-dur')?.value) || 0;
+    qty = parseInt(document.getElementById('n-qty')?.value) || 1;
+  }
+
+  const effectivePerClass = isPerClassFrc || unit === 'per class';
+
+  // Build price array
+  let prices;
+  if (effectivePerClass) {
+    const flat = parseInt(document.getElementById('np-flat')?.value) || 0;
+    prices = Array(7).fill(flat);
+  } else if (isBGC) {
+    prices = BB.map(b => parseInt(document.getElementById('np-' + b)?.value) || 0);
+  } else {
+    prices = BS.map(b => parseInt(document.getElementById('np-' + b)?.value) || 0);
   }
 
   // Build keyHS
-  const heroPos = (hero !== '' && Object.prototype.hasOwnProperty.call(ADD_HERO_POS, hero))
-                  ? ADD_HERO_POS[hero] : -1;
   const ks = [qty, dur];
   for (let i = 2; i <= 15; i++) {
     if (heroPos === i) { ks.push('HERO'); continue; }
     const el = document.getElementById(`n-ks-${i}`);
-    const v  = el ? el.value.trim() : '';
-    ks.push(v !== '' ? v : '0');
+    ks.push(el ? (el.value.trim() || '0') : '0');
   }
-  const matchId = `${hero}-${qty}-${dur}-${region}`;
+  const matchId = `${_matchHeroLabel(hero, ol, os)}-${qty}-${dur}-${region}`;
   const keyHS   = `${matchId}/${ks.join('-')}`;
 
-  const newPkg = { id, hero, coach, qty, dur, supp, band, p: prices, ass, keyHS };
-  if (unit) newPkg.unit = unit;
-  if (unit === 'per class') {
+  const newPkg = { id, hero: heroDataName, coach, qty, dur, supp, band, p: prices, ass, keyHS };
+  if (effectivePerClass) {
+    newPkg.unit = 'per class';
     const minN = parseInt(document.getElementById('np-min')?.value) || 0;
     const maxN = parseInt(document.getElementById('np-max')?.value) || 0;
     if (minN) newPkg.minN = minN;
@@ -1598,18 +1810,22 @@ function addPkg() {
   }
 
   PKGS.push(newPkg);
-  // Clear form
-  ['n-id','n-dur','n-qty','n-supp','n-assess'].forEach(i => {
-    const el = document.getElementById(i); if (el) el.value = '';
-  });
-  document.getElementById('n-hero').value = '';
-  document.getElementById('n-unit').value = '';
+
+  // ── Clear & reset form ──
+  ['n-id','n-supp','n-assess'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
+  ['n-qty','n-dur'].forEach(id => { const e = document.getElementById(id); if (e) { e.value = ''; e.disabled = false; } });
+  ['n-qty-ol','n-qty-os'].forEach(id => { const e = document.getElementById(id); if (e) e.value = '0'; });
+  const heroEl = document.getElementById('n-hero'); if (heroEl) heroEl.value = '';
+  const unitEl = document.getElementById('n-unit'); if (unitEl) { unitEl.value = ''; unitEl.disabled = false; }
+  const regEl  = document.getElementById('n-region'); if (regEl) { regEl.value = 'Asian, European and Native'; regEl.disabled = false; }
+
   onAddHeroChange();
-  document.getElementById('n-khs-preview').innerHTML = '';
+  const previewEl = document.getElementById('n-khs-preview'); if (previewEl) previewEl.innerHTML = '';
+
   renderStats();
   renderPkgList();
-  if (ST.type === hero) {
-    const idx = PROD_TYPES.findIndex(p => p.k === hero);
+  if (ST.type === heroDataName) {
+    const idx = PROD_TYPES.findIndex(p => p.k === heroDataName);
     if (idx >= 0) selectType(idx);
   }
   toast(`✅ เพิ่ม ${id} สำเร็จ!`);
@@ -1663,38 +1879,79 @@ function resetData() {
 // ─────────────────────────────────────────────
 // KEY.H.S GENERATOR
 // ─────────────────────────────────────────────
-// Hero Product → Key.S position (null = no HERO slot, e.g. BGC)
+// Hero Product → Key.S position (null = no HERO slot)
 const HERO_POS = {
   'Private Class':2, 'Discussion Class':3, 'Speedy English':4,
   'GB+:AI':5, 'GB+:LI':6, 'Engoo Standard':7, 'Engoo Premium Lite':8,
   'VPA':9, 'VPA+':10, 'GECB 2 Skills':11, 'GECB 4 Skills':12,
-  'Workshop':13, 'Master Class':14, 'Business Simulation':15,
-  'Business Group Class':null
+  'Workshop Online':13, 'Workshop Onsite':13, 'Master Class':14,
+  'Business Group Class Online':null, 'Business Group Class Onsite':null,
+  'Business Simulation Online':15, 'Business Simulation Onsite':15,
 };
+
+// KHS Generator hero sets for special behavior
+const KHS_WS_HEROES  = new Set(['Workshop Online','Workshop Onsite']);
+const KHS_BGC_HEROES = new Set(['Business Group Class Online','Business Group Class Onsite',
+                                 'Business Simulation Online','Business Simulation Onsite']);
 
 function onKHSHeroChange() {
   const hero    = document.getElementById('khs-hero')?.value || '';
   const heroPos = (hero !== '' && Object.prototype.hasOwnProperty.call(HERO_POS, hero))
                   ? HERO_POS[hero] : -1;
-  // Show/hide HERO badges for positions 2–15
+
+  const isWS  = KHS_WS_HEROES.has(hero);
+  const isBGC = KHS_BGC_HEROES.has(hero);
+
+  // ── Lock Coach Region to Thai for WS / BGC heroes ──
+  const regionEl = document.getElementById('khs-region');
+  if (regionEl) {
+    if (isWS || isBGC) { regionEl.value = 'Thai'; regionEl.disabled = true; }
+    else               { regionEl.disabled = false; }
+  }
+
+  // ── Show standard qty+dur group vs split online+onsite group ──
+  const qtyGroup   = document.getElementById('khs-qty-group');
+  const splitGroup = document.getElementById('khs-qty-split-group');
+  if (qtyGroup)   qtyGroup.style.display   = isBGC ? 'none' : '';
+  if (splitGroup) splitGroup.style.display = isBGC ? ''     : 'none';
+
+  // ── Lock qty=1, dur=0 for WS heroes ──
+  const qtyEl = document.getElementById('khs-qty');
+  const durEl = document.getElementById('khs-dur');
+  if (isWS) {
+    if (qtyEl) { qtyEl.value = 1; qtyEl.disabled = true; }
+    if (durEl) { durEl.value = 0; durEl.disabled = true; }
+  } else if (!isBGC) {
+    if (qtyEl) qtyEl.disabled = false;
+    if (durEl) durEl.disabled = false;
+  }
+
+  // ── HERO badges for positions 2–15 ──
   for (let i = 2; i <= 15; i++) {
     const inp   = document.getElementById(`ks-${i}`);
     const badge = document.getElementById(`ks-hero-${i}`);
     if (!inp || !badge) continue;
-    if (heroPos === i) {
-      inp.style.display   = 'none';
-      badge.style.display = '';
-    } else {
-      inp.style.display   = '';
-      badge.style.display = 'none';
-    }
+    if (heroPos === i) { inp.style.display = 'none'; badge.style.display = ''; }
+    else               { inp.style.display = '';     badge.style.display = 'none'; }
   }
-  buildKHS();
+
+  onKHSQtyDurChange();
 }
 
 function onKHSQtyDurChange() {
-  const qty = document.getElementById('khs-qty')?.value || '0';
-  const dur = document.getElementById('khs-dur')?.value || '0';
+  const hero  = document.getElementById('khs-hero')?.value || '';
+  const isBGC = KHS_BGC_HEROES.has(hero);
+
+  let qty, dur;
+  if (isBGC) {
+    const ol = parseInt(document.getElementById('khs-qty-ol')?.value) || 0;
+    const os = parseInt(document.getElementById('khs-qty-os')?.value) || 0;
+    qty = ol + os; dur = 0;
+  } else {
+    qty = document.getElementById('khs-qty')?.value || '0';
+    dur = document.getElementById('khs-dur')?.value || '0';
+  }
+
   const el0 = document.getElementById('ks-0');
   const el1 = document.getElementById('ks-1');
   if (el0) el0.value = qty;
@@ -1702,11 +1959,33 @@ function onKHSQtyDurChange() {
   buildKHS();
 }
 
+// Returns the correct hero label for Match ID, handling BGC/BizSim hybrid naming
+// ol = Qty Online, os = Qty Onsite (both 0 for non-BGC heroes)
+function _matchHeroLabel(hero, ol, os) {
+  const isBizSim = hero.startsWith('Business Simulation');
+  const isBGC    = hero.startsWith('Business Group');
+  if (!isBizSim && !isBGC) return hero;
+  const base = isBizSim ? 'Business Simulation' : 'Business Group Class';
+  if (ol > 0 && os > 0) return `${base} Hybrid OL${ol}+OS${os}`;
+  if (ol > 0)           return `${base} Online`;
+  if (os > 0)           return `${base} Onsite`;
+  return hero; // both 0 — fallback
+}
+
 function buildKHS() {
   const hero   = document.getElementById('khs-hero')?.value   || '';
   const region = document.getElementById('khs-region')?.value || '';
-  const qty    = document.getElementById('khs-qty')?.value    || '0';
-  const dur    = document.getElementById('khs-dur')?.value    || '0';
+  const isBGC  = KHS_BGC_HEROES.has(hero);
+
+  let ol = 0, os = 0, qty, dur;
+  if (isBGC) {
+    ol  = parseInt(document.getElementById('khs-qty-ol')?.value) || 0;
+    os  = parseInt(document.getElementById('khs-qty-os')?.value) || 0;
+    qty = ol + os; dur = 0;
+  } else {
+    qty = document.getElementById('khs-qty')?.value || '0';
+    dur = document.getElementById('khs-dur')?.value || '0';
+  }
 
   const heroPos = (hero !== '' && Object.prototype.hasOwnProperty.call(HERO_POS, hero))
                   ? HERO_POS[hero] : -1;
@@ -1726,7 +2005,7 @@ function buildKHS() {
     return;
   }
 
-  const matchId = `${hero}-${qty}-${dur}-${region}`;
+  const matchId = `${_matchHeroLabel(hero, ol, os)}-${qty}-${dur}-${region}`;
   const keyS    = ks.join('-');
   const keyHS   = `${matchId}/${keyS}`;
 

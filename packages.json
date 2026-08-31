@@ -1,0 +1,1397 @@
+[
+  {
+    "id": "PVTK-03-18-NA",
+    "hero": "Private Class",
+    "coach": "Global",
+    "qty": 18,
+    "dur": 3,
+    "supp": "None",
+    "band": "s",
+    "p": [
+      9900,
+      9900,
+      9600,
+      9300,
+      9000,
+      8700,
+      8400
+    ],
+    "ass": "Pre-Post Test: 8 Skills",
+    "keyHS": "Private Class-18-3-Asian, European and Native/18-3-HERO-0-0-0-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "PVTK-03-18-NA-4DC",
+    "hero": "Private Class",
+    "coach": "Global",
+    "qty": 18,
+    "dur": 3,
+    "supp": "+4 Discussion Class",
+    "band": "s",
+    "p": [
+      12700,
+      12700,
+      12400,
+      12100,
+      11800,
+      11500,
+      11200
+    ],
+    "ass": "Pre-Post Test: 8 Skills",
+    "keyHS": "Private Class-18-3-Asian, European and Native/18-3-HERO-4-0-0-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "PVTK-03-18-NA-4DC-12S",
+    "hero": "Private Class",
+    "coach": "Global",
+    "qty": 18,
+    "dur": 3,
+    "supp": "+4DC+12SPDE+VXAI",
+    "band": "s",
+    "p": [
+      13800,
+      13800,
+      13500,
+      13200,
+      12900,
+      12600,
+      12300
+    ],
+    "ass": "Pre-Post Test: 8 Skills",
+    "keyHS": "Private Class-18-3-Asian, European and Native/18-3-HERO-4-12-TRUE-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "PVTK-03-18-NA-4DC-24S",
+    "hero": "Private Class",
+    "coach": "Global",
+    "qty": 18,
+    "dur": 3,
+    "supp": "+4DC+24SPDE+VXAI",
+    "band": "s",
+    "p": [
+      14200,
+      14200,
+      13900,
+      13600,
+      13200,
+      12900,
+      12600
+    ],
+    "ass": "Pre-Post Test: 8 Skills",
+    "keyHS": "Private Class-18-3-Asian, European and Native/18-3-HERO-4-24-TRUE-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "PVTK-03-18-NA-4DC-36S",
+    "hero": "Private Class",
+    "coach": "Global",
+    "qty": 18,
+    "dur": 3,
+    "supp": "+4DC+36SPDE+VXAI",
+    "band": "s",
+    "p": [
+      14600,
+      14600,
+      14300,
+      14000,
+      13700,
+      13400,
+      13100
+    ],
+    "ass": "Pre-Post Test: 8 Skills",
+    "keyHS": "Private Class-18-3-Asian, European and Native/18-3-HERO-4-36-TRUE-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "PVTK-03-18-NA-4DC-60S",
+    "hero": "Private Class",
+    "coach": "Global",
+    "qty": 18,
+    "dur": 3,
+    "supp": "+4DC+60SPDE+VXAI",
+    "band": "s",
+    "p": [
+      15000,
+      15000,
+      14600,
+      14200,
+      13800,
+      13400,
+      13000
+    ],
+    "ass": "Pre-Post Test: 8 Skills",
+    "keyHS": "Private Class-18-3-Asian, European and Native/18-3-HERO-4-60-TRUE-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "PVTK-03-18-NA-4DC-90S",
+    "hero": "Private Class",
+    "coach": "Global",
+    "qty": 18,
+    "dur": 3,
+    "supp": "+4DC+90SPDE+VXAI",
+    "band": "s",
+    "p": [
+      15400,
+      15400,
+      14800,
+      14200,
+      13600,
+      13000,
+      12600
+    ],
+    "ass": "Pre-Post Test: 8 Skills",
+    "keyHS": "Private Class-18-3-Asian, European and Native/18-3-HERO-4-90-TRUE-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "PVTK-06-36-NA",
+    "hero": "Private Class",
+    "coach": "Global",
+    "qty": 36,
+    "dur": 6,
+    "supp": "None",
+    "band": "s",
+    "p": [
+      19600,
+      19600,
+      19300,
+      19000,
+      18700,
+      18400,
+      18100
+    ],
+    "ass": "Pre-Mid-Post Test: 8 Skills",
+    "keyHS": "Private Class-36-6-Asian, European and Native/36-6-HERO-0-0-0-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "PVTK-06-36-NA-8DC-12S",
+    "hero": "Private Class",
+    "coach": "Global",
+    "qty": 36,
+    "dur": 6,
+    "supp": "+8DC+12SPDE+VXAI",
+    "band": "s",
+    "p": [
+      25500,
+      25500,
+      24500,
+      23500,
+      22500,
+      21500,
+      20500
+    ],
+    "ass": "Pre-Mid-Post Test: 8 Skills",
+    "keyHS": "Private Class-36-6-Asian, European and Native/36-6-HERO-8-12-TRUE-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "PVTK-06-36-NA-8DC-24S",
+    "hero": "Private Class",
+    "coach": "Global",
+    "qty": 36,
+    "dur": 6,
+    "supp": "+8DC+24SPDE+VXAI",
+    "band": "s",
+    "p": [
+      26500,
+      26500,
+      25500,
+      24500,
+      23500,
+      22500,
+      21500
+    ],
+    "ass": "Pre-Mid-Post Test: 8 Skills",
+    "keyHS": "Private Class-36-6-Asian, European and Native/36-6-HERO-8-24-TRUE-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "PVTK-06-36-NA-8DC-36S",
+    "hero": "Private Class",
+    "coach": "Global",
+    "qty": 36,
+    "dur": 6,
+    "supp": "+8DC+36SPDE+VXAI",
+    "band": "s",
+    "p": [
+      27500,
+      27500,
+      26500,
+      25500,
+      24500,
+      23500,
+      22500
+    ],
+    "ass": "Pre-Mid-Post Test: 8 Skills",
+    "keyHS": "Private Class-36-6-Asian, European and Native/36-6-HERO-8-36-TRUE-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "PVTK-06-36-NA-8DC-60S",
+    "hero": "Private Class",
+    "coach": "Global",
+    "qty": 36,
+    "dur": 6,
+    "supp": "+8DC+60SPDE+VXAI",
+    "band": "s",
+    "p": [
+      28500,
+      28500,
+      27500,
+      26500,
+      25500,
+      24500,
+      23500
+    ],
+    "ass": "Pre-Mid-Post Test: 8 Skills",
+    "keyHS": "Private Class-36-6-Asian, European and Native/36-6-HERO-8-60-TRUE-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "PVTK-06-36-NA-8DC-90S",
+    "hero": "Private Class",
+    "coach": "Global",
+    "qty": 36,
+    "dur": 6,
+    "supp": "+8DC+90SPDE+VXAI",
+    "band": "s",
+    "p": [
+      29500,
+      29500,
+      28500,
+      27500,
+      26500,
+      25500,
+      24500
+    ],
+    "ass": "Pre-Mid-Post Test: 8 Skills",
+    "keyHS": "Private Class-36-6-Asian, European and Native/36-6-HERO-8-90-TRUE-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "PVTK-12-72-NA",
+    "hero": "Private Class",
+    "coach": "Global",
+    "qty": 72,
+    "dur": 12,
+    "supp": "None",
+    "band": "s",
+    "p": [
+      39000,
+      39000,
+      38700,
+      38400,
+      38100,
+      37800,
+      37500
+    ],
+    "ass": "Pre-Mid-Post Test: 8 Skills",
+    "keyHS": "Private Class-72-12-Asian, European and Native/72-12-HERO-0-0-0-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "PVTK-03-18-NNA",
+    "hero": "Private Class",
+    "coach": "Non-Native",
+    "qty": 18,
+    "dur": 3,
+    "supp": "None",
+    "band": "s",
+    "p": [
+      6900,
+      6900,
+      6600,
+      6300,
+      6000,
+      5700,
+      5400
+    ],
+    "ass": "Pre-Post Test: 8 Skills",
+    "keyHS": "Private Class-18-3-Asian and European/18-3-HERO-0-0-0-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "PVTK-03-18-NNA-4DC",
+    "hero": "Private Class",
+    "coach": "Non-Native",
+    "qty": 18,
+    "dur": 3,
+    "supp": "+4DC",
+    "band": "s",
+    "p": [
+      9700,
+      9700,
+      9400,
+      9100,
+      8800,
+      8500,
+      8200
+    ],
+    "ass": "Pre-Post Test: 8 Skills",
+    "keyHS": "Private Class-18-3-Asian and European/18-3-HERO-4-0-0-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "PVTK-06-36-NNA",
+    "hero": "Private Class",
+    "coach": "Non-Native",
+    "qty": 36,
+    "dur": 6,
+    "supp": "None",
+    "band": "s",
+    "p": [
+      13600,
+      13600,
+      13300,
+      13000,
+      12700,
+      12400,
+      12100
+    ],
+    "ass": "Pre-Mid-Post Test: 8 Skills",
+    "keyHS": "Private Class-36-6-Asian and European/36-6-HERO-0-0-0-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "PVTK-12-72-NNA",
+    "hero": "Private Class",
+    "coach": "Non-Native",
+    "qty": 72,
+    "dur": 12,
+    "supp": "None",
+    "band": "s",
+    "p": [
+      27000,
+      27000,
+      26700,
+      26400,
+      26100,
+      25800,
+      25500
+    ],
+    "ass": "Pre-Mid-Post Test: 8 Skills",
+    "keyHS": "Private Class-72-12-Asian and European/72-12-HERO-0-0-0-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "ENSD-03-04",
+    "hero": "Engoo Standard",
+    "coach": "Non-Native",
+    "qty": 12,
+    "dur": 3,
+    "supp": "None",
+    "band": "s",
+    "p": [
+      3900,
+      3900,
+      3900,
+      3900,
+      3700,
+      3700,
+      3700
+    ],
+    "ass": "Engoo Oral Test",
+    "keyHS": "Engoo Standard-12-3-Asian and European/12-3-0-0-0-0-0-HERO-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "ENSD-03-04-S12",
+    "hero": "Engoo Standard",
+    "coach": "Non-Native",
+    "qty": 12,
+    "dur": 3,
+    "supp": "+12 Speedy English",
+    "band": "s",
+    "p": [
+      4600,
+      4600,
+      4600,
+      4400,
+      4200,
+      4200,
+      4000
+    ],
+    "ass": "Engoo Oral Test",
+    "keyHS": "Engoo Standard-12-3-Asian and European/12-3-0-0-12-0-0-HERO-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "ENSD-06-04-S24",
+    "hero": "Engoo Standard",
+    "coach": "Non-Native",
+    "qty": 24,
+    "dur": 6,
+    "supp": "+24 Speedy English",
+    "band": "s",
+    "p": [
+      9000,
+      9000,
+      9000,
+      8800,
+      8600,
+      8600,
+      8400
+    ],
+    "ass": "Engoo Oral Test",
+    "keyHS": "Engoo Standard-24-6-Asian and European/24-6-0-0-24-0-0-HERO-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "ENSD-03-08-S12",
+    "hero": "Engoo Standard",
+    "coach": "Non-Native",
+    "qty": 24,
+    "dur": 3,
+    "supp": "+12 Speedy English",
+    "band": "s",
+    "p": [
+      6900,
+      6900,
+      6900,
+      6700,
+      6500,
+      6500,
+      6500
+    ],
+    "ass": "Engoo Oral Test",
+    "keyHS": "Engoo Standard-24-3-Asian and European/24-3-0-0-12-0-0-HERO-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "ENSD-06-08-S24",
+    "hero": "Engoo Standard",
+    "coach": "Non-Native",
+    "qty": 48,
+    "dur": 6,
+    "supp": "+24 Speedy English",
+    "band": "s",
+    "p": [
+      14000,
+      14000,
+      14000,
+      13800,
+      13800,
+      13600,
+      13600
+    ],
+    "ass": "Engoo Oral Test",
+    "keyHS": "Engoo Standard-48-6-Asian and European/48-6-0-0-24-0-0-HERO-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "ENPL-03-04-S12",
+    "hero": "Engoo Premium Lite",
+    "coach": "Global",
+    "qty": 12,
+    "dur": 3,
+    "supp": "+12 Speedy English",
+    "band": "s",
+    "p": [
+      6600,
+      6600,
+      6600,
+      6400,
+      6200,
+      6000,
+      5800
+    ],
+    "ass": "Engoo Oral Test",
+    "keyHS": "Engoo Premium Lite-12-3-Asian, European and Native/12-3-0-0-12-0-0-0-HERO-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "ENPL-06-04-S24",
+    "hero": "Engoo Premium Lite",
+    "coach": "Global",
+    "qty": 24,
+    "dur": 6,
+    "supp": "+24 Speedy English",
+    "band": "s",
+    "p": [
+      9600,
+      9600,
+      9600,
+      9400,
+      9200,
+      9000,
+      9000
+    ],
+    "ass": "Engoo Oral Test",
+    "keyHS": "Engoo Premium Lite-24-6-Asian, European and Native/24-6-0-0-24-0-0-0-HERO-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "ENPL-03-08-S12",
+    "hero": "Engoo Premium Lite",
+    "coach": "Global",
+    "qty": 24,
+    "dur": 3,
+    "supp": "+12 Speedy English",
+    "band": "s",
+    "p": [
+      10500,
+      10500,
+      10500,
+      10000,
+      10000,
+      9500,
+      9500
+    ],
+    "ass": "Engoo Oral Test",
+    "keyHS": "Engoo Premium Lite-24-3-Asian, European and Native/24-3-0-0-12-0-0-0-HERO-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "ENPL-06-08-S24",
+    "hero": "Engoo Premium Lite",
+    "coach": "Global",
+    "qty": 48,
+    "dur": 6,
+    "supp": "+24 Speedy English",
+    "band": "s",
+    "p": [
+      21000,
+      21000,
+      21000,
+      20500,
+      20500,
+      20000,
+      20000
+    ],
+    "ass": "Engoo Oral Test",
+    "keyHS": "Engoo Premium Lite-48-6-Asian, European and Native/48-6-0-0-24-0-0-0-HERO-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "VXNT-03-30-AI",
+    "hero": "GB+: LI",
+    "coach": "Global",
+    "qty": 30,
+    "dur": 3,
+    "supp": "+GB+: AI",
+    "band": "s",
+    "p": [
+      3900,
+      3900,
+      3750,
+      3600,
+      3400,
+      3200,
+      3000
+    ],
+    "ass": "VPA+",
+    "keyHS": "GB+: LI-30-3-Asian, European and Native/30-3-0-0-0-TRUE-HERO-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "VXNT-03-30-9PV",
+    "hero": "GB+: LI",
+    "coach": "Global",
+    "qty": 30,
+    "dur": 3,
+    "supp": "+9 Private+GB+: AI",
+    "band": "s",
+    "p": [
+      9100,
+      9100,
+      8900,
+      8700,
+      8500,
+      8300,
+      8000
+    ],
+    "ass": "VPA+",
+    "keyHS": "GB+: LI-30-3-Asian, European and Native/30-3-9-0-0-TRUE-HERO-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "VXNT-04-30-AI",
+    "hero": "GB+: LI",
+    "coach": "Global",
+    "qty": 30,
+    "dur": 4,
+    "supp": "+GB+: AI",
+    "band": "s",
+    "p": [
+      5000,
+      5000,
+      4800,
+      4600,
+      4400,
+      4200,
+      4000
+    ],
+    "ass": "VPA+",
+    "keyHS": "GB+: LI-30-4-Asian, European and Native/30-4-0-0-0-TRUE-HERO-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "VXNT-06-30-AI",
+    "hero": "GB+: LI",
+    "coach": "Global",
+    "qty": 30,
+    "dur": 6,
+    "supp": "+GB+: AI",
+    "band": "s",
+    "p": [
+      6900,
+      6900,
+      6700,
+      6500,
+      6300,
+      6100,
+      5900
+    ],
+    "ass": "VPA+",
+    "keyHS": "GB+: LI-30-6-Asian, European and Native/30-6-0-0-0-TRUE-HERO-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "VXNT-12-30-AI",
+    "hero": "GB+: LI",
+    "coach": "Global",
+    "qty": 30,
+    "dur": 12,
+    "supp": "+GB+: AI",
+    "band": "s",
+    "p": [
+      12000,
+      12000,
+      11500,
+      11000,
+      10500,
+      10000,
+      9500
+    ],
+    "ass": "VPA+",
+    "unit": "per class",
+    "keyHS": "GB+: LI-30-12-Asian, European and Native/30-12-0-0-0-TRUE-HERO-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "VXNT-03-36-6PV",
+    "hero": "GB+: LI",
+    "coach": "Global",
+    "qty": 36,
+    "dur": 3,
+    "supp": "+6 Private+GB+: AI",
+    "band": "s",
+    "p": [
+      7600,
+      7600,
+      7300,
+      7000,
+      6700,
+      6400,
+      6100
+    ],
+    "ass": "VPA+",
+    "keyHS": "GB+: LI-36-3-Asian, European and Native/36-3-6-0-0-TRUE-HERO-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "VXNT-03-36-9PV",
+    "hero": "GB+: LI",
+    "coach": "Global",
+    "qty": 36,
+    "dur": 3,
+    "supp": "+9 Private+GB+: AI",
+    "band": "s",
+    "p": [
+      9100,
+      9100,
+      8800,
+      8500,
+      8200,
+      7900,
+      7600
+    ],
+    "ass": "VPA+",
+    "keyHS": "GB+: LI-36-3-Asian, European and Native/36-3-9-0-0-TRUE-HERO-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "VXNT-06-72-18PV",
+    "hero": "GB+: LI",
+    "coach": "Global",
+    "qty": 72,
+    "dur": 6,
+    "supp": "+18 Private+GB+: AI",
+    "band": "s",
+    "p": [
+      18000,
+      18000,
+      17700,
+      17400,
+      17100,
+      16800,
+      16500
+    ],
+    "ass": "VPA+",
+    "keyHS": "GB+: LI-72-6-Asian, European and Native/72-6-18-0-0-TRUE-HERO-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "SPD-03-36",
+    "hero": "Speedy English",
+    "coach": "Global",
+    "qty": 36,
+    "dur": 3,
+    "supp": "None",
+    "band": "s",
+    "p": [
+      3200,
+      3200,
+      3200,
+      2900,
+      2600,
+      2300,
+      2000
+    ],
+    "ass": "Speedy Test: Receptive",
+    "keyHS": "Speedy English-36-3-Asian, European and Native/36-3-0-0-HERO-0-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "SPD-03-36-AI",
+    "hero": "Speedy English",
+    "coach": "Global",
+    "qty": 36,
+    "dur": 3,
+    "supp": "+GB+: AI",
+    "band": "s",
+    "p": [
+      5500,
+      5500,
+      5200,
+      4900,
+      4600,
+      4300,
+      4000
+    ],
+    "ass": "Speedy Test: Receptive",
+    "keyHS": "Speedy English-36-3-Asian, European and Native/36-3-0-0-HERO-TRUE-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "SPD-03-36-9PV",
+    "hero": "Speedy English",
+    "coach": "Global",
+    "qty": 36,
+    "dur": 3,
+    "supp": "+9 Private+GB+: AI",
+    "band": "s",
+    "p": [
+      9100,
+      9100,
+      8800,
+      8500,
+      8200,
+      7900,
+      7600
+    ],
+    "ass": "Speedy Test: Receptive",
+    "keyHS": "Speedy English-36-3-Asian, European and Native/36-3-9-0-HERO-TRUE-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "SPD-06-72-18PV",
+    "hero": "Speedy English",
+    "coach": "Global",
+    "qty": 72,
+    "dur": 6,
+    "supp": "+18 Private+GB+: AI",
+    "band": "s",
+    "p": [
+      18000,
+      18000,
+      17700,
+      17400,
+      17100,
+      16800,
+      16500
+    ],
+    "ass": "Speedy Test: Receptive",
+    "keyHS": "Speedy English-72-6-Asian, European and Native/72-6-18-0-HERO-TRUE-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "SPD-06-72-AI",
+    "hero": "Speedy English",
+    "coach": "Global",
+    "qty": 72,
+    "dur": 6,
+    "supp": "+GB+: AI",
+    "band": "s",
+    "p": [
+      7600,
+      7600,
+      7600,
+      7300,
+      7000,
+      6700,
+      6400
+    ],
+    "ass": "Speedy Test: Receptive",
+    "keyHS": "Speedy English-72-6-Asian, European and Native/72-6-0-0-HERO-TRUE-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "SPD-06-72",
+    "hero": "Speedy English",
+    "coach": "Global",
+    "qty": 72,
+    "dur": 6,
+    "supp": "None",
+    "band": "s",
+    "p": [
+      6200,
+      6200,
+      6200,
+      5900,
+      5600,
+      5300,
+      5000
+    ],
+    "ass": "Speedy Test: Receptive",
+    "keyHS": "Speedy English-72-6-Asian, European and Native/72-6-0-0-HERO-0-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "SPD-03-60-AI",
+    "hero": "Speedy English",
+    "coach": "Global",
+    "qty": 60,
+    "dur": 3,
+    "supp": "+GB+: AI",
+    "band": "s",
+    "p": [
+      6900,
+      6900,
+      6900,
+      6600,
+      6300,
+      6000,
+      5700
+    ],
+    "ass": "Speedy Test: Receptive",
+    "keyHS": "Speedy English-60-3-Asian, European and Native/60-3-0-0-HERO-TRUE-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "VXAI-03",
+    "hero": "GB+: AI",
+    "coach": "None",
+    "qty": 1,
+    "dur": 3,
+    "supp": "None",
+    "band": "s",
+    "p": [
+      1600,
+      1600,
+      1500,
+      1500,
+      1400,
+      1400,
+      1300
+    ],
+    "ass": "VPA",
+    "keyHS": "GB+: AI-1-3-None/1-3-0-0-0-HERO-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "VXAI-06",
+    "hero": "GB+: AI",
+    "coach": "None",
+    "qty": 1,
+    "dur": 6,
+    "supp": "None",
+    "band": "s",
+    "p": [
+      2900,
+      2900,
+      2700,
+      2700,
+      2500,
+      2500,
+      2300
+    ],
+    "ass": "VPA",
+    "keyHS": "GB+: AI-1-6-None/1-6-0-0-0-HERO-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "VXAI-12",
+    "hero": "GB+: AI",
+    "coach": "None",
+    "qty": 1,
+    "dur": 12,
+    "supp": "None",
+    "band": "s",
+    "p": [
+      5600,
+      5600,
+      5200,
+      5200,
+      4800,
+      4800,
+      4200
+    ],
+    "ass": "VPA",
+    "keyHS": "GB+: AI-1-12-None/1-12-0-0-0-HERO-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "VPA",
+    "hero": "VPA",
+    "coach": "None",
+    "qty": 1,
+    "dur": 0,
+    "supp": "Assessment",
+    "band": "s",
+    "p": [
+      800,
+      800,
+      800,
+      700,
+      700,
+      600,
+      600
+    ],
+    "ass": "-",
+    "keyHS": "VPA-1-0-None/1-0-0-0-0-0-0-0-0-HERO-0-0-0-0-0-0"
+  },
+  {
+    "id": "VPA+",
+    "hero": "VPA+",
+    "coach": "None",
+    "qty": 1,
+    "dur": 0,
+    "supp": "Placement Test",
+    "band": "s",
+    "p": [
+      1300,
+      1300,
+      1300,
+      1200,
+      1200,
+      1000,
+      1000
+    ],
+    "ass": "VPA+",
+    "keyHS": "VPA+-1-0-None/1-0-0-0-0-0-0-0-0-0-HERO-0-0-0-0-0"
+  },
+  {
+    "id": "GECB-02",
+    "hero": "GECB",
+    "coach": "None",
+    "qty": 1,
+    "dur": 0,
+    "supp": "2 Skills (Receptive)",
+    "band": "s",
+    "p": [
+      500,
+      500,
+      400,
+      400,
+      350,
+      350,
+      300
+    ],
+    "ass": "-",
+    "keyHS": "GECB 2 Skills: Receptive-1-0-None/1-0-0-0-0-0-0-0-0-0-0-HERO-0-0-0-0"
+  },
+  {
+    "id": "GECB-04",
+    "hero": "GECB",
+    "coach": "None",
+    "qty": 1,
+    "dur": 0,
+    "supp": "4 Skills (R+P)",
+    "band": "s",
+    "p": [
+      900,
+      900,
+      800,
+      800,
+      750,
+      750,
+      700
+    ],
+    "ass": "-",
+    "keyHS": "GECB 4 Skills: Receptive and Productive-1-0-None/1-0-0-0-0-0-0-0-0-0-0-0-HERO-0-0-0"
+  },
+  {
+    "id": "BGOS-10",
+    "hero": "Business Group Class",
+    "coach": "Thai",
+    "qty": 10,
+    "dur": 0,
+    "supp": "None",
+    "band": "b",
+    "p": [
+      7800,
+      7500,
+      6500,
+      6200,
+      5700,
+      5400,
+      4900
+    ],
+    "ass": "PBA Onsite",
+    "keyHS": "Business Group Class Onsite-10-0-Thai/10-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "BGOS-11",
+    "hero": "Business Group Class",
+    "coach": "Thai",
+    "qty": 11,
+    "dur": 0,
+    "supp": "None",
+    "band": "b",
+    "p": [
+      8500,
+      8200,
+      7200,
+      6900,
+      6400,
+      6100,
+      5600
+    ],
+    "ass": "PBA Onsite",
+    "keyHS": "Business Group Class Onsite-11-0-Thai/11-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "BGOS-12",
+    "hero": "Business Group Class",
+    "coach": "Thai",
+    "qty": 12,
+    "dur": 0,
+    "supp": "None",
+    "band": "b",
+    "p": [
+      9000,
+      8700,
+      7700,
+      7400,
+      6900,
+      6600,
+      6100
+    ],
+    "ass": "PBA Onsite",
+    "keyHS": "Business Group Class Onsite-12-0-Thai/12-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "BGOS-13",
+    "hero": "Business Group Class",
+    "coach": "Thai",
+    "qty": 13,
+    "dur": 0,
+    "supp": "None",
+    "band": "b",
+    "p": [
+      9300,
+      9000,
+      8000,
+      7700,
+      7200,
+      6900,
+      6400
+    ],
+    "ass": "PBA Onsite",
+    "keyHS": "Business Group Class Onsite-13-0-Thai/13-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "BGOS-14",
+    "hero": "Business Group Class",
+    "coach": "Thai",
+    "qty": 14,
+    "dur": 0,
+    "supp": "None",
+    "band": "b",
+    "p": [
+      9500,
+      9200,
+      8200,
+      7900,
+      7400,
+      7100,
+      6600
+    ],
+    "ass": "PBA Onsite",
+    "keyHS": "Business Group Class Onsite-14-0-Thai/14-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "BGOS-15",
+    "hero": "Business Group Class",
+    "coach": "Thai",
+    "qty": 15,
+    "dur": 0,
+    "supp": "None",
+    "band": "b",
+    "p": [
+      9900,
+      9600,
+      8600,
+      8300,
+      7800,
+      7500,
+      7000
+    ],
+    "ass": "PBA Onsite",
+    "keyHS": "Business Group Class Onsite-15-0-Thai/15-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "BGOL-10",
+    "hero": "Business Group Class",
+    "coach": "Thai",
+    "qty": 10,
+    "dur": 0,
+    "supp": "None",
+    "band": "b",
+    "p": [
+      3900,
+      3600,
+      2600,
+      2400,
+      1900,
+      1700,
+      1500
+    ],
+    "ass": "PBA Online",
+    "keyHS": "Business Group Class Online-10-0-Thai/10-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "BGOL-11",
+    "hero": "Business Group Class",
+    "coach": "Thai",
+    "qty": 11,
+    "dur": 0,
+    "supp": "None",
+    "band": "b",
+    "p": [
+      4200,
+      3900,
+      2900,
+      2700,
+      2200,
+      2000,
+      1800
+    ],
+    "ass": "PBA Online",
+    "keyHS": "Business Group Class Online-11-0-Thai/11-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "BGOL-12",
+    "hero": "Business Group Class",
+    "coach": "Thai",
+    "qty": 12,
+    "dur": 0,
+    "supp": "None",
+    "band": "b",
+    "p": [
+      4600,
+      4300,
+      3300,
+      3100,
+      2600,
+      2400,
+      2200
+    ],
+    "ass": "PBA Online",
+    "keyHS": "Business Group Class Online-12-0-Thai/12-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "BGOL-13",
+    "hero": "Business Group Class",
+    "coach": "Thai",
+    "qty": 13,
+    "dur": 0,
+    "supp": "None",
+    "band": "b",
+    "p": [
+      4900,
+      4600,
+      3600,
+      3400,
+      2900,
+      2700,
+      2500
+    ],
+    "ass": "PBA Online",
+    "keyHS": "Business Group Class Online-13-0-Thai/13-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "BGOL-14",
+    "hero": "Business Group Class",
+    "coach": "Thai",
+    "qty": 14,
+    "dur": 0,
+    "supp": "None",
+    "band": "b",
+    "p": [
+      5300,
+      5000,
+      4000,
+      3800,
+      3300,
+      3100,
+      2900
+    ],
+    "ass": "PBA Online",
+    "keyHS": "Business Group Class Online-14-0-Thai/14-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "BGOL-15",
+    "hero": "Business Group Class",
+    "coach": "Thai",
+    "qty": 15,
+    "dur": 0,
+    "supp": "None",
+    "band": "b",
+    "p": [
+      5600,
+      5300,
+      4300,
+      4100,
+      3600,
+      3400,
+      2900
+    ],
+    "ass": "PBA Online",
+    "keyHS": "Business Group Class Online-15-0-Thai/15-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "BGHB-5+5",
+    "hero": "Business Group Class",
+    "coach": "Thai",
+    "qty": 10,
+    "dur": 0,
+    "supp": "Hybrid OL5+OS5 (10 คาบ)",
+    "band": "b",
+    "p": [
+      6200,
+      5900,
+      4900,
+      4600,
+      4100,
+      3800,
+      3500
+    ],
+    "ass": "PBA Online+Onsite",
+    "keyHS": "Business Group Class Hybrid OL5+OS5-10-0-Thai/10-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "BGHB-12+3",
+    "hero": "Business Group Class",
+    "coach": "Thai",
+    "qty": 15,
+    "dur": 0,
+    "supp": "Hybrid OL12+OS3 (15 คาบ)",
+    "band": "b",
+    "p": [
+      6900,
+      6600,
+      5600,
+      5300,
+      4800,
+      4500,
+      4200
+    ],
+    "ass": "PBA Online+Onsite",
+    "keyHS": "Business Group Class Hybrid OL12+OS3-15-0-Thai/15-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "BGHB-7+8",
+    "hero": "Business Group Class",
+    "coach": "Thai",
+    "qty": 15,
+    "dur": 0,
+    "supp": "Hybrid OL7+OS8 (15 คาบ)",
+    "band": "b",
+    "p": [
+      8900,
+      8600,
+      7600,
+      7300,
+      6800,
+      6500,
+      6200
+    ],
+    "ass": "PBA Online+Onsite",
+    "keyHS": "Business Group Class Hybrid OL7+OS8-15-0-Thai/15-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0"
+  },
+  {
+    "id": "WSOS-NULL-01-TH",
+    "hero": "Workshop",
+    "coach": "Thai",
+    "qty": 1,
+    "dur": 0,
+    "supp": "Onsite (Thai Coach)",
+    "band": "s",
+    "p": [
+      28000,
+      28000,
+      28000,
+      28000,
+      28000,
+      28000,
+      28000
+    ],
+    "ass": "Pre-Post Quiz",
+    "unit": "per class",
+    "minN": 5,
+    "maxN": 30,
+    "keyHS": "Workshop Onsite-1-0-Thai/1-0-0-0-0-0-0-0-0-0-0-0-0-HERO-0-0"
+  },
+  {
+    "id": "WSOL-NULL-01-TH",
+    "hero": "Workshop",
+    "coach": "Thai",
+    "qty": 1,
+    "dur": 0,
+    "supp": "Online (Thai Coach)",
+    "band": "s",
+    "p": [
+      20000,
+      20000,
+      20000,
+      20000,
+      20000,
+      20000,
+      20000
+    ],
+    "ass": "Pre-Post Quiz",
+    "unit": "per class",
+    "maxN": 30,
+    "keyHS": "Workshop Online-1-0-Thai/1-0-0-0-0-0-0-0-0-0-0-0-0-HERO-0-0"
+  },
+  {
+    "id": "MSTC-NULL-60",
+    "hero": "Master Class",
+    "coach": "Global",
+    "qty": 1,
+    "dur": 0,
+    "supp": "60 นาที",
+    "band": "s",
+    "p": [
+      7900,
+      7900,
+      7900,
+      7900,
+      7900,
+      7900,
+      7900
+    ],
+    "ass": "-",
+    "unit": "per class",
+    "minN": 5,
+    "maxN": 500,
+    "keyHS": "Master Class 60 minutes-1-0-Asian, European and Native/1-0-0-0-0-0-0-0-0-0-0-0-0-0-HERO-0"
+  },
+  {
+    "id": "MSTC-NULL-90",
+    "hero": "Master Class",
+    "coach": "Global",
+    "qty": 1,
+    "dur": 0,
+    "supp": "90 นาที",
+    "band": "s",
+    "p": [
+      8900,
+      8900,
+      8900,
+      8900,
+      8900,
+      8900,
+      8900
+    ],
+    "ass": "-",
+    "unit": "per class",
+    "minN": 5,
+    "maxN": 500,
+    "keyHS": "Master Class 90 minutes-1-0-Asian, European and Native/1-0-0-0-0-0-0-0-0-0-0-0-0-0-HERO-0"
+  },
+  {
+    "id": "MSTC-NULL-120",
+    "hero": "Master Class",
+    "coach": "Global",
+    "qty": 1,
+    "dur": 0,
+    "supp": "120 นาที",
+    "band": "s",
+    "p": [
+      9900,
+      9900,
+      9900,
+      9900,
+      9900,
+      9900,
+      9900
+    ],
+    "ass": "-",
+    "unit": "per class",
+    "minN": 5,
+    "maxN": 500,
+    "keyHS": "Master Class 120 minutes-1-0-Asian, European and Native/1-0-0-0-0-0-0-0-0-0-0-0-0-0-HERO-0"
+  }
+]

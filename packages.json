@@ -912,5 +912,85 @@
     ],
     "ass": "Phone Consult + Pre-Mid-Post Test",
     "keyHS": "Private Class-18-3-Asian, European and Native/18-3-HERO-0-0-0-0-0-0-0-0-0-0-0-12-0"
+  },
+  {
+    "id": "PVTK-03-18-PHEU-12SPD",
+    "hero": "Private Class",
+    "coach": "Non-Native",
+    "qty": 18,
+    "dur": 3,
+    "supp": "+12SPD +Master Class +Workshop (B2C)",
+    "band": "s",
+    "p": [
+      6500,
+      6500,
+      6000,
+      6000,
+      5500,
+      5000,
+      4500
+    ],
+    "ass": "Phone Consult + Pre-Mid-Post Test",
+    "keyHS": "Private Class-18-3-Filipino and European/18-3-HERO-0-12-0-0-0-0-0-0-0-0-0-12-0"
+  },
+  {
+    "id": "PVTK-03-18-PHEU",
+    "hero": "Private Class",
+    "coach": "Non-Native",
+    "qty": 18,
+    "dur": 3,
+    "supp": "+Master Class +Workshop (B2C)",
+    "band": "s",
+    "p": [
+      6100,
+      6100,
+      5600,
+      5600,
+      5100,
+      4600,
+      4100
+    ],
+    "ass": "Phone Consult + Pre-Mid-Post Test",
+    "keyHS": "Private Class-18-3-Filipino and European/18-3-HERO-0-0-0-0-0-0-0-0-0-0-0-12-0"
+  },
+  {
+    "id": "PVTK-03-18-PH-12SPD",
+    "hero": "Private Class",
+    "coach": "Filipino",
+    "qty": 18,
+    "dur": 3,
+    "supp": "+12SPD +Master Class +Workshop (B2C)",
+    "band": "s",
+    "p": [
+      5900,
+      5900,
+      5400,
+      5400,
+      4900,
+      3000,
+      2500
+    ],
+    "ass": "Phone Consult + Pre-Mid-Post Test",
+    "keyHS": "Private Class-18-3-Filipino/18-3-HERO-0-12-0-0-0-0-0-0-0-0-0-12-0"
+  },
+  {
+    "id": "PVTK-03-18-PH",
+    "hero": "Private Class",
+    "coach": "Filipino",
+    "qty": 18,
+    "dur": 3,
+    "supp": "+Master Class +Workshop (B2C)",
+    "band": "s",
+    "p": [
+      4300,
+      4300,
+      3800,
+      3800,
+      3300,
+      3000,
+      2500
+    ],
+    "ass": "Phone Consult + Pre-Mid-Post Test",
+    "keyHS": "Private Class-18-3-Filipino/18-3-HERO-0-0-0-0-0-0-0-0-0-0-0-12-0"
   }
 ]

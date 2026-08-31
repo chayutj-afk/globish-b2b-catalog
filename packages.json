@@ -772,5 +772,145 @@
     "minN": 5,
     "maxN": 500,
     "keyHS": "Master Class 120 minutes-1-0-Asian, European and Native/1-0-0-0-0-0-0-0-0-0-0-0-0-0-HERO-0"
+  },
+  {
+    "id": "PVTK-06-46-NA-24DC-120SPD",
+    "hero": "Private Class",
+    "coach": "Global",
+    "qty": 46,
+    "dur": 6,
+    "supp": "+24DC +120SPD +MasterClass +Workshop (B2C)",
+    "band": "s",
+    "p": [
+      32500,
+      32500,
+      32000,
+      32000,
+      31500,
+      31000,
+      30500
+    ],
+    "ass": "Phone Consult + Pre-Mid-Post Test",
+    "keyHS": "Private Class-46-6-Asian, European and Native/46-6-HERO-24-120-0-0-0-0-0-0-0-0-0-24-0"
+  },
+  {
+    "id": "PVTK-06-36-NA-8DC-72SPD",
+    "hero": "Private Class",
+    "coach": "Global",
+    "qty": 36,
+    "dur": 6,
+    "supp": "+8DC +72SPD +Master Class +Workshop (B2C)",
+    "band": "s",
+    "p": [
+      28000,
+      28000,
+      27500,
+      27500,
+      27000,
+      26500,
+      26000
+    ],
+    "ass": "Phone Consult + Pre-Mid-Post Test",
+    "keyHS": "Private Class-36-6-Asian, European and Native/36-6-HERO-8-72-0-0-0-0-0-0-0-0-0-24-0"
+  },
+  {
+    "id": "PVTK-06-36-NA",
+    "hero": "Private Class",
+    "coach": "Global",
+    "qty": 36,
+    "dur": 6,
+    "supp": "+Master Class +Workshop (B2C)",
+    "band": "s",
+    "p": [
+      14500,
+      14500,
+      14000,
+      14000,
+      13500,
+      13000,
+      12500
+    ],
+    "ass": "Phone Consult + Pre-Mid-Post Test",
+    "keyHS": "Private Class-36-6-Asian, European and Native/36-6-HERO-0-0-0-0-0-0-0-0-0-0-0-12-0"
+  },
+  {
+    "id": "PVTK-03-18-NA-4DC-36SPD",
+    "hero": "Private Class",
+    "coach": "Global",
+    "qty": 18,
+    "dur": 3,
+    "supp": "+4DC +36SPD +Master Class +Workshop (B2C)",
+    "band": "s",
+    "p": [
+      14500,
+      14500,
+      14000,
+      14000,
+      13500,
+      13000,
+      12500
+    ],
+    "ass": "Phone Consult + Pre-Mid-Post Test",
+    "keyHS": "Private Class-18-3-Asian, European and Native/18-3-HERO-4-36-0-0-0-0-0-0-0-0-0-12-0"
+  },
+  {
+    "id": "PVTK-03-18-NA-60SPD",
+    "hero": "Private Class",
+    "coach": "Global",
+    "qty": 18,
+    "dur": 3,
+    "supp": "+60SPD +Master Class +Workshop (B2C)",
+    "band": "s",
+    "p": [
+      10900,
+      10900,
+      10400,
+      10400,
+      9900,
+      9400,
+      8900
+    ],
+    "ass": "Phone Consult + Pre-Mid-Post Test",
+    "keyHS": "Private Class-18-3-Asian, European and Native/18-3-HERO-0-60-0-0-0-0-0-0-0-0-0-12-0"
+  },
+  {
+    "id": "PVTK-03-18-NA-36SPD",
+    "hero": "Private Class",
+    "coach": "Global",
+    "qty": 18,
+    "dur": 3,
+    "supp": "+36SPD +Master Class +Workshop (B2C)",
+    "band": "s",
+    "p": [
+      9800,
+      9800,
+      9300,
+      9300,
+      8800,
+      8399,
+      7800
+    ],
+    "ass": "Phone Consult + Pre-Mid-Post Test",
+    "keyHS": "Private Class-18-3-Asian, European and Native/18-3-HERO-0-36-0-0-0-0-0-0-0-0-0-12-0"
+  },
+  {
+    "id": "PVTK-03-18-NA",
+    "hero": "Private Class",
+    "coach": "Global",
+    "qty": 18,
+    "dur": 3,
+    "supp": "+Master Class +Workshop (B2C)",
+    "band": "s",
+    "p": [
+      7600,
+      7600,
+      7100,
+      7100,
+      6600,
+      6100,
+      5600
+    ],
+    "ass": "Phone Consult + Pre-Mid-Post Test",
+    "keyHS": "Private Class-18-3-Asian, European and Native/18-3-HERO-0-0-0-0-0-0-0-0-0-0-0-12-0"
   }
 ]

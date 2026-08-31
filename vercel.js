@@ -1,5 +1,5 @@
 {
   "rewrites": [
-    { "source": "/", "destination": "/2026B2BStandardCatalog_2.html" }
+    { "source": "/", "destination": "/2026B2BStandardCatalog.html" }
   ]
 }

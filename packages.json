@@ -774,7 +774,7 @@
     "keyHS": "Master Class 120 minutes-1-0-Asian, European and Native/1-0-0-0-0-0-0-0-0-0-0-0-0-0-HERO-0"
   },
   {
-    "id": "PVTK-06-46-NA-24DC-120SPD",
+    "id": "PVTK-06-46-GB-24DC-120SPD",
     "hero": "Private Class",
     "coach": "Global",
     "qty": 46,
@@ -794,7 +794,7 @@
     "keyHS": "Private Class-46-6-Asian, European and Native/46-6-HERO-24-120-0-0-0-0-0-0-0-0-0-24-0"
   },
   {
-    "id": "PVTK-06-36-NA-8DC-72SPD",
+    "id": "PVTK-06-36-GB-8DC-72SPD",
     "hero": "Private Class",
     "coach": "Global",
     "qty": 36,
@@ -814,7 +814,7 @@
     "keyHS": "Private Class-36-6-Asian, European and Native/36-6-HERO-8-72-0-0-0-0-0-0-0-0-0-24-0"
   },
   {
-    "id": "PVTK-06-36-NA",
+    "id": "PVTK-06-36-GB",
     "hero": "Private Class",
     "coach": "Global",
     "qty": 36,
@@ -834,7 +834,7 @@
     "keyHS": "Private Class-36-6-Asian, European and Native/36-6-HERO-0-0-0-0-0-0-0-0-0-0-0-12-0"
   },
   {
-    "id": "PVTK-03-18-NA-4DC-36SPD",
+    "id": "PVTK-03-18-GB-4DC-36SPD",
     "hero": "Private Class",
     "coach": "Global",
     "qty": 18,
@@ -854,7 +854,7 @@
     "keyHS": "Private Class-18-3-Asian, European and Native/18-3-HERO-4-36-0-0-0-0-0-0-0-0-0-12-0"
   },
   {
-    "id": "PVTK-03-18-NA-60SPD",
+    "id": "PVTK-03-18-GB-60SPD",
     "hero": "Private Class",
     "coach": "Global",
     "qty": 18,
@@ -874,7 +874,7 @@
     "keyHS": "Private Class-18-3-Asian, European and Native/18-3-HERO-0-60-0-0-0-0-0-0-0-0-0-12-0"
   },
   {
-    "id": "PVTK-03-18-NA-36SPD",
+    "id": "PVTK-03-18-GB-36SPD",
     "hero": "Private Class",
     "coach": "Global",
     "qty": 18,
@@ -894,7 +894,7 @@
     "keyHS": "Private Class-18-3-Asian, European and Native/18-3-HERO-0-36-0-0-0-0-0-0-0-0-0-12-0"
   },
   {
-    "id": "PVTK-03-18-NA",
+    "id": "PVTK-03-18-GB",
     "hero": "Private Class",
     "coach": "Global",
     "qty": 18,

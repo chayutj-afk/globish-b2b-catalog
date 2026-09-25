@@ -992,5 +992,25 @@
     ],
     "ass": "Phone Consult + Pre-Mid-Post Test",
     "keyHS": "Private Class-18-3-Filipino/18-3-HERO-0-0-0-0-0-0-0-0-0-0-0-12-0"
+  },
+  {
+    "id": "PVTK-03-18-ASEU",
+    "hero": "Private Class",
+    "coach": "Non-Native",
+    "qty": 18,
+    "dur": 3,
+    "supp": "+Master Class +Workshop (B2C)",
+    "band": "s",
+    "p": [
+      6900,
+      6900,
+      6400,
+      6100,
+      5900,
+      5400,
+      4900
+    ],
+    "ass": "Pre-Mid-Post Test",
+    "keyHS": "Private Class-18-3-Asian and European/18-3-HERO-0-0-0-0-0-0-0-0-0-0-0-12-0"
   }
 ]

@@ -111,11 +111,11 @@ test('Whitehouse package lines get a customer-readable description from WHPackag
   const th = describeWh(wh, { title: 'Essential Communication Development', code: '3822' });
   assert.match(th, /^Essential Communication Development \(3822\)/);
   assert.match(th, /หลักสูตร Build Up · ระยะเวลาเรียน 3 เดือน/);
-  assert.match(th, /คลาสเรียนส่วนตัว 1:1 \(Private Class\) 12 ครั้ง/);
+  assert.match(th, /คลาสเรียนตัวต่อตัว 1:1 12 ครั้ง/);
   assert.match(th, /Master Class/);
   assert.doesNotMatch(th, /Real-world/);
   assert.match(describeWh({ ...wh, months: '240' }, { lang: 'EN' }), /no expiry/);
   const line = priceService({ code: '3822', name: 'Essential', qty: 2, unitPrice: 15900, wh, lang: 'EN' }).lines[0];
-  assert.match(line.description, /Private 1:1 classes: 12 sessions/);
+  assert.match(line.description, /One-on-one classes: 12 sessions/);
   assert.equal(priceService({ code: 'B2SCAMP001', name: 'Camp', qty: 1, unitPrice: 1 }).lines[0].description, 'B2SCAMP001 · Camp');
 });

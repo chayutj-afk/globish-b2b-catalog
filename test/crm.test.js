@@ -22,10 +22,11 @@ test('B2B and B2E need an Opportunity ID; B2S never carries one', () => {
   assert.ok(validate({ ...qt, segment: 'Others', items: svc }));
 });
 
-test('PEAK client code is C + 5 digits; a failed tax check digit is flagged, not blocked', () => {
+test('PEAK client code is any PEAK code; a failed tax check digit is flagged, not blocked', () => {
   const o = { ...qt, opportunityId: 'CRM-OPP-2026-00001' };
   assert.equal(validate({ ...o, clientCode: 'c00123' }).r.clientCode, 'C00123');
-  assert.throws(() => validate({ ...o, clientCode: 'C123' }), /C ตามด้วย/);
+  assert.equal(validate({ ...o, clientCode: 'cb00458' }).r.clientCode, 'CB00458');
+  assert.throws(() => validate({ ...o, clientCode: 'C 12/3' }), /รหัสลูกค้า/);
   assert.match(validate({ ...o, taxId: '0105555555555' }).r.note, /ตรวจเลขภาษี/);
   // tax ID is required in every segment, even with a client code
   for (const segment of ['B2B', 'B2E', 'B2S', 'Others']) {
@@ -37,4 +38,29 @@ test('INV requests accept an optional, well-formed Opportunity ID', () => {
   const base = { qtNo: 'QO-1', company: 'Co', taxId: '0105555555554', evidenceType: 'PO จากลูกค้า', evidenceLink: 'https://drive.google.com/x', invoices: [{ amountPreVat: 100 }] };
   assert.equal(inv.validate(base).r.opportunityId, '');
   assert.throws(() => inv.validate({ ...base, opportunityId: 'x' }), /รูปแบบ/);
+});
+
+test('contact lookup matches the tax ID digits and the branch (blank = head office)', () => {
+  const { match } = require('../api/contacts')._test;
+  const rows = [
+    { taxId: '0-1355-61012-50-8', branch: '00000', code: 'CA00101', name: 'A' },
+    { taxId: '0135561012508', branch: '', code: 'CA00102', name: 'A dup' },
+    { taxId: '0135561012508', branch: '00002', code: 'CA00103', name: 'A br2' },
+  ];
+  assert.deepEqual(match(rows, '0135561012508', '00000').matches.map((x) => x.code), ['CA00101', 'CA00102']);
+  assert.deepEqual(match(rows, '0135561012508', '00002').matches.map((x) => x.code), ['CA00103']);
+  const none = match(rows, '0135561012508', '00009');
+  assert.equal(none.matches.length, 0);
+  assert.equal(none.otherBranches.length, 3);
+});
+
+test('contact import keeps only 13-digit tax IDs with a code, strips dashes, defaults branch', () => {
+  const { cleanRows } = require('../api/contacts')._test;
+  const out = cleanRows([
+    { taxId: '0-1355-61012-50-8', branch: '', code: 'CA00101', name: 'A' },
+    { taxId: '61-1974052', branch: '00000', code: 'VC00551', name: 'foreign' },
+    { taxId: '0105555555554', branch: '2', code: '', name: 'no code' },
+    { taxId: '0105555555554', branch: '2', code: 'CB1', name: 'B' },
+  ]);
+  assert.deepEqual(out.map((x) => [x.taxId, x.branch, x.code]), [['0135561012508', '00000', 'CA00101'], ['0105555555554', '00002', 'CB1']]);
 });

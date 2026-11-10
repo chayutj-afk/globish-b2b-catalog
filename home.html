@@ -23,6 +23,7 @@
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   @media(max-width:640px){.grid{grid-template-columns:1fr}}
   a.tile{display:block;background:#fff;border:1.5px solid var(--line);border-radius:16px;padding:24px;text-decoration:none;color:inherit;transition:border-color .15s,box-shadow .15s}
+  a.tile[hidden]{display:none}
   a.tile:hover{border-color:var(--primary);box-shadow:0 8px 24px rgba(232,89,12,.10)}
   .ico{font-size:30px;margin-bottom:10px}
   .tt{font-size:18px;font-weight:700;margin-bottom:6px}
@@ -52,6 +53,11 @@
       <div class="tt">B2B Standard Catalog</div>
       <div class="dd">คำนวณราคาแพ็กเกจ B2B ดู Catalog และ Key H.S. แล้วส่งแพ็กเกจเข้าคำขอ QT</div>
     </a>
+    <a class="tile" href="/import-contacts" id="op-import" hidden>
+      <div class="ico">🔄</div>
+      <div class="tt">นำเข้ารายชื่อลูกค้า PEAK</div>
+      <div class="dd">สำหรับฝ่ายบัญชี: อัปเดตแท็บ PeakContacts จากไฟล์ export ของ PEAK ให้ฟอร์มเติมรหัสลูกค้าจากเลขภาษีได้</div>
+    </a>
   </div>
 </main>
 <script>
@@ -61,6 +67,7 @@
   }).then(function (d) {
     if (!d || !d.user) return;
     document.getElementById('me').textContent = d.user.email;
+    if (d.user.role === 'op') document.getElementById('op-import').hidden = false;
     if (d.user.name) document.getElementById('hello').textContent = 'สวัสดีครับ คุณ' + d.user.name.split(' ')[0];
   }).catch(function () {});
   try {

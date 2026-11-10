@@ -124,10 +124,10 @@ table.items input.r{text-align:right}
     </div>
     <div class="row c3">
       <div class="fg"><label>เลขประจำตัวผู้เสียภาษี (13 หลัก) *</label>
-        <div class="inline"><input id="q-tax" type="text" inputmode="numeric" maxlength="13" placeholder="13 หลัก" oninput="digits(this);taxHint('q')"><button class="btn btn-g btn-sm" type="button" onclick="lookupTax('q')">ตรวจสอบ</button></div>
+        <div class="inline"><input id="q-tax" type="text" inputmode="numeric" maxlength="13" placeholder="13 หลัก" oninput="digits(this);taxHint('q');lookupTax('q')"><button class="btn btn-g btn-sm" type="button" onclick="lookupTax('q', true)">ค้นใน PEAK</button></div>
         <div class="sub" id="q-tax-hint"></div></div>
-      <div class="fg"><label>รหัสสาขา</label><input id="q-branch" type="text" maxlength="5" inputmode="numeric" placeholder="00000 = สำนักงานใหญ่" oninput="digits(this)"></div>
-      <div class="fg"><label>รหัสลูกค้าใน PEAK</label><div class="mask"><span>C</span><input id="q-client" type="text" inputmode="numeric" maxlength="5" placeholder="00123 (ไม่บังคับ)" style="flex:1" oninput="digits(this)"></div></div>
+      <div class="fg"><label>รหัสสาขา</label><input id="q-branch" type="text" maxlength="5" inputmode="numeric" placeholder="00000 = สำนักงานใหญ่" oninput="digits(this)" onchange="lookupTax('q', true)"></div>
+      <div class="fg"><label>รหัสลูกค้าใน PEAK (ระบบเติมให้จากเลขภาษี)</label><input id="q-client" type="text" readonly placeholder="กรอกเลขภาษีแล้วระบบหาให้" style="background:#f3f4f6"></div>
     </div>
     <div class="row c1">
       <div class="fg"><label>ชื่อบริษัท / หน่วยงาน (ตามที่จะออกเอกสาร) *</label><input id="q-company" type="text" maxlength="200"></div>
@@ -368,10 +368,42 @@ function taxHint(p) {
   h.textContent = ok ? '✓ เลขถูกต้องตามหลักตรวจสอบ' : '⚠ เลขนี้ไม่ผ่านการตรวจหลักสุดท้าย ลองตรวจกับเอกสารลูกค้าอีกครั้ง (ถ้าถูกแน่นอน ส่งต่อได้)';
   h.className = 'sub ' + (ok ? 'ok' : 'warn');
 }
-function lookupTax(p) {
-  taxHint(p);
+// Fills the PEAK contact code (and the company name if empty) from the 13-digit tax ID + branch,
+// using the Revenue Hub copy of PEAK contacts. The tax ID stays the key; the code is only shown.
+let lookupSeq = 0;
+async function lookupTax(p, force) {
+  const tax = $(p + '-tax').value.replace(/\D/g, '');
+  const client = $(p + '-client');
+  if (tax.length !== 13) { if (client) client.value = ''; return; }
+  if (!client) return;
   const h = $(p + '-tax-hint');
-  if ($(p + '-tax').value.length === 13) h.textContent += ' · ระบบจะหาลูกค้าใน PEAK จากเลขนี้ + สาขา ตอนสร้าง QT';
+  const branch = ($(p + '-branch').value || '').trim();
+  const seq = ++lookupSeq;
+  try {
+    const r = await fetch(`/api/contacts?taxId=${tax}${branch ? '&branch=' + encodeURIComponent(branch) : ''}`, { cache: 'no-store' });
+    const d = await r.json();
+    if (seq !== lookupSeq) return;
+    if (!r.ok) throw new Error(d.error || r.status);
+    taxHint(p);
+    const m = d.matches || [];
+    if (m.length === 1) {
+      client.value = m[0].code;
+      const co = $(p + '-company');
+      if (co && (!co.value.trim() || force)) co.value = m[0].name;
+      h.textContent += ` · พบใน PEAK: ${m[0].code} ${m[0].name} (สาขา ${m[0].branch})`;
+    } else if (m.length > 1) {
+      client.value = '';
+      h.textContent += ` · เลขนี้มี ${m.length} รายใน PEAK (${m.map((x) => x.code).join(', ')}) ฝ่ายบัญชีจะเลือกให้`;
+      h.className = 'sub warn';
+    } else {
+      client.value = '';
+      const other = (d.otherBranches || []).map((x) => `${x.code} สาขา ${x.branch}`).join(', ');
+      h.textContent += other ? ` · ไม่พบสาขานี้ใน PEAK แต่มี: ${other} ตรวจรหัสสาขาอีกครั้ง` : ' · ยังไม่มีใน PEAK ส่งคำขอได้ ฝ่ายบัญชีจะสร้างลูกค้าให้';
+      h.className = 'sub warn';
+    }
+  } catch (e) {
+    if (seq === lookupSeq) client.value = '';
+  }
 }
 
 async function submitQT() {
@@ -379,7 +411,7 @@ async function submitQT() {
   const seg = v('q-segment');
   const body = {
     segment: seg, dealType: v('q-deal'), opportunityId: seg === 'B2S' ? '' : getOpp('q'),
-    taxId: v('q-tax'), branch: v('q-branch'), clientCode: v('q-client') ? 'C' + v('q-client') : '', company: v('q-company'),
+    taxId: v('q-tax'), branch: v('q-branch'), clientCode: v('q-client'), company: v('q-company'),
     docLang: v('q-lang'), wantedQtDate: v('q-date'), creditTermDays: v('q-term'), poRequired: v('q-po') === 'yes', note: v('q-note'),
     items: CART,
   };
@@ -387,7 +419,6 @@ async function submitQT() {
   if (CART.some((it) => !KINDS[seg].includes(kindOf(it)))) return msg('q-msg', 'err', `มีรายการที่ลูกค้า ${seg} ใช้ไม่ได้ ลบออกก่อนส่ง`);
   if ((seg === 'B2B' || seg === 'B2E') && !body.opportunityId) return msg('q-msg', 'err', `ใส่ Opportunity ID จาก CRM สำหรับลูกค้า ${seg}`);
   if (body.opportunityId && !OPP_OK(body.opportunityId)) return msg('q-msg', 'err', 'Opportunity ID ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN');
-  if (body.clientCode && !/^C\d{5}$/.test(body.clientCode)) return msg('q-msg', 'err', 'รหัสลูกค้าใน PEAK ต้องเป็น C ตามด้วยตัวเลข 5 หลัก');
   if (body.taxId.length !== 13) return msg('q-msg', 'err', 'กรอกเลขประจำตัวผู้เสียภาษี 13 หลัก (บังคับทุกกลุ่มลูกค้า บุคคลธรรมดาใช้เลขบัตรประชาชน)');
   if (!body.company) return msg('q-msg', 'err', 'กรอกชื่อบริษัทหรือหน่วยงาน');
   const btn = $('q-submit'); btn.disabled = true; btn.textContent = '⏳ กำลังส่ง...'; msg('q-msg', '', '');

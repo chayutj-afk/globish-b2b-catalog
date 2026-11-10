@@ -1,10 +1,28 @@
 {
   "rewrites": [
-    { "source": "/", "destination": "/home.html" },
-    { "source": "/catalog", "destination": "/2026B2BStandardCatalog.html" },
-    { "source": "/request", "destination": "/request.html" }
+    {
+      "source": "/",
+      "destination": "/home.html"
+    },
+    {
+      "source": "/catalog",
+      "destination": "/2026B2BStandardCatalog.html"
+    },
+    {
+      "source": "/request",
+      "destination": "/request.html"
+    },
+    {
+      "source": "/import-contacts",
+      "destination": "/import-contacts.html"
+    }
   ],
   "functions": {
-    "api/invoice-requests.js": { "maxDuration": 30 }
+    "api/invoice-requests.js": {
+      "maxDuration": 30
+    },
+    "api/contacts.js": {
+      "maxDuration": 30
+    }
   }
 }

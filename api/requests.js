@@ -55,7 +55,8 @@ function validate(b) {
   // The 13-digit tax ID (+ branch) is the single source of truth for the customer in every segment.
   // Client code is only a hint; the PEAK sync matches on tax ID and flags a mismatch.
   if (!/^\d{13}$/.test(r.taxId)) throw bad('กรอกเลขประจำตัวผู้เสียภาษี 13 หลัก (บังคับทุกกลุ่มลูกค้า บุคคลธรรมดาใช้เลขบัตรประชาชน)');
-  if (r.clientCode && !/^C\d{5}$/.test(r.clientCode)) throw bad('รหัสลูกค้าใน PEAK ต้องเป็น C ตามด้วยตัวเลข 5 หลัก เช่น C00123');
+  // Filled by the form from PEAK Contacts (codes vary: C01988, CB00458, CA00101, 274804 …).
+  if (r.clientCode && !/^[A-Z0-9-]{1,20}$/.test(r.clientCode)) throw bad('รหัสลูกค้าใน PEAK ไม่ถูกต้อง');
   // Check digit is a warning only: flag it for accounting instead of blocking the request.
   if (r.taxId && !validTaxId(r.taxId)) r.note = `[ตรวจเลขภาษี: หลักสุดท้ายไม่ผ่าน] ${r.note}`.trim();
   const br = normBranch(r.branch);

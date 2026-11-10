@@ -64,3 +64,11 @@ test('contact import keeps only 13-digit tax IDs with a code, strips dashes, def
   ]);
   assert.deepEqual(out.map((x) => [x.taxId, x.branch, x.code]), [['0135561012508', '00000', 'CA00101'], ['0105555555554', '00002', 'CB1']]);
 });
+
+test('service lookup: proposed codes are not in PEAK, deactivating codes are flagged', () => {
+  const { lookup } = require('../api/services')._test;
+  const map = new Map([['3822', { code: '3822', name: 'ECD', group: 'B2E', proposal: 'เก็บไว้' }], ['1145', { code: '1145', name: 'Old', group: '', proposal: 'ปิดใช้งาน' }]]);
+  assert.deepEqual(lookup(map, ' 3822 '), { found: true, code: '3822', name: 'ECD', group: 'B2E', inactive: false });
+  assert.equal(lookup(map, '1145').inactive, true);
+  assert.equal(lookup(map, '9999').found, false);
+});

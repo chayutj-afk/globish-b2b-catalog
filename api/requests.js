@@ -10,6 +10,7 @@ const { validTaxId, normBranch } = require('../lib/taxid');
 const hub = require('../lib/hub');
 const peak = require('../lib/peak');
 const { OPP_RE, normaliseOppId } = require('../lib/crm');
+const { services } = require('./services');
 
 const SEGMENTS = ['B2B', 'B2S', 'B2E', 'Others'];
 const DEAL_TYPES = ['New Logo', 'Retention', 'Others'];
@@ -94,6 +95,18 @@ async function create(req, res, user) {
   const recent = existing.filter((x) => x.requestedBy === user.email && (parseSheetDate(x.createdAt) || 0) > hourAgo).length;
   if (recent >= LIMIT_PER_HOUR) throw bad(`ส่งคำขอได้ไม่เกิน ${LIMIT_PER_HOUR} ครั้งต่อชั่วโมง`, 429);
 
+  // Whitehouse Package ID / PEAK service code must exist in PEAK; the name always comes from PEAK.
+  if (items.some((it) => it.kind === 'service')) {
+    const svc = await services();
+    for (const it of items.filter((x) => x.kind === 'service')) {
+      const code = String(it.code || '').trim().toUpperCase();
+      const s = svc.get(code);
+      if (!s) throw bad(`ไม่พบรหัส ${code || '(ว่าง)'} ใน PEAK ตรวจ Package ID อีกครั้ง (ถ้าเพิ่งสร้างใน PEAK แจ้งฝ่ายบัญชี)`);
+      it.code = code;
+      it.name = s.name;
+    }
+  }
+
   const priced = items.map((it) => {
     const kind = it.kind || 'catalog';
     if (kind === 'keyhs') return priceCustomKeyHS({ keyHS: it.keyHS, name: it.name, qty: it.qty, unitPrice: it.unitPrice, discount: it.discount });
@@ -117,7 +130,7 @@ async function create(req, res, user) {
   };
 
   // PEAK Draft quotation (only when PEAK_MODE is uat/prod and every line has a service code).
-  let peakNote = 'PEAK ยังไม่เปิดใช้ คำขอรอฝ่ายบัญชีออกใบเสนอราคา';
+  let peakNote = 'ระบบจะสร้าง QT Draft ใน PEAK ให้ฝ่ายบัญชีตรวจและอนุมัติ แล้วเลข QT จะขึ้นในคำขอของฉัน';
   // WH packages and PEAK services carry their own code; catalog lines map through Products.
   let serviceCodeOf = (l) => l.peakCode || '';
   if (peak.mode() !== 'off') {
@@ -178,12 +191,38 @@ async function list(req, res, user) {
   });
 }
 
+// PATCH (Operation only) { requestId, action, note? }
+//   reject  → status rejected, note shown to sales (required)
+//   approved → status qt_approved (QT approved in PEAK)
+//   reopen  → status new (send it back to the sync)
+const OP_ACTIONS = { reject: 'rejected', approved: 'qt_approved', reopen: 'new' };
+async function update(req, res, user) {
+  checkOrigin(req);
+  if (user.role !== 'op') throw bad('เฉพาะฝ่ายบัญชี / Operation', 403);
+  const b = req.body || {};
+  const status = OP_ACTIONS[b.action];
+  if (!status) throw bad('คำสั่งไม่ถูกต้อง');
+  const note = text(b.note, 500);
+  if (b.action === 'reject' && !note) throw bad('ใส่เหตุผลที่ตีกลับ');
+  const rows = await hub.readTable('Requests');
+  const row = rows.find((x) => x.requestId === text(b.requestId, 40));
+  if (!row) throw bad('ไม่พบคำขอนี้', 404);
+  const at = hub.sheetDateTime();
+  const fields = { status, updatedAt: at };
+  if (b.action === 'approved') fields.qtApprovedAt = at;
+  fields.peakNote = note ? `${note} — ${user.name || user.email}` : (b.action === 'approved' ? `อนุมัติ QT ใน PEAK แล้ว — ${user.name || user.email}` : row.peakNote);
+  await hub.updateRow('Requests', row._row, fields);
+  await hub.log('catalog', `qt_${b.action}`, row.requestId, `${user.email}${note ? ' · ' + note : ''}`);
+  res.status(200).json({ ok: true, status });
+}
+
 module.exports = async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   try {
     const user = requireUser(req);
     if (req.method === 'POST') return await create(req, res, user);
     if (req.method === 'GET') return await list(req, res, user);
+    if (req.method === 'PATCH') return await update(req, res, user);
     res.status(405).json({ ok: false, error: 'Method not allowed' });
   } catch (e) {
     sendError(res, e);

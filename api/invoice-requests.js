@@ -224,6 +224,26 @@ async function update(req, res, user) {
     return res.status(200).json({ ok: true, originalStatus: 'sent' });
   }
 
+  // Accounting: INV issued from the QT in PEAK (fallback when the sync hasn't picked it up), or rejected.
+  if (b.action === 'issued' || b.action === 'reject' || b.action === 'reopen') {
+    if (user.role !== 'op') throw bad('เฉพาะฝ่ายบัญชี / Operation', 403);
+    const note = text(b.note, 500);
+    if (b.action === 'reject') {
+      if (!note) throw bad('ใส่เหตุผลที่ตีกลับ');
+      await hub.updateRow('InvoiceRequests', row._row, { status: 'rejected', accountNote: `${note} — ${user.name || user.email}`, updatedAt: at });
+    } else if (b.action === 'reopen') {
+      await hub.updateRow('InvoiceRequests', row._row, { status: 'new', updatedAt: at });
+    } else {
+      const ivNo = text(b.peakIvNo, 40).toUpperCase();
+      if (!/^[A-Z]{1,6}-?\d{6,}$/.test(ivNo)) throw bad('ใส่เลข INV จาก PEAK เช่น IV-20261100014');
+      const link = text(b.peakDocLink, 500);
+      if (link && !/^https:\/\/(doc|secure)\.peakaccount\.com\//.test(link)) throw bad('ลิงก์เอกสารต้องเป็นลิงก์ของ PEAK');
+      await hub.updateRow('InvoiceRequests', row._row, { status: 'iv_issued', peakIvNo: ivNo, peakDocLink: link || row.peakDocLink, accountNote: note || row.accountNote, updatedAt: at });
+    }
+    await hub.log('catalog', `iv_${b.action}`, id, `${user.email}${note ? ' · ' + note : ''}`);
+    return res.status(200).json({ ok: true });
+  }
+
   throw bad('คำสั่งไม่ถูกต้อง');
 }
 

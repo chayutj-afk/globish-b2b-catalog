@@ -707,7 +707,7 @@ async function submitINV() {
 
 // ─── Mine ─────────────────────────────────────────────────
 const QT_ST = { new: ['รอฝ่ายบัญชีอนุมัติ', 'new'], approved: ['อนุมัติแล้ว · รอระบบสร้าง QT', 'blue'], qt_creating: ['กำลังสร้าง QT ใน PEAK', 'blue'],
-  needs_contact: ['รอฝ่ายบัญชี: ลูกค้าใน PEAK', 'new'], needs_service_code: ['รอฝ่ายบัญชี: รหัสบริการ', 'new'], qt_error: ['รอฝ่ายบัญชีตรวจ', 'red'],
+  needs_contact: ['รอฝ่ายบัญชี: ลูกค้าใน PEAK', 'new'], needs_review: ['รอตรวจคำอธิบายเพิ่มเติม', 'new'], needs_service_code: ['รอฝ่ายบัญชี: รหัสบริการ', 'new'], qt_error: ['รอฝ่ายบัญชีตรวจ', 'red'],
   qt_draft: ['QT Draft · รอบัญชีอนุมัติ', 'blue'], qt_approved: ['QT อนุมัติแล้ว · ส่งลูกค้าได้', 'green'], rejected: ['ตีกลับ', 'red'], changes_requested: ['ขอแก้ไข', 'new'],
   accepted: ['ลูกค้าตอบรับ', 'green'], iv_requested: ['ขอ INV แล้ว', 'green'], iv_issued: ['ออก INV แล้ว', 'green'], cancelled: ['ยกเลิก', 'red'] };
 const IV_ST = { new: ['รอฝ่ายบัญชีออก INV', 'new'], iv_draft: ['INV Draft · รอบัญชีอนุมัติ', 'blue'], iv_issued: ['ออก INV แล้ว', 'green'], rejected: ['ตีกลับ', 'red'] };
@@ -764,7 +764,7 @@ function renderPending() {
   $('nav-pend').hidden = !op;
   if (!op) return;
   const waitQ = REQS.filter((q) => q.status === 'new');
-  const fixQ = REQS.filter((q) => ['needs_contact', 'needs_service_code', 'qt_error'].includes(q.status));
+  const fixQ = REQS.filter((q) => ['needs_contact', 'needs_service_code', 'needs_review', 'qt_error'].includes(q.status));
   const waitI = IVS.filter((v) => v.status === 'new');
   const waitO = IVS.filter((v) => v.originalStatus === 'requested');
   const n = waitQ.length + waitI.length + waitO.length;

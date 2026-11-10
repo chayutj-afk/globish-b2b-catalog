@@ -1,5 +1,8 @@
 {
   "rewrites": [
     { "source": "/", "destination": "/2026B2BStandardCatalog.html" }
-  ]
+  ],
+  "functions": {
+    "api/invoice-requests.js": { "maxDuration": 30 }
+  }
 }

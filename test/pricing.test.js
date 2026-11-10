@@ -17,8 +17,20 @@ test('hero line carries the price, supplements are zero-priced lines', () => {
   assert.equal(r.total, r.lines[0].unitPrice * 25);
 });
 
-test('prices below the catalog floor are refused', () => {
-  assert.throws(() => p.priceItem({ packageId: 'SPD-03-36', students: 10, unitPrice: 100 }), /ต่ำกว่าราคาขั้นต่ำ/);
+test('catalog price is a reference: sales price and discount are used, below-floor is flagged not blocked', () => {
+  const r = p.priceItem({ packageId: 'SPD-03-36', students: 10, unitPrice: 1500, discount: '10%' });
+  assert.equal(r.lines[0].unitPrice, 1500);
+  assert.equal(r.lines[0].discount, 1500);
+  assert.equal(r.total, 13500);
+  assert.equal(r.catalogTotal, p.getPrice(p.findPackage('SPD-03-36'), 10) * 10);
+  assert.match(r.belowFloor, /SPD-03-36/);
+  const ok = p.priceItem({ packageId: 'SPD-03-36', students: 10, discount: 2000 });
+  assert.equal(ok.belowFloor, '');
+});
+
+test('discount must be baht or percent and not exceed the line', () => {
+  assert.throws(() => p.priceItem({ packageId: 'SPD-03-36', students: 10, discount: 'abc' }), /ส่วนลด/);
+  assert.throws(() => p.priceItem({ packageId: 'SPD-03-36', students: 10, discount: 999999 }), /มากกว่ายอด/);
 });
 
 test('per-class workshop with coach and travel surcharges', () => {
@@ -38,6 +50,8 @@ test('PEAK payload: draft, VAT 7% lines, unmapped codes reported', () => {
   assert.equal(q.issuedDate, '20261112');
   assert.equal(q.products[1].price, 0);
   assert.ok(q.products.every((x) => x.vatType === 3));
+  const disc = peak.buildQuotation(req, p.priceItem({ packageId: 'SPD-03-36', students: 10, discount: 500 }).lines, () => 'X');
+  assert.equal(disc.body.PeakQuotations.quotations[0].products[0].discount, '500');
 });
 
 test('PEAK signature is HMAC-SHA1 hex of the UTC timestamp', () => {

@@ -68,16 +68,19 @@ async function create(req, res, user) {
 
   const priced = items.map((it) => priceItem({
     packageId: text(it.packageId, 60), students: it.students, classes: it.classes,
-    unitPrice: it.unitPrice, intl: it.intl, loc: it.loc,
+    unitPrice: it.unitPrice, discount: it.discount, intl: it.intl, loc: it.loc,
   }));
   const lines = priced.flatMap((p) => p.lines);
-  const total = priced.reduce((s, p) => s + p.total, 0);
+  const total = Math.round(priced.reduce((s, p) => s + p.total, 0) * 100) / 100;
+  const catalogTotal = priced.reduce((s, p) => s + p.catalogTotal, 0);
+  const belowFloor = priced.map((p) => p.belowFloor).filter(Boolean).join('; ');
 
   const now = new Date();
   const request = {
     requestId: newId(now), createdAt: hub.sheetDateTime(now), requestedBy: user.email, salesName: user.name,
     ...r, wantedQtDate: toYmdDisplay(r.wantedQtDate), status: 'new', peakQtNo: '', peakQtId: '',
     totalPreVat: total, qtApprovedAt: '', ivRequestedAt: '', updatedAt: hub.sheetDateTime(now),
+    catalogTotal, belowFloor,
   };
 
   // PEAK Draft quotation (only when PEAK_MODE is uat/prod and every line has a service code).
@@ -109,10 +112,11 @@ async function create(req, res, user) {
   await hub.appendRows('RequestLines', lines.map((l, i) => ({
     requestId: request.requestId, line: i + 1, role: l.role, keyHS: l.keyHS, packageId: l.packageId,
     peakServiceCode: serviceCodeOf(l), description: l.description, qty: l.qty, unitPrice: l.unitPrice,
+    discount: l.discount, listPrice: l.listPrice,
   })));
-  await hub.log('catalog', 'request_created', request.requestId, `${user.email} · ${r.company} · ${total}`);
+  await hub.log('catalog', 'request_created', request.requestId, `${user.email} · ${r.company} · ${total}${belowFloor ? ' · below catalog floor: ' + belowFloor : ''}`);
 
-  res.status(200).json({ ok: true, requestId: request.requestId, status: request.status, peakQtNo: request.peakQtNo, total, lines: lines.length, message: peakNote });
+  res.status(200).json({ ok: true, requestId: request.requestId, status: request.status, peakQtNo: request.peakQtNo, total, catalogTotal, belowFloor, lines: lines.length, message: peakNote });
 }
 
 function parseSheetDate(s) {

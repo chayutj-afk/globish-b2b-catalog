@@ -235,6 +235,9 @@ code{font-size:11px;background:#f3f4f6;padding:2px 5px;border-radius:4px;font-fa
 .res-add-req{margin-top:12px;width:100%;padding:11px;border:none;border-radius:8px;background:#E8590C;color:#fff;font-size:14px;font-weight:700;cursor:pointer}
 .res-add-req:hover{background:#c2410c}
 .req-wrap{max-width:900px;margin:0 auto}
+.req-section-title{font-size:16px;font-weight:700;color:var(--gray-900);margin-bottom:14px}
+.req-warn{font-size:10.5px;color:#b45309;margin-top:3px;font-weight:600}
+.fg input[type=file]{width:100%}
 .req-table{width:100%;border-collapse:collapse;font-size:13px}
 .req-table th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--gray-500);text-align:left;padding:8px 6px;border-bottom:1.5px solid var(--gray-200)}
 .req-table td{padding:8px 6px;border-bottom:1px solid var(--gray-100);vertical-align:top}
@@ -291,7 +294,7 @@ code{font-size:11px;background:#f3f4f6;padding:2px 5px;border-radius:4px;font-fa
       <nav class="nav">
         <!-- Sales tabs -->
         <button id="nav-calc" class="nav-btn on" onclick="switchTab('calc',this)">🧮 คำนวณราคา</button>
-        <button id="nav-request" class="nav-btn" onclick="switchTab('request',this)">📝 ขอใบเสนอราคา <span class="cart-badge" id="cart-badge" hidden>0</span></button>
+        <button id="nav-request" class="nav-btn" onclick="switchTab('request',this)">📝 ขอเอกสาร QT/INV <span class="cart-badge" id="cart-badge" hidden>0</span></button>
         <!-- Shared tab -->
         <button id="nav-catalog" class="nav-btn" onclick="switchTab('catalog',this)">📋 Catalog</button>
         <!-- Operation tabs (hidden in sales mode) -->
@@ -399,9 +402,10 @@ code{font-size:11px;background:#f3f4f6;padding:2px 5px;border-radius:4px;font-fa
 <div class="req-wrap">
 
   <div class="card">
+    <div class="req-section-title">ขอใบเสนอราคา (QT)</div>
     <div class="card-label">1 · แพ็กเกจในคำขอ</div>
     <div id="req-cart"></div>
-    <div class="info" style="margin-top:10px">เพิ่มแพ็กเกจจากแท็บ 🧮 คำนวณราคา แล้วกด "เพิ่มเข้าคำขอใบเสนอราคา" · ราคาลดได้ไม่ต่ำกว่าราคาขั้นต่ำในแคตตาล็อก · ส่วนเสริมใน Key H.S. จะขึ้นเป็นบรรทัดราคา 0 ในใบเสนอราคา</div>
+    <div class="info" style="margin-top:10px">เพิ่มแพ็กเกจจากแท็บ 🧮 คำนวณราคา แล้วกด "เพิ่มเข้าคำขอใบเสนอราคา" · ราคาแคตตาล็อกเป็นค่าอ้างอิง แก้ราคาต่อหน่วยและใส่ส่วนลด (บาท หรือ %) ได้ ฝ่ายบัญชีจะออกเอกสารตามตัวเลขที่กรอก · ส่วนเสริมใน Key H.S. จะขึ้นเป็นบรรทัดราคา 0 ในใบเสนอราคา</div>
   </div>
 
   <div class="card">
@@ -436,12 +440,65 @@ code{font-size:11px;background:#f3f4f6;padding:2px 5px;border-radius:4px;font-fa
     <div id="rq-msg"></div>
   </div>
 
+  <div class="card" id="inv-card">
+    <div class="req-section-title">ขอออกใบแจ้งหนี้ (INV)</div>
+    <div class="info" style="margin-bottom:14px">ต้องมีหลักฐานว่าลูกค้ายอมรับใบเสนอราคา: QT ที่เซ็นแล้ว หรือเอกสารที่เทียบเท่า (PO, อีเมลยืนยัน) กรณีลูกค้าไม่เซ็น QT</div>
+    <div class="row c2">
+      <div class="fg"><label>คำขอ QT ในระบบ (ถ้ามี)</label>
+        <select id="iv-req" onchange="onInvRequestPick()"><option value="">— QT นอกระบบ / กรอกเอง —</option></select></div>
+      <div class="fg"><label>เลขที่ใบเสนอราคา (QT)</label><input type="text" id="iv-qt" maxlength="40" placeholder="QO-2026xxxxxxx"></div>
+    </div>
+    <div class="row c2">
+      <div class="fg"><label>ชื่อบริษัท</label><input type="text" id="iv-company" maxlength="200"></div>
+      <div class="fg"><label>เลขประจำตัวผู้เสียภาษี (ถ้ามี)</label><input type="text" id="iv-tax" inputmode="numeric" maxlength="17"></div>
+    </div>
+    <div class="row c2">
+      <div class="fg"><label>หลักฐานที่ลูกค้ายอมรับ</label>
+        <select id="iv-evtype" onchange="document.getElementById('iv-evother-wrap').style.display=this.value==='อื่นๆ'?'':'none'">
+          <option>QT ที่ลูกค้าเซ็นแล้ว</option><option>PO จากลูกค้า</option><option>อีเมลยืนยันจากลูกค้า</option><option>อื่นๆ</option></select></div>
+      <div class="fg" id="iv-evother-wrap" style="display:none"><label>ระบุเอกสาร</label><input type="text" id="iv-evother" maxlength="120"></div>
+    </div>
+    <div class="row c2">
+      <div class="fg" id="iv-file-wrap"><label>แนบไฟล์ (PDF / JPG / PNG ไม่เกิน 3 MB)</label><input type="file" id="iv-file" accept="application/pdf,image/jpeg,image/png" style="font-size:13px"></div>
+      <div class="fg"><label id="iv-link-label">หรือใส่ลิงก์ Google Drive ของไฟล์</label><input type="text" id="iv-link" maxlength="500" placeholder="https://drive.google.com/..."></div>
+    </div>
+    <div class="row c2">
+      <div class="fg"><label>วันที่ต้องการให้ลงใน INV</label><input type="date" id="iv-date"></div>
+      <div class="fg"><label>การเรียกเก็บ</label>
+        <select id="iv-billing" onchange="document.getElementById('iv-inst-row').style.display=this.value==='installment'?'':'none'">
+          <option value="full">เต็มจำนวนตาม QT</option><option value="installment">แบ่งงวด</option></select></div>
+    </div>
+    <div class="row c2" id="iv-inst-row" style="display:none">
+      <div class="fg"><label>งวด (เช่น 1/2 หรือ 30%)</label><input type="text" id="iv-inst" maxlength="20"></div>
+      <div class="fg"><label>ยอดก่อน VAT ของงวดนี้ (บาท)</label><input type="number" id="iv-amount" min="0"></div>
+    </div>
+    <div class="row c2">
+      <div class="fg"><label>จำนวนผู้เรียนที่ออก INV (ถ้าต่างจาก QT)</label><input type="number" id="iv-students" min="1"></div>
+      <div class="fg"><label>เลขที่ PO (ถ้ามี)</label><input type="text" id="iv-po" maxlength="60"></div>
+    </div>
+    <div class="row c2">
+      <div class="fg"><label>เครดิตเทอม (วัน)</label><input type="number" id="iv-term" min="0" max="180"></div>
+      <div class="fg"><label>ผู้ติดต่อฝ่ายการเงินของลูกค้า</label><input type="text" id="iv-fin-name" maxlength="120"></div>
+    </div>
+    <div class="row c2">
+      <div class="fg"><label>อีเมลฝ่ายการเงิน</label><input type="text" id="iv-fin-email" maxlength="120"></div>
+      <div class="fg"><label>เบอร์ฝ่ายการเงิน</label><input type="text" id="iv-fin-phone" maxlength="40"></div>
+    </div>
+    <div class="fg"><label>ส่งเอกสารตัวจริงที่ (เว้นว่าง = ตามที่อยู่บริษัท)</label><input type="text" id="iv-address" maxlength="500" style="width:100%;padding:8px 10px;border:1px solid var(--gray-300);border-radius:8px;font-size:13px"></div>
+    <div class="fg"><label>หมายเหตุถึงฝ่ายบัญชี</label>
+      <textarea id="iv-note" rows="2" maxlength="1000" style="width:100%;padding:9px 11px;border:1.5px solid var(--gray-300);border-radius:8px;font-size:13px;font-family:inherit"></textarea></div>
+    <button class="btn btn-primary btn-block" id="iv-submit" onclick="submitInvoiceRequest()" style="background:#E8590C;justify-content:center">📨 ส่งคำขอออก INV</button>
+    <div id="iv-msg"></div>
+  </div>
+
   <div class="card" style="margin-bottom:0">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <div class="card-label" style="margin-bottom:0" id="rq-list-title">คำขอของฉัน</div>
       <button class="btn btn-gray" style="padding:5px 12px;font-size:12px" onclick="loadRequests()">🔄 รีเฟรช</button>
     </div>
     <div id="rq-list"><div class="req-empty">กำลังโหลด...</div></div>
+    <div class="card-label" style="margin:18px 0 10px">คำขอออก INV</div>
+    <div id="iv-list"><div class="req-empty">กำลังโหลด...</div></div>
   </div>
 
 </div>
@@ -2292,22 +2349,35 @@ function addToRequest() {
   toast(`✅ เพิ่ม ${pkg.id} เข้าคำขอแล้ว (${CART.length} รายการ)`);
 }
 
+function cartDiscount(it, gross) {
+  const d = String(it.discount ?? '').trim().replace(/,/g, '');
+  if (!d) return 0;
+  if (/^\d+(\.\d+)?%$/.test(d)) return gross * Number(d.slice(0, -1)) / 100;
+  return /^\d+(\.\d+)?$/.test(d) ? Number(d) : 0;
+}
+
+function cartQty(it, pkg) {
+  return pkg && pkg.unit === 'per class' ? (Number(it.classes) || 1) : (Number(it.students) || 0);
+}
+
 function cartLineTotal(it, pkg) {
-  const perClass = pkg && pkg.unit === 'per class';
-  return (Number(it.unitPrice) || 0) * (perClass ? (Number(it.classes) || 1) : (Number(it.students) || 0));
+  const gross = (Number(it.unitPrice) || 0) * cartQty(it, pkg);
+  return gross - cartDiscount(it, gross);
 }
 
 function renderCart() {
   const el = document.getElementById('req-cart');
   if (!el) return;
   if (!CART.length) { el.innerHTML = '<div class="req-empty">ยังไม่มีแพ็กเกจ เลือกจากแท็บ 🧮 คำนวณราคา</div>'; return; }
-  let total = 0;
+  let total = 0, catalog = 0;
   const rows = CART.map((it, i) => {
     const pkg = PKGS.find((p) => p.id === it.packageId);
     const perClass = pkg && pkg.unit === 'per class';
     const floor = pkg ? Math.min(...pkg.p) : 0;
     const list = pkg ? getPrice(pkg, perClass ? (pkg.minN || it.students) : it.students) : 0;
-    const lt = cartLineTotal(it, pkg); total += lt;
+    const qty = cartQty(it, pkg);
+    const lt = cartLineTotal(it, pkg); total += lt; catalog += list * qty;
+    const netUnit = qty ? lt / qty : 0;
     const extra = [];
     if (it.intl && it.intl !== '0') extra.push(it.intl === 'na' ? '+ Native coach' : '+ Non-Native coach');
     if (it.loc === 'out') extra.push('+ นอก กทม.');
@@ -2316,18 +2386,20 @@ function renderCart() {
         <div class="req-supp">${esc(pkg ? pkg.hero + (pkg.coach ? ' · ' + pkg.coach : '') : 'ไม่พบในแคตตาล็อก')}</div>
         ${pkg && suppText(pkg.keyHS) ? `<div class="req-supp">ส่วนเสริม: ${esc(suppText(pkg.keyHS))}</div>` : ''}
         ${extra.length ? `<div class="req-supp">${esc(extra.join(' '))} (คิดค่าเพิ่มตามเรทในแคตตาล็อก)</div>` : ''}</td>
-      <td class="num" style="width:90px"><input type="number" min="1" value="${esc(it.students)}" onchange="updateCart(${i},'students',this.value)" aria-label="จำนวนผู้เรียน"></td>
-      <td class="num hide-sm" style="width:80px">${perClass ? `<input type="number" min="1" value="${esc(it.classes)}" onchange="updateCart(${i},'classes',this.value)" aria-label="จำนวนคลาส">` : '–'}</td>
-      <td class="num" style="width:120px"><input type="number" min="${floor}" value="${esc(it.unitPrice)}" onchange="updateCart(${i},'unitPrice',this.value)" aria-label="ราคาต่อหน่วย">
-        <div class="req-floor">list ${fmt(list)} · ขั้นต่ำ ${fmt(floor)}</div></td>
-      <td class="num" style="width:110px">${fmt(lt)}</td>
+      <td class="num" style="width:80px"><input type="number" min="1" value="${esc(it.students)}" onchange="updateCart(${i},'students',this.value)" aria-label="จำนวนผู้เรียน"></td>
+      <td class="num hide-sm" style="width:70px">${perClass ? `<input type="number" min="1" value="${esc(it.classes)}" onchange="updateCart(${i},'classes',this.value)" aria-label="จำนวนคลาส">` : '–'}</td>
+      <td class="num" style="width:120px"><input type="number" min="0" value="${esc(it.unitPrice)}" onchange="updateCart(${i},'unitPrice',this.value)" aria-label="ราคาต่อหน่วย">
+        <div class="req-floor">แคตตาล็อก ${fmt(list)}</div></td>
+      <td class="num" style="width:100px"><input type="text" value="${esc(it.discount ?? '')}" placeholder="0 หรือ 10%" onchange="updateCart(${i},'discount',this.value)" aria-label="ส่วนลด"></td>
+      <td class="num" style="width:110px">${fmt(lt)}${netUnit < floor ? `<div class="req-warn">ต่ำกว่าขั้นต่ำแคตตาล็อก (${fmt(floor)})</div>` : ''}</td>
       <td style="width:40px"><button class="req-del" onclick="removeCart(${i})" aria-label="ลบ">✕</button></td>
     </tr>`;
   }).join('');
   el.innerHTML = `<table class="req-table">
-    <thead><tr><th>แพ็กเกจ</th><th class="num">ผู้เรียน</th><th class="num hide-sm">คลาส</th><th class="num">ราคา/หน่วย</th><th class="num">รวม</th><th></th></tr></thead>
+    <thead><tr><th>แพ็กเกจ</th><th class="num">ผู้เรียน</th><th class="num hide-sm">คลาส</th><th class="num">ราคา/หน่วย</th><th class="num">ส่วนลด</th><th class="num">รวม</th><th></th></tr></thead>
     <tbody>${rows}</tbody></table>
-    <div class="req-total"><span>ยอดรวมก่อน VAT (ไม่รวมค่าเพิ่ม)</span><strong>${fmt(total)}</strong></div>`;
+    <div class="req-total"><span>ยอดรวมก่อน VAT (ไม่รวมค่าเพิ่ม)</span><strong>${fmt(total)}</strong></div>
+    ${catalog && Math.round(catalog) !== Math.round(total) ? `<div class="req-total" style="font-size:12px;color:var(--gray-500)"><span>ราคาแคตตาล็อกรวม (อ้างอิง)</span><span>${fmt(catalog)}</span></div>` : ''}`;
 }
 
 function updateCart(i, field, value) {
@@ -2340,7 +2412,8 @@ function updateCart(i, field, value) {
     if (priceWasList && pkg.unit !== 'per class') it.unitPrice = getPrice(pkg, it.students); // follow the tier
   }
   if (field === 'classes' && v >= 1) it.classes = Math.floor(v);
-  if (field === 'unitPrice' && v > 0) it.unitPrice = v;
+  if (field === 'unitPrice' && v >= 0 && value !== '') it.unitPrice = v;
+  if (field === 'discount') it.discount = String(value).trim();
   saveCart(); renderCart();
 }
 
@@ -2362,6 +2435,8 @@ async function submitRequest() {
   };
   if (!body.company) { showReqMsg('err', 'กรอกชื่อบริษัทหรือหน่วยงาน'); return; }
   if (!body.clientCode && !/^\d{13}$/.test(body.taxId)) { showReqMsg('err', 'เลขประจำตัวผู้เสียภาษีต้องเป็นตัวเลข 13 หลัก (หรือใส่รหัสลูกค้าใน PEAK)'); return; }
+  const badDisc = CART.find((it) => it.discount && !/^\d+(\.\d+)?%?$/.test(String(it.discount).replace(/,/g, '')));
+  if (badDisc) { showReqMsg('err', `ส่วนลดของ ${badDisc.packageId} ต้องเป็นจำนวนเงินหรือเปอร์เซ็นต์ เช่น 5000 หรือ 10%`); return; }
   const btn = document.getElementById('rq-submit');
   btn.disabled = true; btn.textContent = '⏳ กำลังส่ง...'; showReqMsg('', '');
   try {
@@ -2369,7 +2444,7 @@ async function submitRequest() {
     if (r.status === 401) { location.href = '/signin.html?next=' + encodeURIComponent('/#request'); return; }
     const d = await r.json().catch(() => null);
     if (r.ok && d && d.ok) {
-      showReqMsg('ok', `ส่งคำขอ ${d.requestId} แล้ว ยอดก่อน VAT ${fmt(d.total)} · ${d.message}`);
+      showReqMsg('ok', `ส่งคำขอ ${d.requestId} แล้ว ยอดก่อน VAT ${fmt(d.total)} · ${d.message}${d.belowFloor ? ' · มีรายการต่ำกว่าราคาขั้นต่ำแคตตาล็อก (บันทึกไว้ให้ผู้อนุมัติเห็น)' : ''}`);
       CART = []; saveCart(); renderCart();
       ['rq-company','rq-tax','rq-branch','rq-client','rq-date','rq-term','rq-note'].forEach((id) => { document.getElementById(id).value = ''; });
       loadRequests();
@@ -2389,11 +2464,14 @@ const STATUS_TH = { new: 'รอออก QT', qt_draft: 'QT Draft ใน PEAK',
 async function loadRequests() {
   const el = document.getElementById('rq-list');
   if (!el) return;
+  loadInvoiceRequests();
   document.getElementById('rq-list-title').textContent = ME && ME.role === 'op' ? 'คำขอล่าสุด (ทุกคน)' : 'คำขอของฉัน';
   try {
     const r = await fetch('/api/requests', { cache: 'no-store' });
     const d = await r.json().catch(() => null);
     if (!r.ok || !d || !d.ok) { el.innerHTML = `<div class="req-empty">${esc((d && d.error) || 'โหลดไม่สำเร็จ')}</div>`; return; }
+    MY_REQUESTS = d.requests;
+    fillInvRequestPicker();
     if (!d.requests.length) { el.innerHTML = '<div class="req-empty">ยังไม่มีคำขอ</div>'; return; }
     el.innerHTML = d.requests.map((q) => {
       const heroes = q.lines.filter((l) => l.role === 'hero').map((l) => `${esc(l.packageId)} × ${esc(l.qty)}`).join(', ');
@@ -2405,6 +2483,111 @@ async function loadRequests() {
         <div class="req-list-lines">${esc(q.createdAt)} · ${esc(q.segment)} · ${esc(q.dealType)}${ME && ME.role === 'op' ? ' · ' + esc(q.salesName) : ''} · ยอดก่อน VAT ${esc(q.totalPreVat)}<br>${heroes}</div>
       </div>`;
     }).join('');
+  } catch (e) {
+    el.innerHTML = `<div class="req-empty">โหลดไม่สำเร็จ: ${esc(e.message)}</div>`;
+  }
+}
+
+
+// ── Invoice requests ─────────────────────────
+let MY_REQUESTS = [];
+
+function fillInvRequestPicker() {
+  const sel = document.getElementById('iv-req');
+  if (!sel) return;
+  const keep = sel.value;
+  sel.innerHTML = '<option value="">— QT นอกระบบ / กรอกเอง —</option>' + MY_REQUESTS
+    .filter((q) => q.status !== 'cancelled')
+    .map((q) => `<option value="${esc(q.requestId)}">${esc(q.requestId)} · ${esc(q.company)}${q.peakQtNo ? ' · ' + esc(q.peakQtNo) : ''}</option>`).join('');
+  sel.value = keep;
+}
+
+function onInvRequestPick() {
+  const q = MY_REQUESTS.find((x) => x.requestId === document.getElementById('iv-req').value);
+  if (!q) return;
+  document.getElementById('iv-qt').value = q.peakQtNo || '';
+  document.getElementById('iv-company').value = q.company || '';
+  document.getElementById('iv-tax').value = q.taxId || '';
+  document.getElementById('iv-term').value = q.creditTermDays || '';
+  if (!q.peakQtNo) showInvMsg('err', 'คำขอนี้ยังไม่มีเลข QT ในระบบ ใส่เลขที่ QT ที่ฝ่ายบัญชีออกให้');
+  else showInvMsg('', '');
+}
+
+function showInvMsg(kind, text) {
+  const el = document.getElementById('iv-msg');
+  el.innerHTML = text ? `<div class="req-msg ${kind}">${esc(text)}</div>` : '';
+}
+
+function readFileB64(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(',')[1] || '');
+    r.onerror = () => reject(new Error('อ่านไฟล์ไม่สำเร็จ'));
+    r.readAsDataURL(file);
+  });
+}
+
+async function submitInvoiceRequest() {
+  const v = (id) => document.getElementById(id).value.trim();
+  const body = {
+    requestId: v('iv-req'), qtNo: v('iv-qt'), company: v('iv-company'), taxId: v('iv-tax').replace(/[\s-]/g, ''),
+    evidenceType: v('iv-evtype'), evidenceOther: v('iv-evother'), evidenceLink: v('iv-link'),
+    wantedIssueDate: v('iv-date'), billing: v('iv-billing'), installment: v('iv-inst'), amountPreVat: v('iv-amount'),
+    students: v('iv-students'), creditTermDays: v('iv-term'), poNo: v('iv-po'),
+    financeContact: v('iv-fin-name'), financeEmail: v('iv-fin-email'), financePhone: v('iv-fin-phone'),
+    deliveryAddress: v('iv-address'), note: v('iv-note'),
+  };
+  if (!body.qtNo) { showInvMsg('err', 'ใส่เลขที่ใบเสนอราคา (QT)'); return; }
+  if (!body.company) { showInvMsg('err', 'ใส่ชื่อบริษัท'); return; }
+  const f = document.getElementById('iv-file').files[0];
+  if (!f && !body.evidenceLink) { showInvMsg('err', 'แนบไฟล์หลักฐาน หรือใส่ลิงก์ Google Drive ของไฟล์'); return; }
+  if (f && f.size > 3 * 1024 * 1024) { showInvMsg('err', 'ไฟล์ใหญ่เกิน 3 MB ลองย่อหรือแปลงเป็น PDF ก่อน'); return; }
+  if (body.billing === 'installment' && (!body.installment || !(Number(body.amountPreVat) > 0))) { showInvMsg('err', 'ระบุงวดและยอดก่อน VAT ของงวดนี้'); return; }
+  const btn = document.getElementById('iv-submit');
+  btn.disabled = true; btn.textContent = '⏳ กำลังส่ง...'; showInvMsg('', '');
+  try {
+    if (f) body.file = { name: f.name, type: f.type, data: await readFileB64(f) };
+    const r = await fetch('/api/invoice-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (r.status === 401) { location.href = '/signin.html?next=' + encodeURIComponent('/#request'); return; }
+    const d = await r.json().catch(() => null);
+    if (r.ok && d && d.ok) {
+      showInvMsg('ok', `ส่งคำขอ ${d.ivRequestId} แล้ว · ${d.message}`);
+      ['iv-req','iv-qt','iv-company','iv-tax','iv-evother','iv-link','iv-date','iv-inst','iv-amount','iv-students','iv-term','iv-po','iv-fin-name','iv-fin-email','iv-fin-phone','iv-address','iv-note'].forEach((id) => { document.getElementById(id).value = ''; });
+      document.getElementById('iv-file').value = '';
+      document.getElementById('iv-billing').value = 'full'; document.getElementById('iv-inst-row').style.display = 'none';
+      loadRequests();
+    } else {
+      showInvMsg('err', (d && d.error) || `ส่งไม่สำเร็จ (HTTP ${r.status})`);
+    }
+  } catch (e) {
+    showInvMsg('err', 'ส่งไม่สำเร็จ: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '📨 ส่งคำขอออก INV';
+  }
+}
+
+const IV_STATUS_TH = { new: 'รอบัญชีตรวจ', iv_draft: 'INV Draft ใน PEAK', iv_issued: 'ออก INV แล้ว', rejected: 'ตีกลับ' };
+
+async function loadInvoiceRequests() {
+  const el = document.getElementById('iv-list');
+  if (!el) return;
+  try {
+    const r = await fetch('/api/invoice-requests', { cache: 'no-store' });
+    const d = await r.json().catch(() => null);
+    if (!r.ok || !d || !d.ok) { el.innerHTML = `<div class="req-empty">${esc((d && d.error) || 'โหลดไม่สำเร็จ')}</div>`; return; }
+    const fw = document.getElementById('iv-file-wrap');
+    if (fw) fw.style.display = d.uploads ? '' : 'none';
+    const ll = document.getElementById('iv-link-label');
+    if (ll) ll.textContent = d.uploads ? 'หรือใส่ลิงก์ Google Drive ของไฟล์' : 'ลิงก์ Google Drive ของไฟล์หลักฐาน (แชร์ให้ฝ่ายบัญชีเปิดได้)';
+    if (!d.requests.length) { el.innerHTML = '<div class="req-empty">ยังไม่มีคำขอออก INV</div>'; return; }
+    el.innerHTML = d.requests.map((q) => `<div class="req-list-row">
+      <div class="req-list-head">
+        <div><span class="req-list-id">${esc(q.ivRequestId)}</span> · ${esc(q.company)} · ${esc(q.qtNo)}</div>
+        <span class="req-status ${q.status === 'iv_issued' ? 'iv_issued' : q.status === 'rejected' ? 'cancelled' : 'new'}">${esc(IV_STATUS_TH[q.status] || q.status)}${q.peakIvNo ? ' · ' + esc(q.peakIvNo) : ''}</span>
+      </div>
+      <div class="req-list-lines">${esc(q.createdAt)} · ${esc(q.evidenceType)}${q.billing === 'Installment' ? ' · งวด ' + esc(q.installment) + ' ' + esc(q.amountPreVat) : ' · เต็มจำนวน'}${ME && ME.role === 'op' ? ' · ' + esc(q.salesName) : ''}
+        ${q.evidenceLink && /^https:\/\//.test(q.evidenceLink) ? ` · <a href="${esc(q.evidenceLink)}" target="_blank" rel="noopener">ดูหลักฐาน</a>` : ''}</div>
+    </div>`).join('');
   } catch (e) {
     el.innerHTML = `<div class="req-empty">โหลดไม่สำเร็จ: ${esc(e.message)}</div>`;
   }

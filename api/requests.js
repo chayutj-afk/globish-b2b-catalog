@@ -4,7 +4,8 @@
 //          to the Revenue Hub and, when PEAK_MODE is on, creates a Draft quotation in PEAK.
 
 const crypto = require('crypto');
-const { requireUser, checkOrigin, sendError } = require('../lib/session');
+const { checkOrigin, sendError } = require('../lib/session');
+const { requireUser } = require('../lib/users');
 const { priceItem, priceCustomKeyHS, priceService } = require('../lib/pricing');
 const { validTaxId, normBranch } = require('../lib/taxid');
 const hub = require('../lib/hub');
@@ -198,7 +199,7 @@ async function list(req, res, user) {
 const OP_ACTIONS = { reject: 'rejected', approved: 'qt_approved', reopen: 'new' };
 async function update(req, res, user) {
   checkOrigin(req);
-  if (user.role !== 'op') throw bad('เฉพาะฝ่ายบัญชี / Operation', 403);
+  if (user.role !== 'op') throw bad('เฉพาะฝ่ายบัญชี / Admin', 403);
   const b = req.body || {};
   const status = OP_ACTIONS[b.action];
   if (!status) throw bad('คำสั่งไม่ถูกต้อง');
@@ -219,7 +220,7 @@ async function update(req, res, user) {
 module.exports = async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   try {
-    const user = requireUser(req);
+    const user = await requireUser(req);
     if (req.method === 'POST') return await create(req, res, user);
     if (req.method === 'GET') return await list(req, res, user);
     if (req.method === 'PATCH') return await update(req, res, user);

@@ -8,7 +8,8 @@
 //           (sales), or the original has been sent (Operation / accounting).
 
 const crypto = require('crypto');
-const { requireUser, checkOrigin, sendError } = require('../lib/session');
+const { checkOrigin, sendError } = require('../lib/session');
+const { requireUser } = require('../lib/users');
 const hub = require('../lib/hub');
 const drive = require('../lib/drive');
 const notify = require('../lib/notify');
@@ -216,7 +217,7 @@ async function update(req, res, user) {
   }
 
   if (b.action === 'original_sent') {
-    if (user.role !== 'op') throw bad('เฉพาะฝ่ายบัญชี / Operation', 403);
+    if (user.role !== 'op') throw bad('เฉพาะฝ่ายบัญชี / Admin', 403);
     const trackingNo = text(b.trackingNo, 60);
     await hub.updateRow('InvoiceRequests', row._row, { originalStatus: 'sent', originalSentAt: at, trackingNo, updatedAt: at });
     await hub.log('catalog', 'original_sent', id, `${user.email}${trackingNo ? ' · ' + trackingNo : ''}`);
@@ -226,7 +227,7 @@ async function update(req, res, user) {
 
   // Accounting: INV issued from the QT in PEAK (fallback when the sync hasn't picked it up), or rejected.
   if (b.action === 'issued' || b.action === 'reject' || b.action === 'reopen') {
-    if (user.role !== 'op') throw bad('เฉพาะฝ่ายบัญชี / Operation', 403);
+    if (user.role !== 'op') throw bad('เฉพาะฝ่ายบัญชี / Admin', 403);
     const note = text(b.note, 500);
     if (b.action === 'reject') {
       if (!note) throw bad('ใส่เหตุผลที่ตีกลับ');
@@ -260,7 +261,7 @@ async function list(req, res, user) {
 module.exports = async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   try {
-    const user = requireUser(req);
+    const user = await requireUser(req);
     if (req.method === 'POST') return await create(req, res, user);
     if (req.method === 'PATCH') return await update(req, res, user);
     if (req.method === 'GET') return await list(req, res, user);

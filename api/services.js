@@ -2,7 +2,8 @@
 //   { ok, found, code, name, group, inactive }  — the form shows the PEAK name (read-only), so the
 //   name on the QT always comes from PEAK, not from what sales typed.
 
-const { requireUser, sendError } = require('../lib/session');
+const { sendError } = require('../lib/session');
+const { requireUser } = require('../lib/users');
 const hub = require('../lib/hub');
 
 let cache = null; // { at, map } per instance, 5 min
@@ -22,7 +23,7 @@ function lookup(map, code) {
 module.exports = async function handler(req, res) {
   try {
     if (req.method !== 'GET') return res.status(405).json({ ok: false, error: 'GET only' });
-    requireUser(req);
+    await requireUser(req);
     const code = new URL(req.url, 'http://x').searchParams.get('code') || '';
     if (!/^[A-Za-z0-9_-]{1,40}$/.test(code)) return res.status(400).json({ ok: false, error: 'รหัสไม่ถูกต้อง' });
     res.setHeader('Cache-Control', 'no-store');

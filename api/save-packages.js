@@ -8,12 +8,11 @@
 // person's browser tab.
 //
 // AUTH: requires a Google sign-in session (see lib/session.js) whose email is listed in
-// OWNER_EMAILS or OPS_EMAILS. The old shared Operation password is gone.
+// role Accountant / Admin (Users tab, set at /users). The old shared Operation password is gone.
 //
 // Required Environment Variables (set in Vercel → Project → Settings →
 // Environment Variables, NOT in this file):
 //   AUTH_SECRET          long random string that signs session cookies
-//   OPS_EMAILS           comma-separated Operation emails (OWNER_EMAILS also allowed)
 //   GITHUB_TOKEN         Fine-grained GitHub Personal Access Token with
 //                        "Contents: Read and write" permission, scoped to
 //                        this one repository only.
@@ -24,7 +23,8 @@
 // This file itself contains no secrets and is safe to commit to a public
 // repo.
 
-const { requireUser, checkOrigin, sendError } = require('../lib/session');
+const { checkOrigin, sendError } = require('../lib/session');
+const { requireUser } = require('../lib/users');
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -35,7 +35,7 @@ module.exports = async function handler(req, res) {
   try {
     let user;
     try {
-      user = requireUser(req, { role: 'op' });
+      user = await requireUser(req, { role: 'op' });
       checkOrigin(req);
     } catch (e) {
       sendError(res, e);

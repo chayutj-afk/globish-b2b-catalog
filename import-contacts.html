@@ -33,7 +33,7 @@
 <main>
   <p class="sub"><a href="/">← เมนู</a></p>
   <h1>นำเข้ารายชื่อลูกค้าจาก PEAK</h1>
-  <p class="sub">สร้างแท็บ PeakContacts ใน Revenue Hub ใหม่จากไฟล์ export ของ PEAK เพื่อให้ฟอร์มขอ QT เติมรหัสลูกค้าจากเลขผู้เสียภาษี 13 หลักได้ (สำหรับฝ่ายบัญชี / Operation)</p>
+  <p class="sub">สร้างแท็บ PeakContacts ใน Revenue Hub ใหม่จากไฟล์ export ของ PEAK เพื่อให้ฟอร์มขอ QT เติมรหัสลูกค้าจากเลขผู้เสียภาษี 13 หลักได้ (สำหรับฝ่ายบัญชี / Admin)</p>
 
   <div class="card">
     <b>วิธี export จาก PEAK</b>
@@ -211,7 +211,7 @@ fetch('/api/auth/me', { cache: 'no-store' }).then((r) => {
   if (r.status === 401) location.href = '/signin.html?next=/import-contacts';
   return r.json();
 }).then((d) => {
-  if (d && d.user && d.user.role !== 'op') say('status', 'err', 'หน้านี้สำหรับฝ่ายบัญชี / Operation เท่านั้น');
+  if (d && d.user && d.user.role !== 'op') say('status', 'err', 'หน้านี้สำหรับฝ่ายบัญชี / Admin เท่านั้น');
 }).catch(() => {});
 </script>
 </body>

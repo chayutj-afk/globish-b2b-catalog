@@ -8,7 +8,7 @@
 - `/request` ขอเอกสาร: แท็บ ขอ QT / ขอ INV / คำขอของฉัน
 - `/catalog` B2B Standard Catalog: คำนวณราคาแล้ว "เพิ่มเข้าคำขอ" (ตะกร้าเก็บใน browser แชร์กับ `/request`)
 
-ทุกหน้าต้องเข้าสู่ระบบด้วย Google บัญชี @globish.co.th (`middleware.js` + `/api/auth/*`) สิทธิ์ Operation ให้ตามอีเมลใน `OWNER_EMAILS` / `OPS_EMAILS`
+ทุกหน้าต้องเข้าสู่ระบบด้วย Google บัญชี @globish.co.th (`middleware.js` + `/api/auth/*`) สิทธิ์: ทุกคนที่เข้าสู่ระบบถูกบันทึกในแท็บ `Users` และเริ่มเป็น Sales ผู้ดูแลสิทธิ์ (finance@ และ chayut.j@ หรือเพิ่มใน `ADMIN_EMAILS`) เปลี่ยนเป็น Accountant / Admin ได้ที่ `/users`
 
 ## ขอ QT
 

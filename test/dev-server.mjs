@@ -34,7 +34,7 @@ http.createServer(async (req, res) => {
     const r = await middleware(new Request(url, { headers: { cookie: req.headers.cookie || '' } }));
     if (r) { res.writeHead(r.status, { Location: r.headers.get('location') }); return res.end(); }
   }
-  const REWRITES = { '/': '/home.html', '/catalog': '/2026B2BStandardCatalog.html', '/request': '/request.html', '/import-contacts': '/import-contacts.html' };
+  const REWRITES = { '/': '/home.html', '/catalog': '/2026B2BStandardCatalog.html', '/request': '/request.html', '/import-contacts': '/import-contacts.html', '/users': '/users.html' };
   let p = REWRITES[url.pathname] || url.pathname;
   const file = path.join(root, p);
   if (!file.startsWith(root) || !fs.existsSync(file)) { res.statusCode = 404; return res.end('not found'); }

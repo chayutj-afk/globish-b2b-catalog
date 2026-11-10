@@ -7,7 +7,8 @@
 //   Rebuilds the PeakContacts tab from a PEAK contact export (parsed in the browser on
 //   /import-contacts). Keeps only rows with a 13-digit tax ID.
 
-const { requireUser, checkOrigin, sendError } = require('../lib/session');
+const { checkOrigin, sendError } = require('../lib/session');
+const { requireUser } = require('../lib/users');
 const { normBranch } = require('../lib/taxid');
 const hub = require('../lib/hub');
 
@@ -44,7 +45,7 @@ function cleanRows(list) {
 
 async function importRows(req, res) {
   checkOrigin(req);
-  const user = requireUser(req, { role: 'op' });
+  const user = await requireUser(req, { role: 'op' });
   const b = req.body || {};
   if (!Array.isArray(b.rows) || b.rows.length > MAX_ROWS) return res.status(400).json({ error: `ต้องมี rows ไม่เกิน ${MAX_ROWS} แถว` });
   const now = hub.sheetDateTime();
@@ -60,7 +61,7 @@ module.exports = async function handler(req, res) {
   try {
     if (req.method === 'POST') return await importRows(req, res);
     if (req.method !== 'GET') return res.status(405).json({ error: 'GET or POST only' });
-    requireUser(req);
+    await requireUser(req);
     const url = new URL(req.url, 'http://x');
     const taxId = String(url.searchParams.get('taxId') || '').replace(/\D/g, '');
     if (!/^\d{13}$/.test(taxId)) return res.status(400).json({ error: 'ต้องเป็นเลข 13 หลัก' });

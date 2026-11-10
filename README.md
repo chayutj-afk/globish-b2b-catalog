@@ -1,0 +1,34 @@
+# 2026 B2B Standard Catalog
+
+คำนวณราคาแพ็กเกจ B2B, ขอใบเสนอราคา และจัดการแพ็กเกจ (Key H.S.) สำหรับทีม Sales และ Operation
+
+## การเข้าใช้งาน
+
+ทุกหน้าต้องเข้าสู่ระบบด้วย Google บัญชี @globish.co.th (`middleware.js` + `/api/auth/*`) สิทธิ์ Operation (แก้และ Publish แพ็กเกจ) ให้ตามอีเมลใน `OWNER_EMAILS` / `OPS_EMAILS` แทนรหัสผ่านกลางแบบเดิม
+
+## Flow ขอใบเสนอราคา
+
+1. Sales คำนวณราคาในแท็บ 🧮 แล้วกด "เพิ่มเข้าคำขอใบเสนอราคา" (ใส่ได้หลายแพ็กเกจ)
+2. แท็บ 📝 กรอกข้อมูลลูกค้าแล้วส่ง → `POST /api/requests`
+3. Server คิดราคาใหม่จาก `packages.json` (ลดได้ไม่ต่ำกว่าราคา Tier ต่ำสุด) และแตก Key H.S. เป็นบรรทัด:
+   บรรทัด hero มีราคา ส่วนเสริมแต่ละตัวเป็นบรรทัดราคา 0 และ surcharge (โค้ชต่างชาติ/นอก กทม.) เป็นบรรทัดแยก
+4. เขียนลงแท็บ `Requests`, `RequestLines`, `SyncLog` ใน Revenue Hub
+5. ถ้า `PEAK_MODE` = `uat`/`prod` และทุกบรรทัดมีรหัสบริการ PEAK (แท็บ `Products` คอลัมน์ P, แท็บ `Components` คอลัมน์ D)
+   จะสร้างใบเสนอราคา **Draft** ใน PEAK ให้บัญชีตรวจและอนุมัติ ถ้ายังไม่ครบ คำขอจะรอสถานะ `new`
+
+## Environment variables
+
+ดู `.env.example` ค่าลับทั้งหมดอยู่ใน Vercel เท่านั้น
+
+- Google OAuth client ต้องมี redirect URI `https://<domain>/api/auth/callback`
+- แชร์ Revenue Hub ให้ `GOOGLE_SERVICE_ACCOUNT_EMAIL` เป็น Editor
+- `AUTH_SECRET` ใช้เซ็น cookie เปลี่ยนค่าแล้วทุกคนต้องเข้าสู่ระบบใหม่
+- `OPERATION_PASSWORD` ไม่ใช้แล้ว ลบออกจาก Vercel ได้
+
+## ทดสอบในเครื่อง
+
+```
+npm install
+npm test
+AUTH_SECRET=$(openssl rand -hex 32) HUB_MODE=mock node test/dev-server.mjs 3939
+```

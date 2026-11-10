@@ -63,7 +63,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans Thai',sa
 .row.c3{grid-template-columns:1fr 1fr 1fr}
 .row.c1{grid-template-columns:1fr}
 .fg label{display:block;font-size:12px;font-weight:500;color:var(--gray-700);margin-bottom:5px}
-.fg select,.fg input[type=text],.fg input[type=number]{width:100%;padding:8px 10px;border:1px solid var(--gray-300);border-radius:8px;font-size:13px;color:var(--gray-800);background:#fff;transition:border-color .15s}
+.fg select,.fg input[type=text],.fg input[type=number],.fg input[type=date]{width:100%;padding:8px 10px;border:1px solid var(--gray-300);border-radius:8px;font-size:13px;color:var(--gray-800);background:#fff;transition:border-color .15s}
 .fg select:focus,.fg input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.10)}
 
 /* Learner counter */
@@ -207,19 +207,6 @@ code{font-size:11px;background:#f3f4f6;padding:2px 5px;border-radius:4px;font-fa
 /* Separator */
 .section-sep{border:none;border-top:2px solid var(--gray-100);margin:20px 0}
 
-/* Password modal */
-.pw-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:600;display:flex;align-items:center;justify-content:center;padding:16px}
-.pw-modal{background:#fff;border-radius:var(--radius);padding:28px 24px;width:100%;max-width:340px;box-shadow:0 24px 72px rgba(0,0,0,.25);text-align:center}
-.pw-lock-icon{font-size:40px;margin-bottom:12px}
-.pw-title{font-size:17px;font-weight:700;color:var(--gray-900);margin-bottom:6px}
-.pw-sub{font-size:12px;color:var(--gray-500);margin-bottom:18px}
-.pw-input{width:100%;padding:10px 12px;border:1.5px solid var(--gray-300);border-radius:8px;font-size:15px;text-align:center;letter-spacing:.1em;transition:border-color .15s}
-.pw-input:focus{outline:none;border-color:#7c3aed;box-shadow:0 0 0 3px rgba(124,58,237,.1)}
-.pw-error{color:#dc2626;font-size:12px;margin-top:8px;min-height:18px}
-.pw-actions{display:flex;gap:10px;margin-top:16px}
-.pw-confirm{flex:1;padding:10px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;transition:background .15s}
-.pw-confirm:hover{background:#6d28d9}
-.pw-cancel{padding:10px 16px;background:var(--gray-100);color:var(--gray-700);border:none;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer}
 
 /* Package list in manage tab */
 .pkg-list-wrap{max-height:380px;overflow-y:auto;border:1px solid var(--gray-200);border-radius:8px;margin-top:10px}
@@ -234,6 +221,45 @@ code{font-size:11px;background:#f3f4f6;padding:2px 5px;border-radius:4px;font-fa
 .pkg-edit-btn:hover{background:#dbeafe}
 .pkg-del-btn{padding:3px 8px;border:none;border-radius:5px;font-size:11px;cursor:pointer;background:#fee2e2;color:#dc2626;font-weight:600}
 .pkg-del-btn:hover{background:#fecaca}
+
+
+/* User chip */
+.user-chip{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--gray-600)}
+.user-chip span{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.user-chip button{border:1px solid var(--gray-200);background:#fff;border-radius:6px;padding:4px 10px;font-size:12px;color:var(--gray-700);cursor:pointer}
+.user-chip button:hover{background:var(--gray-50)}
+
+/* Quotation request */
+.cart-badge[hidden]{display:none}
+.cart-badge{display:inline-block;min-width:18px;padding:0 5px;margin-left:4px;border-radius:9px;background:#E8590C;color:#fff;font-size:11px;line-height:18px;text-align:center}
+.res-add-req{margin-top:12px;width:100%;padding:11px;border:none;border-radius:8px;background:#E8590C;color:#fff;font-size:14px;font-weight:700;cursor:pointer}
+.res-add-req:hover{background:#c2410c}
+.req-wrap{max-width:900px;margin:0 auto}
+.req-table{width:100%;border-collapse:collapse;font-size:13px}
+.req-table th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--gray-500);text-align:left;padding:8px 6px;border-bottom:1.5px solid var(--gray-200)}
+.req-table td{padding:8px 6px;border-bottom:1px solid var(--gray-100);vertical-align:top}
+.req-table td.num,.req-table th.num{text-align:right;white-space:nowrap}
+.req-table input{width:100%;padding:6px 8px;border:1.5px solid var(--gray-300);border-radius:6px;font-size:13px;text-align:right}
+.req-pkg{font-family:monospace;font-weight:700;color:var(--primary);font-size:12px}
+.req-supp{font-size:11px;color:var(--gray-500);margin-top:2px;line-height:1.5}
+.req-floor{font-size:10.5px;color:var(--gray-500);margin-top:3px}
+.req-del{border:none;background:#fee2e2;color:#dc2626;border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer}
+.req-total{display:flex;justify-content:flex-end;gap:24px;margin-top:12px;font-size:14px}
+.req-total strong{font-size:18px}
+.req-empty{text-align:center;color:var(--gray-500);padding:22px 8px;font-size:13px}
+.req-msg{margin-top:12px;padding:10px 12px;border-radius:8px;font-size:13px;line-height:1.6}
+.req-msg.ok{background:#f0fdf4;color:#166534;border:1px solid #86efac}
+.req-msg.err{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
+.req-list-row{border:1px solid var(--gray-200);border-radius:10px;padding:12px 14px;margin-bottom:10px}
+.req-list-head{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:13px}
+.req-list-id{font-family:monospace;font-weight:700}
+.req-status{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;background:var(--gray-100);color:var(--gray-700)}
+.req-status.new{background:#fff7ed;color:#c2410c}
+.req-status.qt_draft,.req-status.qt_approved{background:#eff6ff;color:#1d4ed8}
+.req-status.iv_issued,.req-status.accepted,.req-status.iv_requested{background:#f0fdf4;color:#166534}
+.req-status.cancelled{background:#fef2f2;color:#b91c1c}
+.req-list-lines{font-size:12px;color:var(--gray-600);margin-top:6px;line-height:1.6}
+@media(max-width:640px){.req-table .hide-sm{display:none}}
 
 /* Per-class badge */
 .b-perclass{background:#fff7ed;color:#c2410c}
@@ -265,15 +291,20 @@ code{font-size:11px;background:#f3f4f6;padding:2px 5px;border-radius:4px;font-fa
       <nav class="nav">
         <!-- Sales tabs -->
         <button id="nav-calc" class="nav-btn on" onclick="switchTab('calc',this)">🧮 คำนวณราคา</button>
+        <button id="nav-request" class="nav-btn" onclick="switchTab('request',this)">📝 ขอใบเสนอราคา <span class="cart-badge" id="cart-badge" hidden>0</span></button>
         <!-- Shared tab -->
         <button id="nav-catalog" class="nav-btn" onclick="switchTab('catalog',this)">📋 Catalog</button>
         <!-- Operation tabs (hidden in sales mode) -->
         <button id="nav-opgen" class="nav-btn" onclick="switchTab('opgen',this)" style="display:none">🔑 Key.H.S</button>
         <button id="nav-manage" class="nav-btn" onclick="switchTab('manage',this)" style="display:none">⚙️ จัดการ Package</button>
       </nav>
-      <div class="role-toggle">
+      <div class="role-toggle" id="role-toggle" style="display:none">
         <button class="role-btn sales on" id="role-sales" onclick="setRole('sales')">👤 Sales</button>
         <button class="role-btn op" id="role-op" onclick="setRole('op')">⚙️ Operation</button>
+      </div>
+      <div class="user-chip">
+        <span id="user-email" title="บัญชีที่เข้าสู่ระบบ"></span>
+        <button type="button" onclick="signOut()">ออกจากระบบ</button>
       </div>
     </div>
   </div>
@@ -358,6 +389,59 @@ code{font-size:11px;background:#f3f4f6;padding:2px 5px;border-radius:4px;font-fa
 
   <div id="result-area">
     <div class="res-empty"><div class="ico">🎯</div><div>เลือกสินค้า → เลือกแพ็กเกจ → ดูราคาได้เลย</div></div>
+  </div>
+
+</div>
+</div>
+
+<!-- ══════════════════ QUOTATION REQUEST ══════════════════ -->
+<div id="tab-request" class="tab">
+<div class="req-wrap">
+
+  <div class="card">
+    <div class="card-label">1 · แพ็กเกจในคำขอ</div>
+    <div id="req-cart"></div>
+    <div class="info" style="margin-top:10px">เพิ่มแพ็กเกจจากแท็บ 🧮 คำนวณราคา แล้วกด "เพิ่มเข้าคำขอใบเสนอราคา" · ราคาลดได้ไม่ต่ำกว่าราคาขั้นต่ำในแคตตาล็อก · ส่วนเสริมใน Key H.S. จะขึ้นเป็นบรรทัดราคา 0 ในใบเสนอราคา</div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">2 · ข้อมูลลูกค้า</div>
+    <div class="row c2">
+      <div class="fg"><label>กลุ่มลูกค้า</label>
+        <select id="rq-segment"><option value="B2B">B2B</option><option value="B2S">B2S</option><option value="B2E">B2E</option><option value="Others">Others</option></select></div>
+      <div class="fg"><label>ประเภทดีล</label>
+        <select id="rq-deal"><option value="New Logo">New Logo (ลูกค้าใหม่)</option><option value="Retention">Retention (ลูกค้าเดิม)</option><option value="Others">Others</option></select></div>
+    </div>
+    <div class="row c2">
+      <div class="fg"><label>ชื่อบริษัท / หน่วยงาน (ตามที่จะออกเอกสาร)</label><input type="text" id="rq-company" maxlength="200" placeholder="บริษัท ตัวอย่าง จำกัด (สำนักงานใหญ่)"></div>
+      <div class="fg"><label>เลขประจำตัวผู้เสียภาษี (13 หลัก)</label><input type="text" id="rq-tax" inputmode="numeric" maxlength="17" placeholder="0105xxxxxxxxx"></div>
+    </div>
+    <div class="row c2">
+      <div class="fg"><label>สาขา</label><input type="text" id="rq-branch" maxlength="60" placeholder="สำนักงานใหญ่ / 00000"></div>
+      <div class="fg"><label>รหัสลูกค้าใน PEAK (ถ้ามี)</label><input type="text" id="rq-client" maxlength="20" placeholder="เช่น CB0237"></div>
+    </div>
+    <div class="row c2">
+      <div class="fg"><label>ภาษาเอกสาร</label>
+        <select id="rq-lang"><option value="TH">ภาษาไทย</option><option value="EN">English</option></select></div>
+      <div class="fg"><label>วันที่ต้องการให้ลงในใบเสนอราคา</label><input id="rq-date" type="date"></div>
+    </div>
+    <div class="row c2">
+      <div class="fg"><label>เครดิตเทอม (วัน)</label><input id="rq-term" type="number" min="0" max="180" placeholder="30"></div>
+      <div class="fg"><label>ลูกค้าออก PO ก่อนวางบิลไหม</label>
+        <select id="rq-po"><option value="no">ไม่ต้องใช้ PO</option><option value="yes">ต้องใช้ PO</option></select></div>
+    </div>
+    <div class="fg"><label>หมายเหตุถึงฝ่ายบัญชี (ที่อยู่ภาษาอังกฤษ รายชื่อผู้เรียน ของแถม ฯลฯ)</label>
+      <textarea id="rq-note" rows="3" maxlength="1000" style="width:100%;padding:9px 11px;border:1.5px solid var(--gray-300);border-radius:8px;font-size:13px;font-family:inherit"></textarea></div>
+    <button class="btn btn-primary btn-block" id="rq-submit" onclick="submitRequest()" style="background:#E8590C;justify-content:center">📨 ส่งคำขอใบเสนอราคา</button>
+    <div id="rq-msg"></div>
+  </div>
+
+  <div class="card" style="margin-bottom:0">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div class="card-label" style="margin-bottom:0" id="rq-list-title">คำขอของฉัน</div>
+      <button class="btn btn-gray" style="padding:5px 12px;font-size:12px" onclick="loadRequests()">🔄 รีเฟรช</button>
+    </div>
+    <div id="rq-list"><div class="req-empty">กำลังโหลด...</div></div>
   </div>
 
 </div>
@@ -674,7 +758,7 @@ code{font-size:11px;background:#f3f4f6;padding:2px 5px;border-radius:4px;font-fa
         <button class="btn btn-block" id="save-publish-btn" onclick="savePublish()" style="background:#16a34a;color:#fff;justify-content:center">💾 Save &amp; Publish ขึ้น GitHub</button>
         <div id="publish-status" style="font-size:11.5px;margin-top:8px;line-height:1.6"></div>
         <div style="margin-top:10px;text-align:right">
-          <a href="#" onclick="logoutOp();return false" style="font-size:11px;color:#166534;text-decoration:underline">🔒 ออกจาก Operation mode (ล้างเซสชัน)</a>
+          <a href="#" onclick="logoutOp();return false" style="font-size:11px;color:#166534;text-decoration:underline">👤 กลับสู่ Sales mode</a>
         </div>
       </div>
       <div class="card" style="margin-bottom:0">
@@ -719,22 +803,6 @@ code{font-size:11px;background:#f3f4f6;padding:2px 5px;border-radius:4px;font-fa
 
 </div><!-- /main -->
 <div class="toast" id="toast"></div>
-
-<!-- ── Password Modal ── -->
-<div class="pw-modal-bg" id="pw-modal" style="display:none">
-  <div class="pw-modal">
-    <div class="pw-lock-icon">🔐</div>
-    <div class="pw-title">Operation Mode</div>
-    <div class="pw-sub">กรุณาใส่รหัสผ่านเพื่อเข้าใช้งาน</div>
-    <input class="pw-input" type="password" id="pw-input" placeholder="••••••••••"
-      onkeydown="if(event.key==='Enter')checkPw()">
-    <div class="pw-error" id="pw-error"></div>
-    <div class="pw-actions">
-      <button class="pw-cancel" onclick="closePwModal()">ยกเลิก</button>
-      <button class="pw-confirm" onclick="checkPw()">🔓 เข้าสู่ระบบ</button>
-    </div>
-  </div>
-</div>
 
 <!-- ── Edit Package Modal ── -->
 <div class="modal-bg" id="edit-modal" style="display:none" onclick="if(event.target===this)closeEditModal()">
@@ -954,102 +1022,47 @@ function switchTab(id, btn) {
   if (btn) btn.classList.add('on');
   if (id === 'catalog') renderCatalog();
   if (id === 'manage')  { renderStats(); renderPkgList(); }
+  if (id === 'request') { renderCart(); loadRequests(); }
 }
 
 // ─────────────────────────────────────────────
-// PASSWORD + ROLE
+// SIGN-IN + ROLE
 // ─────────────────────────────────────────────
-// ─────────────────────────────────────────────
-// AUTH (server-verified — see api/login.js)
-// ─────────────────────────────────────────────
-// The password is never compared in this file anymore. Logging in calls
-// POST /api/login, which checks the password against the OPERATION_PASSWORD
-// Environment Variable on the server and returns a short-lived signed
-// token. That token — not the password — is what gets stored (in
-// sessionStorage, so it survives a refresh in this tab but disappears when
-// the tab/browser closes) and sent as "Authorization: Bearer <token>" to
-// /api/save-packages. Anyone reading this file's source only ever sees
-// this logic, never a real credential.
-let AUTH = null; // { token, exp } | null
+// Everyone signs in with their @globish.co.th Google account (middleware.js
+// and /api/auth/*). The session lives in an HttpOnly cookie the page can't
+// read; /api/auth/me tells us who is signed in and whether the account is on
+// the Operation list (OPS_EMAILS / OWNER_EMAILS in Vercel).
+let ME = null; // { email, name, role: 'sales' | 'op' }
 
-function loadStoredAuth() {
+async function loadMe() {
   try {
-    const raw = sessionStorage.getItem('gc_auth');
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed.exp === 'number' && Date.now() < parsed.exp) return parsed;
-  } catch {}
-  return null;
-}
-
-function storeAuth(auth) {
-  AUTH = auth;
-  try {
-    if (auth) sessionStorage.setItem('gc_auth', JSON.stringify(auth));
-    else sessionStorage.removeItem('gc_auth');
-  } catch {}
+    const r = await fetch('/api/auth/me', { cache: 'no-store' });
+    if (r.status === 401) {
+      location.href = '/signin.html?next=' + encodeURIComponent(location.pathname + location.hash);
+      return;
+    }
+    const d = await r.json();
+    ME = d.user;
+    document.getElementById('user-email').textContent = ME.email;
+    document.getElementById('role-toggle').style.display = ME.role === 'op' ? '' : 'none';
+  } catch (e) {
+    console.warn('Could not load the signed-in user', e);
+  }
 }
 
 function setRole(r) {
-  if (r === 'op' && ROLE !== 'op') {
-    // Already have a valid, unexpired session in this tab — skip the
-    // password prompt.
-    const restored = loadStoredAuth();
-    if (restored) {
-      AUTH = restored;
-      applyRole('op');
-      return;
-    }
-    // Need password
-    document.getElementById('pw-modal').style.display = 'flex';
-    document.getElementById('pw-input').value = '';
-    document.getElementById('pw-error').textContent = '';
-    setTimeout(() => document.getElementById('pw-input').focus(), 50);
-    return;
-  }
-  applyRole(r);
+  if (r === 'op' && (!ME || ME.role !== 'op')) { toast('บัญชีนี้ไม่มีสิทธิ์ Operation'); return; }
+  if (r !== ROLE) applyRole(r);
 }
 
-async function checkPw() {
-  const val = document.getElementById('pw-input').value;
-  const errEl = document.getElementById('pw-error');
-  const confirmBtn = document.querySelector('.pw-confirm');
-  errEl.textContent = '';
-  if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = '⏳ กำลังตรวจสอบ...'; }
-
-  try {
-    const resp = await fetch('/api/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: val }),
-    });
-    let data;
-    try { data = await resp.json(); } catch { data = null; }
-
-    if (resp.ok && data && data.ok) {
-      storeAuth({ token: data.token, exp: data.exp });
-      document.getElementById('pw-modal').style.display = 'none';
-      applyRole('op');
-    } else {
-      errEl.textContent = '❌ ' + ((data && data.error) || 'รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่');
-      document.getElementById('pw-input').value = '';
-      document.getElementById('pw-input').focus();
-    }
-  } catch (e) {
-    errEl.textContent = '❌ เชื่อมต่อ server ไม่ได้: ' + e.message;
-  } finally {
-    if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = '🔓 เข้าสู่ระบบ'; }
-  }
-}
-
-function closePwModal() {
-  document.getElementById('pw-modal').style.display = 'none';
+async function signOut() {
+  try { await fetch('/api/auth/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' } }); } catch {}
+  location.href = '/signin.html';
 }
 
 function logoutOp() {
-  storeAuth(null);
   applyRole('sales');
-  toast('🔒 ออกจาก Operation mode แล้ว');
+  toast('👤 กลับสู่ Sales mode');
 }
 
 function applyRole(r) {
@@ -1362,6 +1375,12 @@ function calc() {
     surchargeNote = surchargeNote.replace(/ · $/, '');
   }
 
+  LAST_CALC = {
+    pkgId: pkg.id, n, numClasses,
+    intl: (isBGC || isWS) ? (document.getElementById('intl-sel')?.value || '0') : '0',
+    loc: (isBGC || isWS) ? (document.getElementById('loc-sel')?.value || 'bkk') : 'bkk',
+    unitPrice: pp,
+  };
   renderResult({ pkg, pp, base, n, numClasses, surcharge, surchargeNote });
 }
 
@@ -1411,6 +1430,7 @@ function renderResult(d) {
         <div class="res-hs-code" id="hs-code">${pkg.keyHS}</div>
         <button class="res-hs-copy" onclick="copyHS()">📋 คัดลอก Key.H.S</button>
       </div>` : ''}
+      ${pkg.keyHS ? `<button class="res-add-req" onclick="addToRequest()">➕ เพิ่มเข้าคำขอใบเสนอราคา</button>` : ''}
     </div>`;
 }
 
@@ -2024,13 +2044,6 @@ function resetData() {
 // every visitor — not just the current browser tab — once the deploy
 // finishes (usually 30-60 seconds).
 async function savePublish() {
-  const current = AUTH || loadStoredAuth();
-  if (!current) {
-    alert('เซสชันหมดอายุ กรุณาล็อกอิน Operation mode ใหม่');
-    applyRole('sales');
-    return;
-  }
-
   const n = PKGS.length;
   if (!confirm(`ยืนยัน Publish แพ็กเกจทั้งหมด ${n} รายการขึ้น GitHub?\n\nระบบจะ commit ไฟล์ packages.json เวอร์ชันใหม่ Vercel จะ deploy ให้อัตโนมัติ (~30-60 วินาที) หลังจากนั้นทุกคนที่เข้าเว็บนี้จะเห็นข้อมูลชุดนี้ทันที`)) return;
 
@@ -2045,10 +2058,7 @@ async function savePublish() {
   try {
     const resp = await fetch('/api/save-packages', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${current.token}`,
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ packages: PKGS }),
     });
     let data;
@@ -2059,12 +2069,8 @@ async function savePublish() {
       toast(`✅ Publish สำเร็จ! (${data.count} แพ็กเกจ)`);
       statusEl.textContent = `✅ Publish สำเร็จเมื่อ ${new Date().toLocaleTimeString('th-TH')} — รอ Vercel deploy ประมาณ 30-60 วินาทีแล้วรีเฟรชหน้าเว็บเพื่อยืนยัน`;
     } else if (resp.status === 401) {
-      // Token expired/invalid — clear it and send them back to log in.
-      storeAuth(null);
-      statusEl.style.color = '#dc2626';
-      statusEl.textContent = '❌ เซสชันหมดอายุ กรุณาล็อกอินใหม่';
-      alert('❌ เซสชันหมดอายุ กรุณาล็อกอิน Operation mode ใหม่');
-      applyRole('sales');
+      alert('❌ เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่');
+      location.href = '/signin.html';
     } else {
       const msg = (data && data.error) || `HTTP ${resp.status}`;
       statusEl.style.color = '#dc2626';
@@ -2240,11 +2246,181 @@ function copyKHS() {
 }
 
 // ─────────────────────────────────────────────
+// QUOTATION REQUEST
+// ─────────────────────────────────────────────
+// The cart is a draft kept in this browser only (localStorage), so a refresh
+// doesn't lose it. Submitting sends it to /api/requests, which re-prices every
+// line from packages.json on the server, writes the Revenue Hub and (when PEAK
+// is switched on) creates a Draft quotation in PEAK.
+let LAST_CALC = null;
+let CART = [];
+const CART_KEY = 'gc_quote_cart_v1';
+const SUPP_LABELS = ['Hero tickets','Hero duration','Private Class','Discussion Class','Speedy English','GB+: AI','GB+: LI','Engoo Standard','Engoo Premium Lite','VPA','VPA+','GECB 2 Skills','GECB 4 Skills','Workshop','Master Class','Business Simulation'];
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+function loadCart() {
+  try { const v = JSON.parse(localStorage.getItem(CART_KEY) || '[]'); CART = Array.isArray(v) ? v : []; } catch { CART = []; }
+}
+function saveCart() {
+  try { localStorage.setItem(CART_KEY, JSON.stringify(CART)); } catch {}
+  const b = document.getElementById('cart-badge');
+  if (b) { b.textContent = CART.length; b.hidden = CART.length === 0; }
+}
+
+function suppText(keyHS) {
+  const i = String(keyHS || '').indexOf('/');
+  if (i < 0) return '';
+  const slots = keyHS.slice(i + 1).split('-');
+  const out = [];
+  for (let k = 2; k < 16; k++) {
+    const v = String(slots[k] || '').toUpperCase();
+    if (v && v !== '0' && v !== 'HERO') out.push(`${SUPP_LABELS[k]} ${v === 'TRUE' ? '✓' : v}`);
+  }
+  return out.join(' · ');
+}
+
+function addToRequest() {
+  if (!LAST_CALC) return;
+  const pkg = PKGS.find((p) => p.id === LAST_CALC.pkgId);
+  if (!pkg) return;
+  if (CART.length >= 20) { toast('ใส่ได้ไม่เกิน 20 แพ็กเกจต่อคำขอ'); return; }
+  CART.push({
+    packageId: pkg.id, students: LAST_CALC.n, classes: LAST_CALC.numClasses,
+    unitPrice: LAST_CALC.unitPrice, intl: LAST_CALC.intl, loc: LAST_CALC.loc,
+  });
+  saveCart(); renderCart();
+  toast(`✅ เพิ่ม ${pkg.id} เข้าคำขอแล้ว (${CART.length} รายการ)`);
+}
+
+function cartLineTotal(it, pkg) {
+  const perClass = pkg && pkg.unit === 'per class';
+  return (Number(it.unitPrice) || 0) * (perClass ? (Number(it.classes) || 1) : (Number(it.students) || 0));
+}
+
+function renderCart() {
+  const el = document.getElementById('req-cart');
+  if (!el) return;
+  if (!CART.length) { el.innerHTML = '<div class="req-empty">ยังไม่มีแพ็กเกจ เลือกจากแท็บ 🧮 คำนวณราคา</div>'; return; }
+  let total = 0;
+  const rows = CART.map((it, i) => {
+    const pkg = PKGS.find((p) => p.id === it.packageId);
+    const perClass = pkg && pkg.unit === 'per class';
+    const floor = pkg ? Math.min(...pkg.p) : 0;
+    const list = pkg ? getPrice(pkg, perClass ? (pkg.minN || it.students) : it.students) : 0;
+    const lt = cartLineTotal(it, pkg); total += lt;
+    const extra = [];
+    if (it.intl && it.intl !== '0') extra.push(it.intl === 'na' ? '+ Native coach' : '+ Non-Native coach');
+    if (it.loc === 'out') extra.push('+ นอก กทม.');
+    return `<tr>
+      <td><div class="req-pkg">${esc(it.packageId)}</div>
+        <div class="req-supp">${esc(pkg ? pkg.hero + (pkg.coach ? ' · ' + pkg.coach : '') : 'ไม่พบในแคตตาล็อก')}</div>
+        ${pkg && suppText(pkg.keyHS) ? `<div class="req-supp">ส่วนเสริม: ${esc(suppText(pkg.keyHS))}</div>` : ''}
+        ${extra.length ? `<div class="req-supp">${esc(extra.join(' '))} (คิดค่าเพิ่มตามเรทในแคตตาล็อก)</div>` : ''}</td>
+      <td class="num" style="width:90px"><input type="number" min="1" value="${esc(it.students)}" onchange="updateCart(${i},'students',this.value)" aria-label="จำนวนผู้เรียน"></td>
+      <td class="num hide-sm" style="width:80px">${perClass ? `<input type="number" min="1" value="${esc(it.classes)}" onchange="updateCart(${i},'classes',this.value)" aria-label="จำนวนคลาส">` : '–'}</td>
+      <td class="num" style="width:120px"><input type="number" min="${floor}" value="${esc(it.unitPrice)}" onchange="updateCart(${i},'unitPrice',this.value)" aria-label="ราคาต่อหน่วย">
+        <div class="req-floor">list ${fmt(list)} · ขั้นต่ำ ${fmt(floor)}</div></td>
+      <td class="num" style="width:110px">${fmt(lt)}</td>
+      <td style="width:40px"><button class="req-del" onclick="removeCart(${i})" aria-label="ลบ">✕</button></td>
+    </tr>`;
+  }).join('');
+  el.innerHTML = `<table class="req-table">
+    <thead><tr><th>แพ็กเกจ</th><th class="num">ผู้เรียน</th><th class="num hide-sm">คลาส</th><th class="num">ราคา/หน่วย</th><th class="num">รวม</th><th></th></tr></thead>
+    <tbody>${rows}</tbody></table>
+    <div class="req-total"><span>ยอดรวมก่อน VAT (ไม่รวมค่าเพิ่ม)</span><strong>${fmt(total)}</strong></div>`;
+}
+
+function updateCart(i, field, value) {
+  const it = CART[i]; if (!it) return;
+  const pkg = PKGS.find((p) => p.id === it.packageId);
+  const v = Number(value);
+  if (field === 'students' && v >= 1) {
+    const priceWasList = pkg && Number(it.unitPrice) === getPrice(pkg, pkg.unit === 'per class' ? (pkg.minN || it.students) : it.students);
+    it.students = Math.floor(v);
+    if (priceWasList && pkg.unit !== 'per class') it.unitPrice = getPrice(pkg, it.students); // follow the tier
+  }
+  if (field === 'classes' && v >= 1) it.classes = Math.floor(v);
+  if (field === 'unitPrice' && v > 0) it.unitPrice = v;
+  saveCart(); renderCart();
+}
+
+function removeCart(i) { CART.splice(i, 1); saveCart(); renderCart(); }
+
+function showReqMsg(kind, text) {
+  const el = document.getElementById('rq-msg');
+  el.innerHTML = text ? `<div class="req-msg ${kind}">${esc(text)}</div>` : '';
+}
+
+async function submitRequest() {
+  if (!CART.length) { showReqMsg('err', 'ยังไม่มีแพ็กเกจในคำขอ'); return; }
+  const v = (id) => document.getElementById(id).value.trim();
+  const body = {
+    segment: v('rq-segment'), dealType: v('rq-deal'), company: v('rq-company'),
+    taxId: v('rq-tax').replace(/[\s-]/g, ''), branch: v('rq-branch'), clientCode: v('rq-client'),
+    docLang: v('rq-lang'), wantedQtDate: v('rq-date'), creditTermDays: v('rq-term'),
+    poRequired: v('rq-po') === 'yes', note: v('rq-note'), items: CART,
+  };
+  if (!body.company) { showReqMsg('err', 'กรอกชื่อบริษัทหรือหน่วยงาน'); return; }
+  if (!body.clientCode && !/^\d{13}$/.test(body.taxId)) { showReqMsg('err', 'เลขประจำตัวผู้เสียภาษีต้องเป็นตัวเลข 13 หลัก (หรือใส่รหัสลูกค้าใน PEAK)'); return; }
+  const btn = document.getElementById('rq-submit');
+  btn.disabled = true; btn.textContent = '⏳ กำลังส่ง...'; showReqMsg('', '');
+  try {
+    const r = await fetch('/api/requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (r.status === 401) { location.href = '/signin.html?next=' + encodeURIComponent('/#request'); return; }
+    const d = await r.json().catch(() => null);
+    if (r.ok && d && d.ok) {
+      showReqMsg('ok', `ส่งคำขอ ${d.requestId} แล้ว ยอดก่อน VAT ${fmt(d.total)} · ${d.message}`);
+      CART = []; saveCart(); renderCart();
+      ['rq-company','rq-tax','rq-branch','rq-client','rq-date','rq-term','rq-note'].forEach((id) => { document.getElementById(id).value = ''; });
+      loadRequests();
+    } else {
+      showReqMsg('err', (d && d.error) || `ส่งไม่สำเร็จ (HTTP ${r.status})`);
+    }
+  } catch (e) {
+    showReqMsg('err', 'เชื่อมต่อ server ไม่ได้: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '📨 ส่งคำขอใบเสนอราคา';
+  }
+}
+
+const STATUS_TH = { new: 'รอออก QT', qt_draft: 'QT Draft ใน PEAK', qt_approved: 'QT อนุมัติแล้ว', changes_requested: 'ขอแก้ไข',
+  accepted: 'ลูกค้าตอบรับ', iv_requested: 'ขอ INV แล้ว', iv_issued: 'ออก INV แล้ว', cancelled: 'ยกเลิก' };
+
+async function loadRequests() {
+  const el = document.getElementById('rq-list');
+  if (!el) return;
+  document.getElementById('rq-list-title').textContent = ME && ME.role === 'op' ? 'คำขอล่าสุด (ทุกคน)' : 'คำขอของฉัน';
+  try {
+    const r = await fetch('/api/requests', { cache: 'no-store' });
+    const d = await r.json().catch(() => null);
+    if (!r.ok || !d || !d.ok) { el.innerHTML = `<div class="req-empty">${esc((d && d.error) || 'โหลดไม่สำเร็จ')}</div>`; return; }
+    if (!d.requests.length) { el.innerHTML = '<div class="req-empty">ยังไม่มีคำขอ</div>'; return; }
+    el.innerHTML = d.requests.map((q) => {
+      const heroes = q.lines.filter((l) => l.role === 'hero').map((l) => `${esc(l.packageId)} × ${esc(l.qty)}`).join(', ');
+      return `<div class="req-list-row">
+        <div class="req-list-head">
+          <div><span class="req-list-id">${esc(q.requestId)}</span> · ${esc(q.company)}</div>
+          <span class="req-status ${esc(q.status)}">${esc(STATUS_TH[q.status] || q.status)}${q.peakQtNo ? ' · ' + esc(q.peakQtNo) : ''}</span>
+        </div>
+        <div class="req-list-lines">${esc(q.createdAt)} · ${esc(q.segment)} · ${esc(q.dealType)}${ME && ME.role === 'op' ? ' · ' + esc(q.salesName) : ''} · ยอดก่อน VAT ${esc(q.totalPreVat)}<br>${heroes}</div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    el.innerHTML = `<div class="req-empty">โหลดไม่สำเร็จ: ${esc(e.message)}</div>`;
+  }
+}
+
+// ─────────────────────────────────────────────
 // INIT
 // ─────────────────────────────────────────────
 renderProdGrid();
 initPriceGrid();
 initSurchargeCfgInputs();
+loadCart(); saveCart(); renderCart();
+loadMe().then(() => {
+  loadRequests();
+  if (location.hash === '#request') switchTab('request', document.getElementById('nav-request'));
+});
 </script>
 </body>
 </html>

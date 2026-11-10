@@ -7,18 +7,13 @@
 // (usually 30-60 seconds), instead of the change only living inside one
 // person's browser tab.
 //
-// AUTH: this endpoint no longer accepts a plaintext password in the
-// request body. It requires a short-lived signed token, obtained from
-// POST /api/login, sent as "Authorization: Bearer <token>". See login.js
-// for how the token is issued and verified — verifyToken() below must stay
-// in sync with signToken() there (both are duplicated in each file on
-// purpose, so each file can be copy-pasted into GitHub independently
-// without needing a shared module path).
+// AUTH: requires a Google sign-in session (see lib/session.js) whose email is listed in
+// OWNER_EMAILS or OPS_EMAILS. The old shared Operation password is gone.
 //
 // Required Environment Variables (set in Vercel → Project → Settings →
 // Environment Variables, NOT in this file):
-//   AUTH_SECRET          long random string used to verify login tokens —
-//                        must be the SAME value set for /api/login.
+//   AUTH_SECRET          long random string that signs session cookies
+//   OPS_EMAILS           comma-separated Operation emails (OWNER_EMAILS also allowed)
 //   GITHUB_TOKEN         Fine-grained GitHub Personal Access Token with
 //                        "Contents: Read and write" permission, scoped to
 //                        this one repository only.
@@ -29,25 +24,7 @@
 // This file itself contains no secrets and is safe to commit to a public
 // repo.
 
-const crypto = require('crypto');
-
-function verifyToken(token, secret) {
-  if (!token || typeof token !== 'string' || !token.includes('.')) return false;
-  const [b64, sig] = token.split('.');
-  if (!b64 || !sig) return false;
-  const expectedSig = crypto.createHmac('sha256', secret).update(b64).digest('base64url');
-  const sigBuf = Buffer.from(sig);
-  const expBuf = Buffer.from(expectedSig);
-  if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) return false;
-  let payload;
-  try {
-    payload = JSON.parse(Buffer.from(b64, 'base64url').toString('utf-8'));
-  } catch {
-    return false;
-  }
-  if (!payload || typeof payload.exp !== 'number' || Date.now() > payload.exp) return false;
-  return true;
-}
+const { requireUser, checkOrigin, sendError } = require('../lib/session');
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -56,16 +33,12 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const secret = process.env.AUTH_SECRET;
-    if (!secret) {
-      res.status(500).json({ ok: false, error: 'Server ยังไม่ได้ตั้งค่า AUTH_SECRET ใน Vercel Environment Variables' });
-      return;
-    }
-
-    const authHeader = req.headers.authorization || req.headers.Authorization || '';
-    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
-    if (!verifyToken(token, secret)) {
-      res.status(401).json({ ok: false, error: 'เซสชันหมดอายุ หรือยังไม่ได้ล็อกอิน กรุณาล็อกอินใหม่' });
+    let user;
+    try {
+      user = requireUser(req, { role: 'op' });
+      checkOrigin(req);
+    } catch (e) {
+      sendError(res, e);
       return;
     }
 
@@ -120,7 +93,7 @@ module.exports = async function handler(req, res) {
       method: 'PUT',
       headers: { ...ghHeaders, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        message: `Update packages.json via Manage Package tab (${new Date().toISOString()})`,
+        message: `Update packages.json via Manage Package tab by ${user.email} (${new Date().toISOString()})`,
         content,
         branch,
         ...(sha ? { sha } : {}),

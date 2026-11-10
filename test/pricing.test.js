@@ -51,7 +51,11 @@ test('PEAK payload: draft, VAT 7% lines, unmapped codes reported', () => {
   assert.equal(q.products[1].price, 0);
   assert.ok(q.products.every((x) => x.vatType === 3));
   const disc = peak.buildQuotation(req, p.priceItem({ packageId: 'SPD-03-36', students: 10, discount: 500 }).lines, () => 'X');
-  assert.equal(disc.body.PeakQuotations.quotations[0].products[0].discount, '500');
+  // PEAK discount is per unit: 500 off the line ÷ 10 students = 50 per unit
+  assert.equal(disc.body.PeakQuotations.quotations[0].products[0].discount, '50');
+  assert.equal(q.dueDate, '20261212');
+  assert.equal(peak.unitDiscount({ discount: 1590, qty: 2 }), '795');
+  assert.equal(peak.addDays('20261215', 30), '20270114');
 });
 
 test('PEAK signature is HMAC-SHA1 hex of the UTC timestamp', () => {

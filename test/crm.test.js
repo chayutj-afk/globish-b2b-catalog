@@ -22,6 +22,13 @@ test('B2B and B2E need an Opportunity ID; B2S never carries one', () => {
   assert.ok(validate({ ...qt, segment: 'Others', items: svc }));
 });
 
+test('PEAK client code is C + 5 digits; a failed tax check digit is flagged, not blocked', () => {
+  const o = { ...qt, opportunityId: 'CRM-OPP-2026-00001' };
+  assert.equal(validate({ ...o, clientCode: 'c00123' }).r.clientCode, 'C00123');
+  assert.throws(() => validate({ ...o, clientCode: 'C123' }), /C ตามด้วย/);
+  assert.match(validate({ ...o, taxId: '0105555555555' }).r.note, /ตรวจเลขภาษี/);
+});
+
 test('INV requests accept an optional, well-formed Opportunity ID', () => {
   const base = { qtNo: 'QO-1', company: 'Co', evidenceType: 'PO จากลูกค้า', evidenceLink: 'https://drive.google.com/x', invoices: [{ amountPreVat: 100 }] };
   assert.equal(inv.validate(base).r.opportunityId, '');

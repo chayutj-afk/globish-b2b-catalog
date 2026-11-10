@@ -2239,7 +2239,21 @@ function addToRequest() {
     unitPrice: LAST_CALC.unitPrice, intl: LAST_CALC.intl, loc: LAST_CALC.loc,
   });
   saveCart();
+  if (RETURN_TO_REQUEST) {
+    toast(`✅ เพิ่ม ${pkg.id} แล้ว กำลังกลับไปหน้าขอ QT...`);
+    setTimeout(() => { location.href = '/request#qt'; }, 700);
+    return;
+  }
   toast(`✅ เพิ่ม ${pkg.id} เข้าคำขอแล้ว (${CART.length} รายการ) · กด 📝 ขอเอกสาร ด้านบนเพื่อส่งคำขอ`);
+}
+
+// Opened from the request page ("เลือกจาก B2B Catalog"): go straight back after adding.
+const RETURN_TO_REQUEST = new URLSearchParams(location.search).get('return') === 'request';
+if (RETURN_TO_REQUEST) {
+  const bar = document.createElement('div');
+  bar.style.cssText = 'background:#fff7ed;border-bottom:1px solid #fed7aa;padding:10px 16px;font-size:13px;text-align:center';
+  bar.innerHTML = 'เลือกแพ็กเกจแล้วกด <b>➕ เพิ่มเข้าคำขอใบเสนอราคา</b> ระบบจะพากลับไปหน้าขอ QT พร้อมข้อมูลที่กรอกไว้ · <a href="/request#qt">← กลับโดยไม่เพิ่ม</a>';
+  document.body.insertBefore(bar, document.querySelector('.main'));
 }
 
 

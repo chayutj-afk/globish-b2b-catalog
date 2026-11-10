@@ -35,7 +35,7 @@ function validate(b) {
   const r = {
     segment: text(b.segment, 20),
     dealType: text(b.dealType, 20),
-    clientCode: text(b.clientCode, 20),
+    clientCode: text(b.clientCode, 20).toUpperCase(),
     company: text(b.company, 200),
     taxId: text(b.taxId, 20).replace(/[\s-]/g, ''),
     branch: text(b.branch, 60),
@@ -53,7 +53,9 @@ function validate(b) {
   if (OPP_REQUIRED.includes(r.segment) && !r.opportunityId) throw bad(`ใส่ Opportunity ID จาก CRM (CRM-OPP-YYYY-NNNNN) สำหรับลูกค้า ${r.segment}`);
   if (!r.company) throw bad('กรอกชื่อบริษัทหรือหน่วยงาน');
   if (!r.clientCode && !/^\d{13}$/.test(r.taxId)) throw bad('เลขประจำตัวผู้เสียภาษีต้องเป็นตัวเลข 13 หลัก (หรือใส่รหัสลูกค้าใน PEAK)');
-  if (r.taxId && !validTaxId(r.taxId)) throw bad('เลขประจำตัวผู้เสียภาษีไม่ถูกต้อง (เลขตรวจสอบหลักสุดท้ายไม่ตรง) ตรวจเลขอีกครั้ง');
+  if (r.clientCode && !/^C\d{5}$/.test(r.clientCode)) throw bad('รหัสลูกค้าใน PEAK ต้องเป็น C ตามด้วยตัวเลข 5 หลัก เช่น C00123');
+  // Check digit is a warning only: flag it for accounting instead of blocking the request.
+  if (r.taxId && !validTaxId(r.taxId)) r.note = `[ตรวจเลขภาษี: หลักสุดท้ายไม่ผ่าน] ${r.note}`.trim();
   const br = normBranch(r.branch);
   if (br === null) throw bad('สาขาต้องเป็นรหัส 5 หลัก เช่น 00000 (สำนักงานใหญ่) หรือ 00001');
   r.branch = br;

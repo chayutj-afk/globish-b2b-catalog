@@ -33,7 +33,8 @@ function newBatchId(now = new Date()) {
 
 function checkEntity(e, label) {
   if (!e.company) throw bad(`${label}: ใส่ชื่อบริษัทตามที่จะออก INV`);
-  if (e.taxId && !validTaxId(e.taxId)) throw bad(`${label}: เลขประจำตัวผู้เสียภาษีไม่ถูกต้อง`);
+  if (e.taxId && !/^\d{13}$/.test(e.taxId)) throw bad(`${label}: เลขประจำตัวผู้เสียภาษีต้องเป็นตัวเลข 13 หลัก`);
+  e.taxCheckWarn = !!e.taxId && !validTaxId(e.taxId);
   const br = normBranch(e.branch);
   if (br === null) throw bad(`${label}: สาขาต้องเป็นรหัส 5 หลัก เช่น 00000 (สำนักงานใหญ่)`);
   e.branch = br;
@@ -74,6 +75,7 @@ function validate(b) {
     const same = !x || x.billTo !== 'other';
     const v = {
       billTo: same ? 'same' : 'other',
+      taxCheckWarn: same ? r.taxCheckWarn : false,
       company: same ? r.company : text(x.company, 200),
       taxId: same ? r.taxId : text(x.taxId, 20).replace(/[\s-]/g, ''),
       branch: same ? r.branch : text(x.branch, 20),
@@ -149,7 +151,7 @@ async function create(req, res, user) {
     billing: partial ? 'Partial' : 'Full', installment: v.label || (invoices.length > 1 ? `${i + 1}/${invoices.length}` : ''),
     amountPreVat: v.amountPreVat, students: v.students, creditTermDays: v.creditTermDays, poNo: v.poNo,
     financeContact: r.financeContact, financeEmail: r.financeEmail, financePhone: r.financePhone,
-    deliveryAddress: v.originalAddress, note: [v.note, r.note].filter(Boolean).join(' · '),
+    deliveryAddress: v.originalAddress, note: [v.taxCheckWarn ? '[ตรวจเลขภาษี: หลักสุดท้ายไม่ผ่าน]' : '', v.note, r.note].filter(Boolean).join(' · '),
     status: 'new', peakIvNo: '', updatedAt: at, opportunityId: r.opportunityId,
     batchId, branch: v.branch, billToRelation: v.billTo === 'other' ? v.relation : '',
     originalDoc: v.originalDoc, originalStatus: ORIGINAL[v.originalDoc], originalRecipient: v.originalRecipient,

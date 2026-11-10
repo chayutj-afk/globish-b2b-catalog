@@ -196,8 +196,7 @@ table.items input.r{text-align:right}
       <div class="fg" id="i-evother-wrap" hidden><label>ระบุเอกสาร</label><input id="i-evother" type="text" maxlength="120"></div>
     </div>
     <div class="row">
-      <div class="fg" id="i-file-wrap" hidden><label>📎 อัปโหลดไฟล์หลักฐาน (PDF / JPG / PNG ไม่เกิน 3 MB) — เก็บเข้า Drive ของฝ่ายบัญชีให้อัตโนมัติ</label><input id="i-file" type="file" accept=".pdf,.jpg,.jpeg,.png"></div>
-      <div class="fg"><label id="i-link-label">ลิงก์ Google Drive ของไฟล์หลักฐาน (แชร์ให้ฝ่ายบัญชีเปิดได้)</label><input id="i-link" type="text" maxlength="500" placeholder="https://drive.google.com/..."></div>
+      <div class="fg" id="i-file-wrap"><label>📎 อัปโหลดไฟล์หลักฐาน (PDF / JPG / PNG ไม่เกิน 3 MB) — เก็บเข้า Drive ของฝ่ายบัญชีให้อัตโนมัติ</label><input id="i-file" type="file" accept=".pdf,.jpg,.jpeg,.png"></div>
     </div>
   </div>
 
@@ -661,7 +660,7 @@ async function submitINV() {
   const body = {
     requestId: v('i-req'), qtNo: v('i-qt'), opportunityId: getOpp('i'), company: v('i-company'),
     taxId: v('i-tax'), branch: v('i-branch'),
-    evidenceType: v('i-evtype'), evidenceOther: v('i-evother'), evidenceLink: v('i-link'),
+    evidenceType: v('i-evtype'), evidenceOther: v('i-evother'),
     financeContact: v('i-fin-name'), financeEmail: v('i-fin-email'), financePhone: v('i-fin-phone'), note: v('i-note'),
     overReason: $('i-over-wrap').hidden ? '' : v('i-over'), invoices: INVS,
   };
@@ -670,7 +669,7 @@ async function submitINV() {
   if (body.taxId.length !== 13) return msg('i-msg', 'err', 'กรอกเลขผู้เสียภาษี 13 หลักของลูกค้าตาม QT');
   if (body.opportunityId && !OPP_OK(body.opportunityId)) return msg('i-msg', 'err', 'Opportunity ID ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN');
   const f = $('i-file').files[0];
-  if (!f && !body.evidenceLink) return msg('i-msg', 'err', 'แนบไฟล์หลักฐาน หรือใส่ลิงก์ Google Drive ของไฟล์');
+  if (!f) return msg('i-msg', 'err', 'แนบไฟล์หลักฐาน (PDF / JPG / PNG)');
   if (f && f.size > 3 * 1024 * 1024) return msg('i-msg', 'err', 'ไฟล์ใหญ่เกิน 3 MB');
   for (let i = 0; i < INVS.length; i++) {
     const x = INVS[i];
@@ -685,7 +684,7 @@ async function submitINV() {
     if (f) body.file = { name: f.name, type: f.type, data: await readFileB64(f) };
     const d = await api('/api/invoice-requests', { method: 'POST', body: JSON.stringify(body) });
     $('i-msg').innerHTML = `<div class="done-card"><b>✓ ส่งคำขอ ${esc(d.batchId)} (${d.ivRequestIds.length} ใบ) แล้ว</b><div style="margin:6px 0 10px">${d.remaining !== null && d.remaining !== undefined ? `QT คงเหลือ ${fmt(d.remaining)} · ` : ''}${esc(d.message)}</div><button class="btn btn-o btn-sm" onclick="go('mine');setMine('inv',document.querySelectorAll('#mine-seg button')[1])">ดูสถานะในคำขอของฉัน</button></div>`;
-    ['i-req', 'i-qt', 'i-opp-y', 'i-opp-n', 'i-company', 'i-tax', 'i-branch', 'i-evother', 'i-link', 'i-fin-name', 'i-fin-email', 'i-fin-phone', 'i-note', 'i-over'].forEach((id) => { $(id).value = ''; });
+    ['i-req', 'i-qt', 'i-opp-y', 'i-opp-n', 'i-company', 'i-tax', 'i-branch', 'i-evother', 'i-fin-name', 'i-fin-email', 'i-fin-phone', 'i-note', 'i-over'].forEach((id) => { $(id).value = ''; });
     $('i-file').value = ''; $('i-qt').readOnly = false; $('i-qt-hint').textContent = ''; INVS = [blankInv()]; renderInvs(); taxHint('i');
     loadAll();
   } catch (e) { msg('i-msg', 'err', e.message); }
@@ -707,8 +706,6 @@ async function loadAll() {
   try {
     const [a, b] = await Promise.all([api('/api/requests'), api('/api/invoice-requests')]);
     REQS = a.requests; IVS = b.requests;
-    $('i-file-wrap').hidden = !b.uploads;
-    $('i-link-label').textContent = b.uploads ? 'หรือวางลิงก์ Google Drive (ถ้าไฟล์อยู่ใน Drive แล้ว)' : 'ลิงก์ Google Drive ของไฟล์หลักฐาน (แชร์ให้ฝ่ายบัญชีเปิดได้)';
     fillQTPicker(); renderMine(); renderPending(); updateSum();
   } catch (e) {
     $('mine-qt').innerHTML = $('mine-inv').innerHTML = `<div class="empty">${esc(e.message)}</div>`;

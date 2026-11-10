@@ -4,15 +4,14 @@ const { validate, alreadyInvoiced } = require('../api/invoice-requests.js')._tes
 
 const base = {
   qtNo: 'QO-20261100001', company: 'Co', taxId: '0105555555554',
-  evidenceType: 'QT ที่ลูกค้าเซ็นแล้ว', evidenceLink: 'https://drive.google.com/file/d/x/view',
+  evidenceType: 'QT ที่ลูกค้าเซ็นแล้ว', file: { name: 'qt.pdf', type: 'application/pdf', data: 'JVBERi0=' },
   invoices: [{ amountPreVat: 50000 }],
 };
 
 test('needs QT number, evidence and at least one invoice with an amount', () => {
   assert.ok(validate(base));
   assert.throws(() => validate({ ...base, qtNo: '' }), /QT/);
-  assert.throws(() => validate({ ...base, evidenceLink: '' }), /แนบไฟล์/);
-  assert.throws(() => validate({ ...base, evidenceLink: 'https://evil.example/x' }), /Google Drive/);
+  assert.throws(() => validate({ ...base, file: undefined }), /แนบไฟล์/);
   assert.throws(() => validate({ ...base, evidenceType: 'อื่นๆ' }), /ระบุ/);
   assert.throws(() => validate({ ...base, invoices: [] }), /อย่างน้อย/);
   assert.throws(() => validate({ ...base, invoices: [{}] }), /ยอดก่อน VAT/);

@@ -53,7 +53,6 @@ function validate(b) {
     branch: text(b.branch, 20),
     evidenceType: text(b.evidenceType, 40),
     evidenceOther: text(b.evidenceOther, 120),
-    evidenceLink: text(b.evidenceLink, 500),
     financeContact: text(b.financeContact, 120),
     financeEmail: text(b.financeEmail, 120),
     financePhone: text(b.financePhone, 40),
@@ -65,8 +64,7 @@ function validate(b) {
   checkEntity(r, 'ลูกค้าตาม QT');
   if (!EVIDENCE.includes(r.evidenceType)) throw bad('เลือกประเภทหลักฐานที่ลูกค้ายอมรับ');
   if (r.evidenceType === 'อื่นๆ' && !r.evidenceOther) throw bad('ระบุว่าหลักฐานเป็นเอกสารอะไร');
-  if (!b.file && !r.evidenceLink) throw bad('แนบไฟล์หลักฐาน หรือใส่ลิงก์ไฟล์ (Google Drive)');
-  if (r.evidenceLink && !/^https:\/\/(drive|docs)\.google\.com\//.test(r.evidenceLink)) throw bad('ลิงก์หลักฐานต้องเป็นลิงก์ Google Drive หรือ Google Docs');
+  if (!b.file) throw bad('แนบไฟล์หลักฐาน (PDF / JPG / PNG)');
   if (r.financeEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r.financeEmail)) throw bad('อีเมลฝ่ายการเงินไม่ถูกต้อง');
 
   const list = Array.isArray(b.invoices) ? b.invoices : [];
@@ -138,9 +136,9 @@ async function create(req, res, user) {
   const now = new Date();
   const at = hub.sheetDateTime(now);
   const batchId = newBatchId(now);
-  let evidenceLink = r.evidenceLink;
-  if (b.file) {
-    if (!drive.enabled()) throw bad('ยังอัปโหลดไฟล์ไม่ได้ ใส่ลิงก์ Google Drive ของไฟล์แทน');
+  let evidenceLink = '';
+  {
+    if (!drive.enabled()) throw Object.assign(new Error('ระบบยังไม่ได้ตั้งค่าที่เก็บไฟล์ (DOCS_FOLDER_ID) แจ้งผู้ดูแลระบบ'), { status: 500 });
     evidenceLink = await drive.upload(b.file, `${batchId} ${r.qtNo} ${r.company}`.slice(0, 120));
   }
   const evidenceType = r.evidenceType === 'อื่นๆ' ? `อื่นๆ: ${r.evidenceOther}` : r.evidenceType;

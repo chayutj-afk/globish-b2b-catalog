@@ -13,15 +13,15 @@ const peak = require('../lib/peak');
 const { OPP_RE, normaliseOppId } = require('../lib/crm');
 const { services } = require('./services');
 
-const SEGMENTS = ['B2B', 'B2S', 'B2E', 'Others'];
+const SEGMENTS = ['B2B', 'B2C', 'B2S', 'B2E', 'Others'];
 const DEAL_TYPES = ['New Logo', 'Retention', 'Others'];
 const LIMIT_PER_HOUR = 30;
-// Which segments carry a CRM Opportunity ID: B2B and B2E always, B2S never.
-const OPP_REQUIRED = ['B2B', 'B2E'];
+// Which segments carry a CRM Opportunity ID: every segment except B2S (required), B2S never.
+const OPP_REQUIRED = ['B2B', 'B2C', 'B2E', 'Others'];
 const OPP_NONE = ['B2S'];
 // Line kinds a segment may use. catalog = B2B Standard Catalog package, keyhs = customized
 // B2B package with its own Key H.S., service = Whitehouse Package ID or PEAK service code.
-const KINDS = { B2B: ['catalog', 'keyhs', 'surcharge'], B2E: ['service'], B2S: ['service'], Others: ['catalog', 'keyhs', 'service', 'surcharge'] };
+const KINDS = { B2B: ['catalog', 'keyhs', 'surcharge'], B2C: ['service'], B2E: ['service'], B2S: ['service'], Others: ['catalog', 'keyhs', 'service', 'surcharge'] };
 
 const bad = (m, status = 400) => Object.assign(new Error(m), { status });
 const text = (v, max) => String(v ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').trim().slice(0, max);
@@ -48,7 +48,7 @@ function validate(b) {
     note: text(b.note, 1000),
     opportunityId: normaliseOppId(b.opportunityId),
   };
-  if (!SEGMENTS.includes(r.segment)) throw bad('เลือกกลุ่มลูกค้า (B2B / B2S / B2E / Others)');
+  if (!SEGMENTS.includes(r.segment)) throw bad('เลือกกลุ่มลูกค้า (B2B / B2C / B2E / B2S / Others)');
   if (!DEAL_TYPES.includes(r.dealType)) throw bad('เลือกประเภทดีล (New Logo / Retention / Others)');
   if (OPP_NONE.includes(r.segment)) r.opportunityId = '';
   if (r.opportunityId && !OPP_RE.test(r.opportunityId)) throw bad('Opportunity ID ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN');
@@ -65,8 +65,9 @@ function validate(b) {
   if (br === null) throw bad('สาขาต้องเป็นรหัส 5 หลัก เช่น 00000 (สำนักงานใหญ่) หรือ 00001');
   r.branch = br;
   if (!['TH', 'EN'].includes(r.docLang)) throw bad('เลือกภาษาเอกสาร (TH / EN)');
-  if (r.wantedQtDate && !/^\d{4}-\d{2}-\d{2}$/.test(r.wantedQtDate)) throw bad('วันที่ใบเสนอราคาไม่ถูกต้อง');
-  if (r.creditTermDays !== '' && (!Number.isFinite(r.creditTermDays) || r.creditTermDays < 0 || r.creditTermDays > 180)) throw bad('เครดิตเทอมต้องอยู่ระหว่าง 0 ถึง 180 วัน');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(r.wantedQtDate)) throw bad('ใส่วันที่ต้องการให้ลงใน QT');
+  if (r.creditTermDays === '') throw bad('ใส่เครดิตเทอม (วัน)');
+  if ((!Number.isFinite(r.creditTermDays) || r.creditTermDays < 0 || r.creditTermDays > 180)) throw bad('เครดิตเทอมต้องอยู่ระหว่าง 0 ถึง 180 วัน');
   const items = Array.isArray(b.items) ? b.items : [];
   if (items.length < 1) throw bad('ยังไม่มีแพ็กเกจในคำขอ');
   if (items.length > 20) throw bad('ใส่แพ็กเกจได้ไม่เกิน 20 รายการต่อคำขอ');

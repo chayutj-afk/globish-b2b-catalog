@@ -1,4 +1,5 @@
 const test = require('node:test');
+const L = { students: 5, wantedIssueDate: '2026-11-20', creditTermDays: 30 };
 const assert = require('node:assert');
 const { normaliseOppId, OPP_RE } = require('../lib/crm');
 const { validate } = require('../api/requests.js')._test;
@@ -10,16 +11,22 @@ test('Opportunity ID is normalised from typed text or a pasted CRM link', () => 
   assert.ok(!OPP_RE.test(normaliseOppId('OPP-123')));
 });
 
-const qt = { segment: 'B2B', dealType: 'Retention', company: 'Co', taxId: '0105555555554', docLang: 'TH', items: [{ packageId: 'SPD-03-36', students: 10 }] };
+const qt = { segment: 'B2B', dealType: 'Retention', company: 'Co', taxId: '0105555555554', docLang: 'TH', wantedQtDate: '2026-11-15', creditTermDays: 30, items: [{ packageId: 'SPD-03-36', students: 10 }] };
 const svc = [{ kind: 'service', code: '3822', name: 'Essential', qty: 5, unitPrice: 15900 }];
 
-test('B2B and B2E need an Opportunity ID; B2S never carries one', () => {
+test('every segment but B2S needs an Opportunity ID; B2S never carries one; QT date and credit term are required', () => {
   assert.throws(() => validate(qt), /Opportunity ID/);
   assert.equal(validate({ ...qt, opportunityId: 'crm-opp-2026-00001' }).r.opportunityId, 'CRM-OPP-2026-00001');
   assert.throws(() => validate({ ...qt, segment: 'B2E', items: svc }), /Opportunity ID/);
   assert.throws(() => validate({ ...qt, segment: 'B2E', items: svc, opportunityId: 'nope' }), /รูปแบบ/);
   assert.equal(validate({ ...qt, segment: 'B2S', items: svc, opportunityId: 'CRM-OPP-2026-00001' }).r.opportunityId, '');
-  assert.ok(validate({ ...qt, segment: 'Others', items: svc }));
+  assert.throws(() => validate({ ...qt, segment: 'Others', items: svc }), /Opportunity ID/);
+  assert.throws(() => validate({ ...qt, segment: 'B2C', items: svc }), /Opportunity ID/);
+  assert.ok(validate({ ...qt, segment: 'B2C', items: svc, opportunityId: 'CRM-OPP-2026-00002' }));
+  assert.throws(() => validate({ ...qt, segment: 'B2C', items: [{ packageId: 'SPD-03-36', students: 10 }], opportunityId: 'CRM-OPP-2026-00002' }), /B2C/);
+  const ok = { ...qt, opportunityId: 'CRM-OPP-2026-00001' };
+  assert.throws(() => validate({ ...ok, wantedQtDate: '' }), /วันที่ต้องการให้ลงใน QT/);
+  assert.throws(() => validate({ ...ok, creditTermDays: '' }), /เครดิตเทอม/);
 });
 
 test('PEAK client code is any PEAK code; a failed tax check digit is flagged, not blocked', () => {
@@ -35,7 +42,7 @@ test('PEAK client code is any PEAK code; a failed tax check digit is flagged, no
 });
 
 test('INV requests accept an optional, well-formed Opportunity ID', () => {
-  const base = { qtNo: 'QO-1', company: 'Co', taxId: '0105555555554', evidenceType: 'PO จากลูกค้า', file: { name: 'qt.pdf', type: 'application/pdf', data: 'JVBERi0=' }, invoices: [{ amountPreVat: 100 }] };
+  const base = { qtNo: 'QO-1', company: 'Co', taxId: '0105555555554', evidenceType: 'PO จากลูกค้า', file: { name: 'qt.pdf', type: 'application/pdf', data: 'JVBERi0=' }, invoices: [{ ...L, amountPreVat: 100 }] };
   assert.equal(inv.validate(base).r.opportunityId, '');
   assert.throws(() => inv.validate({ ...base, opportunityId: 'x' }), /รูปแบบ/);
 });

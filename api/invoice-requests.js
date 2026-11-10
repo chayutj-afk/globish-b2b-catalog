@@ -48,6 +48,7 @@ function validate(b) {
     requestId: text(b.requestId, 40),
     qtNo: text(b.qtNo, 40),
     opportunityId: normaliseOppId(b.opportunityId),
+    segment: text(b.segment, 20),
     company: text(b.company, 200),
     taxId: text(b.taxId, 20).replace(/[\s-]/g, ''),
     branch: text(b.branch, 20),
@@ -95,7 +96,10 @@ function validate(b) {
     if (!same && !v.relation) throw bad(`${label}: ระบุความสัมพันธ์กับลูกค้าตาม QT เช่น บริษัทลูก`);
     if (!(v.amountPreVat > 0 && v.amountPreVat < 1e9)) throw bad(`${label}: ใส่ยอดก่อน VAT`);
     v.amountPreVat = round2(v.amountPreVat);
-    if (v.students !== '' && !(Number.isInteger(v.students) && v.students >= 1 && v.students <= 5000)) throw bad(`${label}: จำนวนผู้เรียนไม่ถูกต้อง`);
+    if (v.students === '') throw bad(`${label}: ใส่จำนวนผู้เรียนในใบนี้`);
+    if (!v.wantedIssueDate) throw bad(`${label}: ใส่วันที่ต้องการให้ลงใน INV`);
+    if (v.creditTermDays === '') throw bad(`${label}: ใส่เครดิตเทอม (วัน)`);
+    if (!(Number.isInteger(v.students) && v.students >= 1 && v.students <= 5000)) throw bad(`${label}: จำนวนผู้เรียนไม่ถูกต้อง`);
     if (v.wantedIssueDate && !/^\d{4}-\d{2}-\d{2}$/.test(v.wantedIssueDate)) throw bad(`${label}: วันที่ออก INV ไม่ถูกต้อง`);
     if (v.creditTermDays !== '' && !(Number.isInteger(v.creditTermDays) && v.creditTermDays >= 0 && v.creditTermDays <= 180)) throw bad(`${label}: เครดิตเทอมต้องอยู่ระหว่าง 0 ถึง 180 วัน`);
     if (v.originalDoc === 'yes' && !v.originalAddress) throw bad(`${label}: ใส่ที่อยู่สำหรับส่งเอกสารตัวจริง`);
@@ -116,13 +120,25 @@ async function create(req, res, user) {
   const b = req.body || {};
   const { r, invoices } = validate(b);
 
+  if (!drive.enabled()) throw Object.assign(new Error('ระบบยังไม่ได้ตั้งค่าที่เก็บไฟล์ (DOCS_FOLDER_ID) แจ้งผู้ดูแลระบบ'), { status: 500 });
+  const now = new Date();
+  const at = hub.sheetDateTime(now);
+  const batchId = newBatchId(now);
+  // The upload is the slow part: run it alongside the sheet reads. If a check below fails the
+  // file is already in Drive (harmless; it's named by batch ID and nothing links to it).
+  const uploading = drive.upload(b.file, `${batchId} ${r.qtNo} ${r.company}`.slice(0, 120));
+  uploading.catch(() => {});
   const [requests, existing] = await Promise.all([r.requestId ? hub.readTable('Requests') : [], hub.readTable('InvoiceRequests')]);
   let linked = null;
   if (r.requestId) {
     linked = requests.find((x) => x.requestId === r.requestId);
     if (!linked || (user.role !== 'op' && linked.requestedBy !== user.email)) throw bad('ไม่พบคำขอใบเสนอราคาที่เลือก');
     if (!r.opportunityId) r.opportunityId = linked.opportunityId || '';
+    r.segment = linked.segment || r.segment;
   }
+  // CRM Opportunity ID: required for every segment except B2S.
+  if (r.segment === 'B2S') r.opportunityId = '';
+  else if (!r.opportunityId) throw bad('ใส่ Opportunity ID จาก CRM (CRM-OPP-YYYY-NNNNN) ยกเว้นลูกค้า B2S');
 
   // Balance check: never silently bill more than the QT.
   const prior = alreadyInvoiced(existing, r);
@@ -133,14 +149,7 @@ async function create(req, res, user) {
     throw bad(`ยอดรวม INV (${money(prior + asked)}) เกินยอด QT (${money(qtTotal)}) ใส่เหตุผลก่อนส่ง หรือแก้ยอด`);
   }
 
-  const now = new Date();
-  const at = hub.sheetDateTime(now);
-  const batchId = newBatchId(now);
-  let evidenceLink = '';
-  {
-    if (!drive.enabled()) throw Object.assign(new Error('ระบบยังไม่ได้ตั้งค่าที่เก็บไฟล์ (DOCS_FOLDER_ID) แจ้งผู้ดูแลระบบ'), { status: 500 });
-    evidenceLink = await drive.upload(b.file, `${batchId} ${r.qtNo} ${r.company}`.slice(0, 120));
-  }
+  const evidenceLink = await uploading;
   const evidenceType = r.evidenceType === 'อื่นๆ' ? `อื่นๆ: ${r.evidenceOther}` : r.evidenceType;
   const partial = invoices.length > 1 || prior > 0 || (qtTotal > 0 && Math.abs(asked - qtTotal) > 0.01);
 
@@ -160,25 +169,26 @@ async function create(req, res, user) {
   }));
   await hub.appendRows('InvoiceRequests', rows);
 
-  if (linked) {
-    await hub.updateRow('Requests', linked._row, {
+  const remaining = qtTotal > 0 ? round2(qtTotal - prior - asked) : null;
+  const after = [
+    linked ? hub.updateRow('Requests', linked._row, {
       status: 'iv_requested', ivRequestedAt: linked.ivRequestedAt || at, updatedAt: at,
       peakQtNo: linked.peakQtNo || r.qtNo,
-    });
-  }
-  const remaining = qtTotal > 0 ? round2(qtTotal - prior - asked) : null;
-  await hub.log('catalog', 'invoice_requested', batchId,
-    `${user.email} · ${r.qtNo} · ${rows.length} INV · ${asked}${over ? ' · over QT: ' + r.overReason : ''}`);
+    }) : null,
+    hub.log('catalog', 'invoice_requested', batchId,
+      `${user.email} · ${r.qtNo} · ${rows.length} INV · ${asked}${over ? ' · over QT: ' + r.overReason : ''}`),
+  ];
 
   const entities = [...new Set(rows.map((x) => x.company))];
   const originals = rows.filter((x) => x.originalDoc === 'yes').length;
-  await notify.chat([
+  after.push(notify.chat([
     `🧾 ขอออก INV ใหม่ ${batchId} จาก ${user.name || user.email}`,
     `QT ${r.qtNo} · ${rows.length} ใบ · รวมก่อน VAT ${money(asked)}${remaining !== null ? ` · คงเหลือ ${money(remaining)}` : ''}`,
     `ออกในนาม: ${entities.join(', ')}`,
     originals ? `📮 ต้องส่งตัวจริง ${originals} ใบ` : '',
     over ? `⚠️ เกินยอด QT: ${r.overReason}` : '',
-  ].filter(Boolean).join('\n'));
+  ].filter(Boolean).join('\n')));
+  await Promise.all(after);
 
   res.status(200).json({
     ok: true, batchId, ivRequestIds: rows.map((x) => x.ivRequestId), evidenceLink, asked, remaining,

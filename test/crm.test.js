@@ -72,3 +72,25 @@ test('service lookup: proposed codes are not in PEAK, deactivating codes are fla
   assert.equal(lookup(map, '1145').inactive, true);
   assert.equal(lookup(map, '9999').found, false);
 });
+
+test('services list follows the accounting decision in column G', async () => {
+  const fs = require('fs'); const os = require('os'); const path = require('path');
+  const f = path.join(os.tmpdir(), `svc-${process.pid}.json`);
+  fs.writeFileSync(f, JSON.stringify({ PeakServices: [
+    ['3822', 'ECD', 'B2E', 'ขายได้', 'เก็บไว้', '', 'ตามข้อเสนอ'],
+    ['466', 'Old', 'Adult', 'Inactive', 'ปิดใช้งาน', '', 'ตามข้อเสนอ'],
+    ['1305', 'Review', 'Adult', '', 'ตรวจก่อน', '', 'ปิดใช้งาน'],
+    ['4974_TikTok', 'Tik', 'Adult', '', 'ตรวจก่อน', '', 'เก็บไว้'],
+    ['B2B-PVT', 'PVT', 'B2B', '', 'สร้างแล้ว', '', 'ตามข้อเสนอ'],
+    ['0001A', 'Legacy', 'B2B', '', 'ปิดใช้งาน (หลังเริ่มใช้รหัสใหม่)', '', 'ตามข้อเสนอ'],
+  ] }));
+  const prev = [process.env.HUB_MODE, process.env.HUB_MOCK_FILE];
+  process.env.HUB_MODE = 'mock'; process.env.HUB_MOCK_FILE = f;
+  const map = await require('../lib/hub').readServices();
+  [process.env.HUB_MODE, process.env.HUB_MOCK_FILE] = prev;
+  fs.unlinkSync(f);
+  assert.deepEqual([...map.keys()].sort(), ['0001A', '3822', '4974_TIKTOK', 'B2B-PVT']);
+  const { lookup } = require('../api/services')._test;
+  assert.equal(lookup(map, '0001A').inactive, true);
+  assert.equal(lookup(map, '466').found, false);
+});

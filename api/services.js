@@ -17,7 +17,7 @@ function lookup(map, code) {
   const c = String(code || '').trim().toUpperCase();
   const s = map.get(c);
   if (!s) return { found: false, code: c };
-  return { found: true, code: s.code, name: s.name, group: s.group, inactive: s.proposal === 'ปิดใช้งาน' || s.proposal.startsWith('ปิดใช้งานหลัง') };
+  return { found: true, code: s.code, name: s.name, group: s.group, inactive: s.proposal.startsWith('ปิดใช้งาน') };
 }
 
 module.exports = async function handler(req, res) {

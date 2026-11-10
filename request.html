@@ -144,7 +144,7 @@ table.items input.r{text-align:right}
     <p class="hint">กรอกเลขผู้เสียภาษี 13 หลัก แล้วเลือกสาขา ระบบจะดึงรหัสลูกค้าและชื่อจาก PEAK ให้ บุคคลธรรมดาใช้เลขบัตรประชาชน</p>
     <div class="row c3">
       <div class="fg"><label>กลุ่มลูกค้า</label>
-        <select id="q-segment" onchange="changeSegment()"><option>B2B</option><option>B2C</option><option>B2E</option><option>B2S</option><option>Others</option></select></div>
+        <select id="q-segment" onchange="changeSegment()"><option>B2B</option><option>B2C</option><option>MaoMao</option><option>B2E</option><option>B2S</option><option>Others</option></select></div>
       <div class="fg"><label>ประเภทดีล</label>
         <select id="q-deal"><option value="New Logo">New Logo (ลูกค้าใหม่)</option><option value="Retention">Retention (ต่อสัญญา)</option><option value="Others">อื่นๆ</option></select></div>
       <div class="fg" id="q-opp-wrap"><label id="q-opp-label">Opportunity ID ใน CRM *</label>
@@ -197,7 +197,7 @@ table.items input.r{text-align:right}
     </div>
     <div id="i-balance"></div>
     <div class="row c4">
-      <div class="fg"><label>กลุ่มลูกค้า *</label><select id="i-seg" onchange="onInvSeg()"><option value="">— เลือก —</option><option>B2B</option><option>B2C</option><option>B2E</option><option>B2S</option><option>Others</option></select></div>
+      <div class="fg"><label>กลุ่มลูกค้า *</label><select id="i-seg" onchange="onInvSeg()"><option value="">— เลือก —</option><option>B2B</option><option>B2C</option><option>MaoMao</option><option>B2E</option><option>B2S</option><option>Others</option></select></div>
       <div class="fg" id="i-opp-wrap"><label>Opportunity ID ใน CRM *</label><div class="mask"><span>CRM-OPP-</span><input id="i-opp-y" type="text" inputmode="numeric" maxlength="4" placeholder="2026" style="width:44px" oninput="oppInput(this,'i-opp-n')" onpaste="oppPaste(event,'i')"><span class="mid">-</span><input id="i-opp-n" type="text" inputmode="numeric" maxlength="5" placeholder="00123" style="flex:1" oninput="digits(this)" onpaste="oppPaste(event,'i')"></div></div>
       <div class="fg"><label>เลขผู้เสียภาษีของลูกค้าตาม QT *</label><input id="i-tax" type="text" maxlength="13" inputmode="numeric" placeholder="13 หลัก" oninput="digits(this);taxHint('i')"><div class="sub" id="i-tax-hint"></div></div>
       <div class="fg"><label>รหัสสาขา</label><input id="i-branch" type="text" maxlength="5" inputmode="numeric" placeholder="00000" oninput="digits(this)"></div>
@@ -364,7 +364,7 @@ const CART_KEY = 'gc_quote_cart_v1';
 let CART = [];
 function loadCart() { try { const v = JSON.parse(localStorage.getItem(CART_KEY) || '[]'); CART = Array.isArray(v) ? v : []; } catch { CART = []; } }
 function saveCart() { try { localStorage.setItem(CART_KEY, JSON.stringify(CART)); } catch {} }
-const KINDS = { B2B: ['catalog', 'keyhs', 'surcharge'], B2C: ['service'], B2E: ['service'], B2S: ['service'], Others: ['catalog', 'keyhs', 'service', 'surcharge'] };
+const KINDS = { B2B: ['catalog', 'keyhs', 'surcharge'], B2C: ['service'], MaoMao: ['service'], B2E: ['service'], B2S: ['service'], Others: ['catalog', 'keyhs', 'service', 'surcharge'] };
 const kindOf = (it) => it.kind || 'catalog';
 
 // User switched the customer segment: drop what doesn't fit the new segment, so nothing stale is sent.
@@ -836,7 +836,7 @@ function renderMine() {
     const total = toNum(q.totalPreVat), done = toNum(q.invoicedPreVat);
     const mineIvs = IVS.filter((v) => v.requestId === q.requestId);
     return `<div class="list-row">
-      <div class="list-head"><div>${q.peakQtNo ? `<span class="list-id">QT ${docLink(q.peakQtNo, q.peakDocLink)}</span>` : '<span class="small">ยังไม่มีเลข QT</span>'} · ${esc(q.company)}</div>${st(QT_ST, q.status)}</div>
+      <div class="list-head"><div>${q.peakQtNo ? `<span class="list-id">QT ${qtLink(q)}</span>` : '<span class="small">ยังไม่มีเลข QT</span>'} · ${esc(q.company)}</div>${st(QT_ST, q.status)}</div>
       <div class="list-sub">${esc(q.requestId)} · ${esc(q.createdAt)} · ${esc(q.segment)}${q.opportunityId ? ' · ' + esc(q.opportunityId) : ''}${op ? ' · ' + esc(q.salesName) : ''}<br>
         ${heroes}<br>ยอดก่อน VAT <b>${fmt(total)}</b> · ขอ INV แล้ว ${fmt(done)} · คงเหลือ <b>${fmt(total - done)}</b>${q.peakNote ? `<br><span class="small">หมายเหตุ: ${esc(q.peakNote)}</span>` : ''}</div>
       ${mineIvs.length ? `<div class="inv-mini">${mineIvs.map((v) => `<div class="inv-mini-row"><span class="mono">${esc(v.ivRequestId)}</span><span>${esc(v.company)} · ${fmt(toNum(v.amountPreVat))}</span><span>${st(IV_ST, v.status)} ${st(ORIG_ST, v.originalStatus)}</span></div>`).join('')}</div>` : ''}
@@ -870,13 +870,17 @@ function renderPending() {
   const fixQ = REQS.filter((q) => ['needs_contact', 'needs_service_code', 'needs_review', 'qt_error'].includes(q.status));
   const waitI = IVS.filter((v) => v.status === 'new');
   const waitO = IVS.filter((v) => v.originalStatus === 'requested');
-  const n = waitQ.length + waitI.length + waitO.length;
-  $('pend-orig-n').textContent = waitO.length ? `(${waitO.length})` : '';
+  const readyO = waitO.filter((v) => v.status === 'iv_issued');
+  const draftQ = REQS.filter((q) => q.status === 'qt_draft');
+  const n = waitQ.length + waitI.length + readyO.length;
+  $('pend-orig-n').textContent = readyO.length ? `(${readyO.length})` : '';
   $('pend-orig').innerHTML = waitO.length ? waitO.map((v) => `<div class="list-row">
       <div class="list-head"><div><span class="list-id">${esc(v.company)}</span> · ${esc(v.ivRequestId)}</div>${st(ORIG_ST, v.originalStatus)}</div>
       <div class="list-sub">QT ${esc(v.qtNo)}${v.peakIvNo ? ' · INV ' + docLink(v.peakIvNo, v.peakDocLink) : ' · <span class="warn">ยังไม่ได้ออก INV</span>'} · โดย ${esc(v.salesName)}${v.originalRequestedAt ? ' · ขอเมื่อ ' + esc(v.originalRequestedAt) : ''}<br>
         ส่งถึง: <b>${esc(v.originalRecipient)}</b> ${esc(v.originalAddress)}</div>
-      <div class="op-bar"><input id="trk-${esc(v.ivRequestId)}" type="text" maxlength="60" placeholder="เลขพัสดุ (ถ้ามี)" style="flex:1;min-width:160px"><button class="btn btn-p btn-sm" onclick="markSent('${esc(v.ivRequestId)}')">✅ ส่งตัวจริงแล้ว</button></div>
+      ${v.status === 'iv_issued'
+        ? `<div class="op-bar"><input id="trk-${esc(v.ivRequestId)}" type="text" maxlength="60" placeholder="เลขพัสดุ (ถ้ามี)" style="flex:1;min-width:160px"><button class="btn btn-p btn-sm" onclick="markSent('${esc(v.ivRequestId)}')">✅ ส่งตัวจริงแล้ว</button></div>`
+        : `<div class="op-bar"><span class="small warn">รออนุมัติ INV ก่อน (แท็บ "ใบแจ้งหนี้") แล้วจึงบันทึกการส่งตัวจริงได้</span></div>`}
     </div>`).join('') : '<div class="empty">ไม่มีเอกสารตัวจริงที่ต้องส่ง</div>';
   $('pend-count').textContent = n; $('pend-count').hidden = !n;
   $('pend-qt-n').textContent = waitQ.length ? `(${waitQ.length})` : '';
@@ -895,13 +899,16 @@ function renderPending() {
       <span id="qm-${esc(q.requestId)}"></span></div>
   </div>`;
   $('pend-qt').innerHTML = (waitQ.length ? waitQ.map((q) => qCard(q, false)).join('') : '<div class="empty">ไม่มีคำขอ QT รออนุมัติ</div>')
-    + (fixQ.length ? `<h3 style="margin:18px 0 8px;font-size:15px">ต้องแก้ใน PEAK ก่อนสร้าง QT (${fixQ.length})</h3>` + fixQ.map((q) => qCard(q, true)).join('') : '');
+    + (fixQ.length ? `<h3 style="margin:18px 0 8px;font-size:15px">ต้องแก้ใน PEAK ก่อนสร้าง QT (${fixQ.length})</h3>` + fixQ.map((q) => qCard(q, true)).join('') : '')
+    + (draftQ.length ? `<h3 style="margin:18px 0 8px;font-size:15px">QT Draft รออนุมัติใน PEAK (${draftQ.length})</h3><p class="hint">อนุมัติใน PEAK แล้วกดปุ่มด้านล่าง (หรือรอระบบอัปเดตเองในรอบ 10:49 / 17:49) Sales จึงจะเปิดลิงก์ QT ส่งลูกค้าได้</p>` + draftQ.map((q) => `<div class="list-row"><div class="list-head"><div><span class="list-id">${esc(q.company)}</span> · ${esc(q.peakQtNo)}</div>${st(QT_ST, q.status)}</div>
+      <div class="list-sub">${esc(q.requestId)} · โดย ${esc(q.salesName)} · ยอดก่อน VAT ${fmt(toNum(q.totalPreVat))}${q.peakDocLink ? ` · <a href="${esc(q.peakDocLink)}" target="_blank" rel="noopener">เปิดใน PEAK ↗</a>` : ''}</div>
+      <div class="op-bar"><button class="btn btn-p btn-sm" onclick="qtAction('${esc(q.requestId)}','qt_approved')">✓ อนุมัติ QT ใน PEAK แล้ว</button><span id="qm-${esc(q.requestId)}"></span></div></div>`).join('') : '');
   $('pend-inv').innerHTML = waitI.length ? waitI.map((v) => {
     const q = REQS.find((x) => x.requestId === v.requestId);
     return `<div class="list-row">
       <div class="list-head"><div><span class="list-id">${esc(v.company)}</span>${v.billToRelation ? ` <span class="small">(${esc(v.billToRelation)})</span>` : ''}</div>${st(IV_ST, v.status)}</div>
       <div class="list-sub">${esc(v.ivRequestId)} · ${esc(v.createdAt)} · โดย ${esc(v.salesName)}<br>
-        จาก QT ${q ? docLink(v.qtNo, q.peakDocLink) : esc(v.qtNo)} · เลขภาษี ${esc(v.taxId)} · สาขา ${esc(v.branch)}<br>
+        จาก QT ${q && q.peakQtNo === v.qtNo ? qtLink(q) : esc(v.qtNo)} · เลขภาษี ${esc(v.taxId)} · สาขา ${esc(v.branch)}<br>
         ยอดก่อน VAT <b>${fmt(toNum(v.amountPreVat))}</b>${v.installment ? ' · ' + esc(v.installment) : ''}${v.students ? ' · ' + esc(v.students) + ' ผู้เรียน' : ''}${v.creditTermDays ? ' · เครดิต ' + esc(v.creditTermDays) + ' วัน' : ''} · <b>${whtText(v.whtRate)}</b>${v.poNo ? ' · PO ' + esc(v.poNo) : ''}${v.wantedIssueDate ? ' · ต้องการวันที่ ' + esc(v.wantedIssueDate) : ''}<br>
         หลักฐาน: ${esc(v.evidenceType)}${v.evidenceLink && /^https:\/\//.test(v.evidenceLink) ? ` · <a href="${esc(v.evidenceLink)}" target="_blank" rel="noopener">เปิดดู</a>` : ''} · ตัวจริง: ${st(ORIG_ST, v.originalStatus)}${v.note ? `<br>หมายเหตุ: ${esc(v.note)}` : ''}${v.overReason ? `<br><span class="warn">เกินยอด QT: ${esc(v.overReason)}</span>` : ''}</div>
       <div class="op-bar">
@@ -915,6 +922,12 @@ function renderPending() {
 }
 
 // PEAK document link (the public doc.peakaccount.com link PEAK returns), opens / downloads the document.
+// QT link opens only once accounting approved the QT in PEAK (a Draft isn't ready for the customer).
+const QT_LIVE = ['qt_approved', 'accepted', 'iv_requested', 'iv_issued'];
+function qtLink(q) {
+  if (!q.peakQtNo) return '';
+  return QT_LIVE.includes(q.status) ? docLink(q.peakQtNo, q.peakDocLink) : `<span title="QT ยังเป็น Draft ใน PEAK เปิดได้เมื่อฝ่ายบัญชีอนุมัติ">${esc(q.peakQtNo)} <span class="small">(Draft)</span></span>`;
+}
 function docLink(no, url) {
   return url && /^https:\/\/(doc|secure)\.peakaccount\.com\//.test(url)
     ? `<a class="doc" href="${esc(url)}" target="_blank" rel="noopener" title="เปิดเอกสารใน PEAK (พิมพ์ / ดาวน์โหลด PDF ได้)">${esc(no)} ↗</a>` : esc(no);
@@ -922,6 +935,7 @@ function docLink(no, url) {
 const QT_ASK = {
   approve: { title: 'อนุมัติคำขอนี้?', ok: '✓ อนุมัติ', body: 'ระบบจะสร้าง QT Draft ใน PEAK ในรอบถัดไป (10:49 / 17:49 หรือกด Run now)' },
   reject: { title: 'ตีกลับคำขอนี้?', ok: 'ตีกลับ', kind: 'danger', body: 'Sales จะเห็นเหตุผล และต้องส่งคำขอใหม่' },
+  qt_approved: { title: 'อนุมัติ QT ใน PEAK แล้ว?', ok: '✓ อนุมัติแล้ว', body: 'ยืนยันว่าอนุมัติ QT นี้ใน PEAK แล้ว (สถานะรอตอบกลับ) Sales จะเปิดลิงก์ QT ส่งลูกค้าได้' },
   reopen: { title: 'ให้ระบบสร้าง QT ใหม่?', ok: '↻ สร้างใหม่', body: 'ใช้เมื่อแก้ลูกค้า / รหัสบริการใน PEAK แล้ว ระบบจะลองสร้าง QT อีกครั้งในรอบถัดไป' },
 };
 async function qtAction(id, action) {

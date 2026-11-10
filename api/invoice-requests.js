@@ -238,6 +238,8 @@ async function update(req, res, user) {
 
   if (b.action === 'original_sent') {
     if (user.role !== 'op') throw bad('เฉพาะฝ่ายบัญชี / Admin', 403);
+    // The original can only go out once the INV exists (approved in PEAK, number + link entered).
+    if (row.status !== 'iv_issued') throw bad('ยังส่งตัวจริงไม่ได้: ต้องอนุมัติ INV (ใส่เลข INV และลิงก์ PEAK) ก่อน', 409);
     if (row.originalStatus === 'sent') throw bad(`บันทึกว่าส่งตัวจริงไปแล้ว${row.trackingNo ? ' (เลขพัสดุ ' + row.trackingNo + ')' : ''} รีเฟรชหน้าเพื่อดูข้อมูลล่าสุด`, 409);
     if (row.originalStatus !== 'requested') throw bad('ลูกค้ายังไม่ได้ขอเอกสารตัวจริงสำหรับ INV นี้', 409);
     const trackingNo = text(b.trackingNo, 60);

@@ -14,6 +14,8 @@ const { OPP_RE, normaliseOppId } = require('../lib/crm');
 const { services } = require('./services');
 
 const SEGMENTS = ['B2B', 'B2C', 'B2S', 'B2E', 'Others'];
+// Withholding tax the customer deducts from the payment: 0 = none, otherwise percent (services to a company: usually 3%).
+const WHT_RATES = ['0', '1', '2', '3', '5'];
 const DEAL_TYPES = ['New Logo', 'Retention', 'Others'];
 const LIMIT_PER_HOUR = 30;
 // Which segments carry a CRM Opportunity ID: every segment except B2S (required), B2S never.
@@ -47,6 +49,7 @@ function validate(b) {
     poRequired: b.poRequired === true || b.poRequired === 'yes' ? 'Yes' : 'No',
     note: text(b.note, 1000),
     opportunityId: normaliseOppId(b.opportunityId),
+    whtRate: String(b.whtRate ?? '').trim(),
   };
   if (!SEGMENTS.includes(r.segment)) throw bad('เลือกกลุ่มลูกค้า (B2B / B2C / B2E / B2S / Others)');
   if (!DEAL_TYPES.includes(r.dealType)) throw bad('เลือกประเภทดีล (New Logo / Retention / Others)');
@@ -67,6 +70,7 @@ function validate(b) {
   if (!['TH', 'EN'].includes(r.docLang)) throw bad('เลือกภาษาเอกสาร (TH / EN)');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(r.wantedQtDate)) throw bad('ใส่วันที่ต้องการให้ลงใน QT');
   if (r.creditTermDays === '') throw bad('ใส่เครดิตเทอม (วัน)');
+  if (!WHT_RATES.includes(r.whtRate)) throw bad('เลือกหัก ณ ที่จ่าย (ไม่หัก / 1% / 2% / 3% / 5%)');
   if ((!Number.isFinite(r.creditTermDays) || r.creditTermDays < 0 || r.creditTermDays > 180)) throw bad('เครดิตเทอมต้องอยู่ระหว่าง 0 ถึง 180 วัน');
   const items = Array.isArray(b.items) ? b.items : [];
   if (items.length < 1) throw bad('ยังไม่มีแพ็กเกจในคำขอ');
@@ -269,4 +273,4 @@ module.exports = async function handler(req, res) {
   }
 };
 
-module.exports._test = { validate, newId, parseSheetDate, KINDS };
+module.exports._test = { validate, newId, parseSheetDate, KINDS, WHT_RATES };

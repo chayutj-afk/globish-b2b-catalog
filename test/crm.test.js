@@ -11,7 +11,7 @@ test('Opportunity ID is normalised from typed text or a pasted CRM link', () => 
   assert.ok(!OPP_RE.test(normaliseOppId('OPP-123')));
 });
 
-const qt = { segment: 'B2B', dealType: 'Retention', company: 'Co', taxId: '0105555555554', docLang: 'TH', wantedQtDate: '2026-11-15', creditTermDays: 30, items: [{ packageId: 'SPD-03-36', students: 10 }] };
+const qt = { segment: 'B2B', dealType: 'Retention', company: 'Co', taxId: '0105555555554', docLang: 'TH', wantedQtDate: '2026-11-15', creditTermDays: 30, whtRate: '3', items: [{ packageId: 'SPD-03-36', students: 10 }] };
 const svc = [{ kind: 'service', code: '3822', name: 'Essential', qty: 5, unitPrice: 15900 }];
 
 test('every segment but B2S needs an Opportunity ID; B2S never carries one; QT date and credit term are required', () => {
@@ -27,6 +27,9 @@ test('every segment but B2S needs an Opportunity ID; B2S never carries one; QT d
   const ok = { ...qt, opportunityId: 'CRM-OPP-2026-00001' };
   assert.throws(() => validate({ ...ok, wantedQtDate: '' }), /วันที่ต้องการให้ลงใน QT/);
   assert.throws(() => validate({ ...ok, creditTermDays: '' }), /เครดิตเทอม/);
+  assert.throws(() => validate({ ...ok, whtRate: '' }), /หัก ณ ที่จ่าย/);
+  assert.throws(() => validate({ ...ok, whtRate: '7' }), /หัก ณ ที่จ่าย/);
+  assert.equal(validate({ ...ok, whtRate: '0' }).r.whtRate, '0');
 });
 
 test('PEAK client code is any PEAK code; a failed tax check digit is flagged, not blocked', () => {
@@ -42,7 +45,7 @@ test('PEAK client code is any PEAK code; a failed tax check digit is flagged, no
 });
 
 test('INV requests accept an optional, well-formed Opportunity ID', () => {
-  const base = { qtNo: 'QO-1', company: 'Co', taxId: '0105555555554', evidenceType: 'PO จากลูกค้า', file: { name: 'qt.pdf', type: 'application/pdf', data: 'JVBERi0=' }, invoices: [{ ...L, amountPreVat: 100 }] };
+  const base = { whtRate: '3', qtNo: 'QO-1', company: 'Co', taxId: '0105555555554', evidenceType: 'PO จากลูกค้า', file: { name: 'qt.pdf', type: 'application/pdf', data: 'JVBERi0=' }, invoices: [{ ...L, amountPreVat: 100 }] };
   assert.equal(inv.validate(base).r.opportunityId, '');
   assert.throws(() => inv.validate({ ...base, opportunityId: 'x' }), /รูปแบบ/);
 });

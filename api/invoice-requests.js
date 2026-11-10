@@ -49,6 +49,7 @@ function validate(b) {
     qtNo: text(b.qtNo, 40),
     opportunityId: normaliseOppId(b.opportunityId),
     segment: text(b.segment, 20),
+    whtRate: String(b.whtRate ?? '').trim(),
     company: text(b.company, 200),
     taxId: text(b.taxId, 20).replace(/[\s-]/g, ''),
     branch: text(b.branch, 20),
@@ -61,6 +62,7 @@ function validate(b) {
     overReason: text(b.overReason, 300),
   };
   if (!r.qtNo) throw bad('ใส่เลขที่ใบเสนอราคา (QT) ที่ต้องการออก INV');
+  if (!['0', '1', '2', '3', '5'].includes(r.whtRate)) throw bad('เลือกหัก ณ ที่จ่าย (ไม่หัก / 1% / 2% / 3% / 5%)');
   if (r.opportunityId && !OPP_RE.test(r.opportunityId)) throw bad('Opportunity ID ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN');
   checkEntity(r, 'ลูกค้าตาม QT');
   if (!EVIDENCE.includes(r.evidenceType)) throw bad('เลือกประเภทหลักฐานที่ลูกค้ายอมรับ');
@@ -174,7 +176,7 @@ async function create(req, res, user) {
     batchId, branch: v.branch, billToRelation: v.billTo === 'other' ? v.relation : '',
     originalDoc: v.originalDoc, originalStatus: ORIGINAL[v.originalDoc], originalRecipient: v.originalRecipient,
     originalAddress: v.originalAddress, originalRequestedAt: v.originalDoc === 'yes' ? at : '', originalSentAt: '', trackingNo: '',
-    overReason: over ? r.overReason : '',
+    overReason: over ? r.overReason : '', whtRate: r.whtRate,
   }));
   await hub.appendRows('InvoiceRequests', rows);
 

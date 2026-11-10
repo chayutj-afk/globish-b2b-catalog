@@ -168,7 +168,8 @@ table.items input.r{text-align:right}
       <div class="fg"><label>วันที่ต้องการให้ลงใน QT *</label><input id="q-date" type="date"></div>
       <div class="fg"><label>เครดิตเทอม (วัน) *</label><input id="q-term" type="number" min="0" max="180" placeholder="30"></div>
     </div>
-    <div class="row">
+    <div class="row c3">
+      <div class="fg"><label>หัก ณ ที่จ่าย *</label><select id="q-wht"><option value="">— เลือก —</option><option value="0">ไม่หัก ณ ที่จ่าย</option><option value="3">หัก 3% (ค่าบริการ · นิติบุคคล)</option><option value="1">หัก 1% (หน่วยงานรัฐ)</option><option value="2">หัก 2%</option><option value="5">หัก 5%</option></select><div class="sub">ลูกค้านิติบุคคลส่วนใหญ่หัก 3% · บุคคลธรรมดาไม่หัก · หน่วยงานรัฐ 1%</div></div>
       <div class="fg"><label>ลูกค้าต้องออก PO ไหม</label><select id="q-po"><option value="no">ไม่ต้องใช้ PO</option><option value="yes">ต้องมี PO</option></select></div>
       <div class="fg"><label>หมายเหตุถึงฝ่ายบัญชี</label><input id="q-note" type="text" maxlength="1000"></div>
     </div>
@@ -201,7 +202,8 @@ table.items input.r{text-align:right}
       <div class="fg"><label>เลขผู้เสียภาษีของลูกค้าตาม QT *</label><input id="i-tax" type="text" maxlength="13" inputmode="numeric" placeholder="13 หลัก" oninput="digits(this);taxHint('i')"><div class="sub" id="i-tax-hint"></div></div>
       <div class="fg"><label>รหัสสาขา</label><input id="i-branch" type="text" maxlength="5" inputmode="numeric" placeholder="00000" oninput="digits(this)"></div>
     </div>
-    <div class="row c1"><div class="fg"><label>ชื่อลูกค้าตาม QT *</label><input id="i-company" type="text" maxlength="200"></div></div>
+    <div class="row"><div class="fg"><label>ชื่อลูกค้าตาม QT *</label><input id="i-company" type="text" maxlength="200"></div>
+      <div class="fg"><label>หัก ณ ที่จ่าย *</label><select id="i-wht"><option value="">— เลือก —</option><option value="0">ไม่หัก ณ ที่จ่าย</option><option value="3">หัก 3% (ค่าบริการ · นิติบุคคล)</option><option value="1">หัก 1% (หน่วยงานรัฐ)</option><option value="2">หัก 2%</option><option value="5">หัก 5%</option></select><div class="sub" id="i-wht-hint">ใช้กับทุกใบในคำขอนี้</div></div></div>
   </div>
 
   <div class="card">
@@ -309,6 +311,7 @@ async function signOut() { try { await fetch('/api/auth/logout', { method: 'POST
 let ME = null, PKGS = [], REQS = [], IVS = [];
 
 
+const whtText = (r) => (r === undefined || r === '' ? '—' : String(r) === '0' ? 'ไม่หัก ณ ที่จ่าย' : `หัก ณ ที่จ่าย ${r}%`);
 // ─── modal + loading ──────────────────────────────────────
 // ask({ title, html, ok, kind: 'warn'|'danger', cancel }) → Promise<boolean>
 function ask({ title, html = '', ok = 'ยืนยัน', cancel = 'ยกเลิก', kind = '' }) {
@@ -602,7 +605,7 @@ async function submitQT() {
   const body = {
     segment: seg, dealType: v('q-deal'), opportunityId: seg === 'B2S' ? '' : getOpp('q'),
     taxId: v('q-tax'), branch: v('q-branch'), clientCode: v('q-client'), company: v('q-company'),
-    docLang: v('q-lang'), wantedQtDate: v('q-date'), creditTermDays: v('q-term'), poRequired: v('q-po') === 'yes', note: v('q-note'),
+    docLang: v('q-lang'), wantedQtDate: v('q-date'), creditTermDays: v('q-term'), whtRate: v('q-wht'), poRequired: v('q-po') === 'yes', note: v('q-note'),
     items: CART,
   };
   if (!CART.length) return msg('q-msg', 'err', 'ยังไม่มีรายการสินค้า');
@@ -610,6 +613,7 @@ async function submitQT() {
   if (seg !== 'B2S' && !body.opportunityId) return msg('q-msg', 'err', `ใส่ Opportunity ID จาก CRM สำหรับลูกค้า ${seg}`);
   if (!body.wantedQtDate) return msg('q-msg', 'err', 'ใส่วันที่ต้องการให้ลงใน QT');
   if (body.creditTermDays === '') return msg('q-msg', 'err', 'ใส่เครดิตเทอม (วัน)');
+  if (body.whtRate === '') return msg('q-msg', 'err', 'เลือกหัก ณ ที่จ่าย (ไม่หัก / 1% / 2% / 3% / 5%)');
   if (body.opportunityId && !OPP_OK(body.opportunityId)) return msg('q-msg', 'err', 'Opportunity ID ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN');
   if (body.taxId.length !== 13) return msg('q-msg', 'err', 'กรอกเลขประจำตัวผู้เสียภาษี 13 หลัก (บังคับทุกกลุ่มลูกค้า บุคคลธรรมดาใช้เลขบัตรประชาชน)');
   if (!/^\d{5}$/.test(body.branch)) return msg('q-msg', 'err', 'เลือกหรือกรอกรหัสสาขา 5 หลัก');
@@ -620,7 +624,8 @@ async function submitQT() {
     <tr><td>ลูกค้า</td><td><b>${esc(body.company)}</b> (${esc(seg)})</td></tr>
     <tr><td>เลขภาษี / สาขา</td><td>${esc(body.taxId)} / ${esc(body.branch)}${body.clientCode ? ' · ' + esc(body.clientCode) : ''}</td></tr>
     <tr><td>รายการ</td><td>${CART.length} รายการ · ยอดก่อน VAT <b>${esc($('q-total').textContent)}</b></td></tr>
-    <tr><td>วันที่ QT / เครดิต</td><td>${esc(body.wantedQtDate)} · ${esc(body.creditTermDays)} วัน</td></tr></table>
+    <tr><td>วันที่ QT / เครดิต</td><td>${esc(body.wantedQtDate)} · ${esc(body.creditTermDays)} วัน</td></tr>
+    <tr><td>หัก ณ ที่จ่าย</td><td>${whtText(body.whtRate)}</td></tr></table>
     <p class="small" style="margin-top:8px">ส่งแล้วแก้ไม่ได้ ถ้าต้องแก้ ให้ฝ่ายบัญชีตีกลับแล้วส่งใหม่</p>` });
   if (!ok) return;
   const btn = $('q-submit'); btn.disabled = true; msg('q-msg', '', '');
@@ -629,7 +634,7 @@ async function submitQT() {
     if (!d) { msg('q-msg', 'info', 'ยังไม่ได้ส่ง ดูคำขอเดิมได้ที่ "คำขอของฉัน"'); return; }
     $('q-msg').innerHTML = `<div class="done-card"><b>✓ ส่งคำขอ ${esc(d.requestId)} แล้ว</b><div style="margin:6px 0 10px">ยอดก่อน VAT ${fmt(d.total)} · ${esc(d.message)}${d.belowFloor ? '<br>มีรายการต่ำกว่าราคาขั้นต่ำ Catalog (บันทึกไว้ให้ผู้อนุมัติเห็น)' : ''}</div><button class="btn btn-o btn-sm" onclick="go('mine')">ดูสถานะในคำขอของฉัน</button></div>`;
     CART = []; saveCart(); renderItems();
-    ['q-opp-y', 'q-opp-n', 'q-tax', 'q-branch', 'q-client', 'q-company', 'q-date', 'q-term', 'q-note'].forEach((id) => { $(id).value = ''; });
+    ['q-opp-y', 'q-opp-n', 'q-tax', 'q-branch', 'q-client', 'q-company', 'q-date', 'q-term', 'q-wht', 'q-note'].forEach((id) => { $(id).value = ''; });
     onTaxInput('q');
     clearDraft();
     taxHint('q'); loadAll();
@@ -726,6 +731,7 @@ function onPickQT() {
     $('i-qt').value = q.peakQtNo || ''; $('i-company').value = q.company || ''; $('i-tax').value = q.taxId || '';
     $('i-branch').value = q.branch || ''; setOpp('i', q.opportunityId); taxHint('i');
     $('i-seg').value = q.segment || '';
+    if (q.whtRate !== undefined && q.whtRate !== '') { $('i-wht').value = q.whtRate; $('i-wht-hint').textContent = 'ดึงจาก QT ' + whtText(q.whtRate) + ' · เปลี่ยนได้ถ้าใบนี้ต่างจาก QT'; }
     INVS.forEach((x) => { if (!x.creditTermDays && q.creditTermDays) x.creditTermDays = q.creditTermDays; });
     if (INVS.length === 1 && !INVS[0].amountPreVat) prefillAmount();
   }
@@ -743,7 +749,7 @@ function readFileB64(file) { return new Promise((res, rej) => { const r = new Fi
 async function submitINV() {
   const v = (id) => $(id).value.trim();
   const body = {
-    requestId: v('i-req'), qtNo: v('i-qt'), segment: v('i-seg'), opportunityId: v('i-seg') === 'B2S' ? '' : getOpp('i'), company: v('i-company'),
+    requestId: v('i-req'), qtNo: v('i-qt'), segment: v('i-seg'), whtRate: v('i-wht'), opportunityId: v('i-seg') === 'B2S' ? '' : getOpp('i'), company: v('i-company'),
     taxId: v('i-tax'), branch: v('i-branch'),
     evidenceType: v('i-evtype'), evidenceOther: v('i-evother'),
     financeContact: v('i-fin-name'), financeEmail: v('i-fin-email'), financePhone: v('i-fin-phone'), note: v('i-note'),
@@ -753,6 +759,7 @@ async function submitINV() {
   if (!body.company) return msg('i-msg', 'err', 'ใส่ชื่อลูกค้าตาม QT');
   if (body.taxId.length !== 13) return msg('i-msg', 'err', 'กรอกเลขผู้เสียภาษี 13 หลักของลูกค้าตาม QT');
   if (!body.segment) return msg('i-msg', 'err', 'เลือกกลุ่มลูกค้า');
+  if (body.whtRate === '') return msg('i-msg', 'err', 'เลือกหัก ณ ที่จ่าย (ไม่หัก / 1% / 2% / 3% / 5%)');
   if (body.segment !== 'B2S' && !body.opportunityId) return msg('i-msg', 'err', 'ใส่ Opportunity ID จาก CRM (ยกเว้นลูกค้า B2S)');
   if (body.opportunityId && !OPP_OK(body.opportunityId)) return msg('i-msg', 'err', 'Opportunity ID ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN');
   const badInv = INVS.findIndex((x) => !x.students || !x.wantedIssueDate || x.creditTermDays === '' || x.creditTermDays === undefined);
@@ -784,6 +791,7 @@ async function submitINV() {
     <tr><td>QT</td><td><b>${esc(body.qtNo)}</b> · ${esc(body.company)}</td></tr>
     <tr><td>จำนวน INV</td><td>${INVS.length} ใบ · รวมก่อน VAT <b>${fmt(sum)}</b></td></tr>
     ${INVS.map((x, i) => `<tr><td>ใบที่ ${i + 1}</td><td>${fmt(toNum(x.amountPreVat))} · ${esc(x.students)} ผู้เรียน · วันที่ ${esc(x.wantedIssueDate)} · เครดิต ${esc(x.creditTermDays)} วัน${x.billTo === 'other' ? ' · ออกในนาม ' + esc(x.company) : ''}</td></tr>`).join('')}
+    <tr><td>หัก ณ ที่จ่าย</td><td>${whtText(body.whtRate)}</td></tr>
     <tr><td>หลักฐาน</td><td>${esc(body.evidenceType)} · ${esc(f.name)}</td></tr></table>` });
   if (!ok) return;
   const btn = $('i-submit'); btn.disabled = true; msg('i-msg', '', '');
@@ -793,7 +801,7 @@ async function submitINV() {
     if (!d) { msg('i-msg', 'info', 'ยังไม่ได้ส่ง ดูคำขอเดิมได้ที่ "คำขอของฉัน"'); return; }
     INV_DIRTY = false;
     $('i-msg').innerHTML = `<div class="done-card"><b>✓ ส่งคำขอ ${esc(d.batchId)} (${d.ivRequestIds.length} ใบ) แล้ว</b><div style="margin:6px 0 10px">${d.remaining !== null && d.remaining !== undefined ? `QT คงเหลือ ${fmt(d.remaining)} · ` : ''}${esc(d.message)}</div><button class="btn btn-o btn-sm" onclick="go('mine');setMine('inv',document.querySelectorAll('#mine-seg button')[1])">ดูสถานะในคำขอของฉัน</button></div>`;
-    ['i-req', 'i-qt', 'i-seg', 'i-opp-y', 'i-opp-n', 'i-company', 'i-tax', 'i-branch', 'i-evother', 'i-fin-name', 'i-fin-email', 'i-fin-phone', 'i-note', 'i-over'].forEach((id) => { $(id).value = ''; });
+    ['i-req', 'i-qt', 'i-seg', 'i-wht', 'i-opp-y', 'i-opp-n', 'i-company', 'i-tax', 'i-branch', 'i-evother', 'i-fin-name', 'i-fin-email', 'i-fin-phone', 'i-note', 'i-over'].forEach((id) => { $(id).value = ''; });
     $('i-file').value = ''; $('i-qt').readOnly = false; $('i-seg').disabled = false; onInvSeg(); $('i-qt-hint').textContent = ''; INVS = [blankInv()]; renderInvs(); taxHint('i');
     loadAll();
   } catch (e) { msg('i-msg', 'err', e.message); }
@@ -877,7 +885,7 @@ function renderPending() {
   const qCard = (q, fix) => `<div class="list-row">
     <div class="list-head"><div><span class="list-id">${esc(q.company)}</span> · ${esc(q.segment)}</div>${st(QT_ST, q.status)}</div>
     <div class="list-sub">${esc(q.requestId)} · ${esc(q.createdAt)} · โดย ${esc(q.salesName)}${q.opportunityId ? ' · ' + esc(q.opportunityId) : ''}<br>
-      เลขภาษี ${esc(q.taxId)} · สาขา ${esc(q.branch)} · รหัส PEAK ${esc(q.clientCode || '— (ระบบจะหาจากเลขภาษี)')} · ภาษาเอกสาร ${esc(q.docLang)}${q.creditTermDays ? ' · เครดิต ' + esc(q.creditTermDays) + ' วัน' : ''}${q.poRequired === 'Yes' ? ' · ต้องมี PO' : ''}
+      เลขภาษี ${esc(q.taxId)} · สาขา ${esc(q.branch)} · รหัส PEAK ${esc(q.clientCode || '— (ระบบจะหาจากเลขภาษี)')} · ภาษาเอกสาร ${esc(q.docLang)}${q.creditTermDays ? ' · เครดิต ' + esc(q.creditTermDays) + ' วัน' : ''} · <b>${whtText(q.whtRate)}</b>${q.poRequired === 'Yes' ? ' · ต้องมี PO' : ''}
       ${q.note ? `<br>หมายเหตุจาก Sales: ${esc(q.note)}` : ''}${q.belowFloor ? `<br><span class="warn">ต่ำกว่าราคาขั้นต่ำ Catalog: ${esc(q.belowFloor)}</span>` : ''}${fix && q.peakNote ? `<br><span class="err-line">${esc(q.peakNote)}</span>` : ''}</div>
     <div style="overflow-x:auto;margin-top:6px"><table class="items"><thead><tr><th>รายการ (ข้อความที่จะลงใน QT)</th><th class="num">จำนวน</th><th class="num">ราคา/หน่วย</th><th class="num">ส่วนลด</th></tr></thead><tbody>${lineRows(q)}</tbody></table></div>
     <div class="total"><span>ยอดก่อน VAT</span><strong>${fmt(toNum(q.totalPreVat))}</strong></div>
@@ -894,7 +902,7 @@ function renderPending() {
       <div class="list-head"><div><span class="list-id">${esc(v.company)}</span>${v.billToRelation ? ` <span class="small">(${esc(v.billToRelation)})</span>` : ''}</div>${st(IV_ST, v.status)}</div>
       <div class="list-sub">${esc(v.ivRequestId)} · ${esc(v.createdAt)} · โดย ${esc(v.salesName)}<br>
         จาก QT ${q ? docLink(v.qtNo, q.peakDocLink) : esc(v.qtNo)} · เลขภาษี ${esc(v.taxId)} · สาขา ${esc(v.branch)}<br>
-        ยอดก่อน VAT <b>${fmt(toNum(v.amountPreVat))}</b>${v.installment ? ' · ' + esc(v.installment) : ''}${v.students ? ' · ' + esc(v.students) + ' ผู้เรียน' : ''}${v.creditTermDays ? ' · เครดิต ' + esc(v.creditTermDays) + ' วัน' : ''}${v.poNo ? ' · PO ' + esc(v.poNo) : ''}${v.wantedIssueDate ? ' · ต้องการวันที่ ' + esc(v.wantedIssueDate) : ''}<br>
+        ยอดก่อน VAT <b>${fmt(toNum(v.amountPreVat))}</b>${v.installment ? ' · ' + esc(v.installment) : ''}${v.students ? ' · ' + esc(v.students) + ' ผู้เรียน' : ''}${v.creditTermDays ? ' · เครดิต ' + esc(v.creditTermDays) + ' วัน' : ''} · <b>${whtText(v.whtRate)}</b>${v.poNo ? ' · PO ' + esc(v.poNo) : ''}${v.wantedIssueDate ? ' · ต้องการวันที่ ' + esc(v.wantedIssueDate) : ''}<br>
         หลักฐาน: ${esc(v.evidenceType)}${v.evidenceLink && /^https:\/\//.test(v.evidenceLink) ? ` · <a href="${esc(v.evidenceLink)}" target="_blank" rel="noopener">เปิดดู</a>` : ''} · ตัวจริง: ${st(ORIG_ST, v.originalStatus)}${v.note ? `<br>หมายเหตุ: ${esc(v.note)}` : ''}${v.overReason ? `<br><span class="warn">เกินยอด QT: ${esc(v.overReason)}</span>` : ''}</div>
       <div class="op-bar">
         <input id="ivn-${esc(v.ivRequestId)}" type="text" maxlength="40" placeholder="เลข INV เช่น IV-20261100014" style="width:180px">
@@ -971,7 +979,7 @@ async function markSent(id) {
 
 // ─── QT draft: kept in this browser so a trip to the catalog doesn't lose it ─
 const DRAFT_KEY = 'gc_qt_draft_v1';
-const DRAFT_FIELDS = ['q-segment', 'q-deal', 'q-opp-y', 'q-opp-n', 'q-tax', 'q-branch', 'q-client', 'q-company', 'q-lang', 'q-date', 'q-term', 'q-po', 'q-note'];
+const DRAFT_FIELDS = ['q-segment', 'q-deal', 'q-opp-y', 'q-opp-n', 'q-tax', 'q-branch', 'q-client', 'q-company', 'q-lang', 'q-date', 'q-term', 'q-wht', 'q-po', 'q-note'];
 function saveDraft() { try { const d = {}; DRAFT_FIELDS.forEach((id) => { d[id] = $(id).value; }); localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch {} }
 function restoreDraft() { try { const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null'); if (d) DRAFT_FIELDS.forEach((id) => { if (d[id] !== undefined && d[id] !== null) $(id).value = d[id]; }); } catch {} }
 function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch {} }

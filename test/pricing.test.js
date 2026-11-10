@@ -119,3 +119,12 @@ test('Whitehouse package lines get a customer-readable description from WHPackag
   assert.match(line.description, /One-on-one classes: 12 sessions/);
   assert.equal(priceService({ code: 'B2SCAMP001', name: 'Camp', qty: 1, unitPrice: 1 }).lines[0].description, 'B2SCAMP001 · Camp');
 });
+
+test('withholding tax: PEAK line gets rate × line amount after discount; none when 0', () => {
+  const lines = [{ role: 'wh_package', qty: 2, unitPrice: 15900, discount: 800, description: 'x' }, { role: 'supplement', qty: 2, unitPrice: 0, discount: 0, description: 'y' }];
+  const q3 = peak.buildQuotation({ requestId: 'R', whtRate: '3' }, lines, () => 'C').body.PeakQuotations.quotations[0];
+  assert.equal(q3.products[0].withHoldingTaxAmount, '930');
+  assert.equal(q3.products[1].withHoldingTaxAmount, '0');
+  const q0 = peak.buildQuotation({ requestId: 'R', whtRate: '0' }, lines, () => 'C').body.PeakQuotations.quotations[0];
+  assert.equal(q0.products[0].withHoldingTaxAmount, undefined);
+});

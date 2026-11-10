@@ -78,6 +78,7 @@ table.items input.r{text-align:right}
 .total strong{font-size:18px}
 .empty{text-align:center;color:var(--muted);padding:20px 8px;font-size:13px}
 .msg{margin-top:12px;padding:10px 12px;border-radius:8px;font-size:13px;line-height:1.6}
+.msg.info{background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe}
 .msg.ok{background:#f0fdf4;color:#166534;border:1px solid #86efac}
 .msg.err{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
 .balance{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:4px 0 12px}
@@ -124,7 +125,7 @@ table.items input.r{text-align:right}
     <p class="hint">กรอกเลขผู้เสียภาษี 13 หลัก แล้วเลือกสาขา ระบบจะดึงรหัสลูกค้าและชื่อจาก PEAK ให้ บุคคลธรรมดาใช้เลขบัตรประชาชน</p>
     <div class="row c3">
       <div class="fg"><label>กลุ่มลูกค้า</label>
-        <select id="q-segment" onchange="onSegment()"><option>B2B</option><option>B2E</option><option>B2S</option><option>Others</option></select></div>
+        <select id="q-segment" onchange="changeSegment()"><option>B2B</option><option>B2E</option><option>B2S</option><option>Others</option></select></div>
       <div class="fg"><label>ประเภทดีล</label>
         <select id="q-deal"><option value="New Logo">New Logo (ลูกค้าใหม่)</option><option value="Retention">Retention (ต่อสัญญา)</option><option value="Others">อื่นๆ</option></select></div>
       <div class="fg" id="q-opp-wrap"><label id="q-opp-label">Opportunity ID ใน CRM *</label>
@@ -286,6 +287,21 @@ function saveCart() { try { localStorage.setItem(CART_KEY, JSON.stringify(CART))
 const KINDS = { B2B: ['catalog', 'keyhs'], B2E: ['service'], B2S: ['service'], Others: ['catalog', 'keyhs', 'service'] };
 const kindOf = (it) => it.kind || 'catalog';
 
+// User switched the customer segment: drop what doesn't fit the new segment, so nothing stale is sent.
+//   - line items of a kind the segment can't use (B2B catalog / Key H.S. ↔ B2E/B2S package IDs)
+//   - Opportunity ID when switching to B2S (B2S has none)
+// Customer details (tax ID, branch, name) stay: they describe the customer, not the segment.
+function changeSegment() {
+  const seg = $('q-segment').value;
+  const before = CART.length;
+  CART = CART.filter((it) => KINDS[seg].includes(kindOf(it)));
+  const dropped = before - CART.length;
+  if (dropped) saveCart();
+  if (seg === 'B2S') { $('q-opp-y').value = ''; $('q-opp-n').value = ''; }
+  onSegment();
+  msg('q-msg', dropped ? 'info' : '', dropped ? `เปลี่ยนเป็น ${seg} แล้ว ลบ ${dropped} รายการที่ใช้กับ ${seg} ไม่ได้ออกให้ ใส่รายการใหม่ได้เลย` : '');
+  saveDraft();
+}
 function onSegment() {
   const seg = $('q-segment').value;
   $('q-opp-wrap').hidden = seg === 'B2S';

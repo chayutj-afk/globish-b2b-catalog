@@ -535,7 +535,8 @@ async function submitINV() {
 }
 
 // ─── Mine ─────────────────────────────────────────────────
-const QT_ST = { new: ['รอออก QT', 'new'], qt_issued: ['ออก QT แล้ว', 'blue'], qt_draft: ['QT Draft ใน PEAK', 'blue'], qt_approved: ['QT อนุมัติแล้ว', 'blue'], changes_requested: ['ขอแก้ไข', 'new'],
+const QT_ST = { new: ['รอออก QT', 'new'], qt_issued: ['ออก QT แล้ว', 'blue'], qt_creating: ['กำลังสร้าง QT ใน PEAK', 'blue'],
+  needs_contact: ['รอฝ่ายบัญชีสร้างลูกค้าใน PEAK', 'new'], needs_service_code: ['รอรหัสบริการใน PEAK', 'new'], qt_error: ['สร้าง QT ไม่สำเร็จ', 'red'], qt_draft: ['QT Draft ใน PEAK', 'blue'], qt_approved: ['QT อนุมัติแล้ว', 'blue'], changes_requested: ['ขอแก้ไข', 'new'],
   accepted: ['ลูกค้าตอบรับ', 'green'], iv_requested: ['ขอ INV แล้ว', 'green'], iv_issued: ['ออก INV แล้ว', 'green'], cancelled: ['ยกเลิก', 'red'] };
 const IV_ST = { new: ['รอบัญชีตรวจ', 'new'], iv_draft: ['INV Draft ใน PEAK', 'blue'], iv_issued: ['ออก INV แล้ว', 'green'], rejected: ['ตีกลับ', 'red'] };
 const ORIG_ST = { not_needed: ['ไม่ต้องส่งตัวจริง', ''], pending_decision: ['ยังไม่ทราบเรื่องตัวจริง', 'new'], requested: ['รอส่งตัวจริง', 'blue'], sent: ['ส่งตัวจริงแล้ว', 'green'] };
@@ -564,7 +565,7 @@ function renderMine() {
     return `<div class="list-row">
       <div class="list-head"><div>${q.peakQtNo ? `<span class="list-id">QT ${esc(q.peakQtNo)}</span>` : '<span class="small">ยังไม่มีเลข QT</span>'} · ${esc(q.company)}</div>${st(QT_ST, q.peakQtNo && ['new', 'qt_draft'].includes(q.status) ? 'qt_issued' : q.status)}</div>
       <div class="list-sub">${esc(q.requestId)} · ${esc(q.createdAt)} · ${esc(q.segment)}${q.opportunityId ? ' · ' + esc(q.opportunityId) : ''}${op ? ' · ' + esc(q.salesName) : ''}<br>
-        ${heroes}<br>ยอดก่อน VAT <b>${fmt(total)}</b> · ขอ INV แล้ว ${fmt(done)} · คงเหลือ <b>${fmt(total - done)}</b></div>
+        ${heroes}<br>ยอดก่อน VAT <b>${fmt(total)}</b> · ขอ INV แล้ว ${fmt(done)} · คงเหลือ <b>${fmt(total - done)}</b>${q.peakNote ? `<br><span class="small">PEAK: ${esc(q.peakNote)}</span>` : ''}</div>
       ${mineIvs.length ? `<div class="inv-mini">${mineIvs.map((v) => `<div class="inv-mini-row"><span class="mono">${esc(v.ivRequestId)}</span><span>${esc(v.company)} · ${fmt(toNum(v.amountPreVat))}</span><span>${st(IV_ST, v.status)} ${st(ORIG_ST, v.originalStatus)}</span></div>`).join('')}</div>` : ''}
       ${q.status !== 'cancelled' ? `<div style="margin-top:8px"><button class="btn btn-o btn-sm" onclick="startInvFor('${esc(q.requestId)}')">🧾 ขอ INV จาก QT นี้</button></div>` : ''}
     </div>`;

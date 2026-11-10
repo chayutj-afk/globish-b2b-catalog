@@ -171,7 +171,7 @@ async function list(req, res, user) {
   lines.filter((l) => ids.has(l.requestId)).forEach((l) => { (byId[l.requestId] = byId[l.requestId] || []).push(l); });
   res.status(200).json({
     ok: true,
-    requests: mine.map(({ _row, _createdMs, ...r }) => ({ ...r, invoicedPreVat: Math.round((invoiced[r.requestId] || 0) * 100) / 100, lines: (byId[r.requestId] || []).map(({ _row: _, ...l }) => l) })),
+    requests: mine.map(({ _row, _createdMs, _invoicedPreVat, _remainingPreVat, ...r }) => ({ ...r, invoicedPreVat: Math.round((invoiced[r.requestId] || 0) * 100) / 100, lines: (byId[r.requestId] || []).map(({ _row: _, ...l }) => l) })),
   });
 }
 

@@ -33,7 +33,8 @@ function newBatchId(now = new Date()) {
 
 function checkEntity(e, label) {
   if (!e.company) throw bad(`${label}: ใส่ชื่อบริษัทตามที่จะออก INV`);
-  if (e.taxId && !/^\d{13}$/.test(e.taxId)) throw bad(`${label}: เลขประจำตัวผู้เสียภาษีต้องเป็นตัวเลข 13 หลัก`);
+  // 13-digit tax ID is the single source of truth for the billed entity (all segments).
+  if (!/^\d{13}$/.test(e.taxId || '')) throw bad(`${label}: กรอกเลขประจำตัวผู้เสียภาษี 13 หลัก`);
   e.taxCheckWarn = !!e.taxId && !validTaxId(e.taxId);
   const br = normBranch(e.branch);
   if (br === null) throw bad(`${label}: สาขาต้องเป็นรหัส 5 หลัก เช่น 00000 (สำนักงานใหญ่)`);

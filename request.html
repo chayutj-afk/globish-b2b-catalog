@@ -127,7 +127,7 @@ table.items input.r{text-align:right}
         <div class="inline"><input id="q-tax" type="text" inputmode="numeric" maxlength="13" placeholder="13 หลัก" oninput="digits(this);taxHint('q')"><button class="btn btn-g btn-sm" type="button" onclick="lookupTax('q')">ตรวจสอบ</button></div>
         <div class="sub" id="q-tax-hint"></div></div>
       <div class="fg"><label>รหัสสาขา</label><input id="q-branch" type="text" maxlength="5" inputmode="numeric" placeholder="00000 = สำนักงานใหญ่" oninput="digits(this)"></div>
-      <div class="fg"><label>รหัสลูกค้าใน PEAK</label><div class="mask"><span>C</span><input id="q-client" type="text" inputmode="numeric" maxlength="5" placeholder="00123 (ถ้ามี)" style="flex:1" oninput="digits(this)"></div></div>
+      <div class="fg"><label>รหัสลูกค้าใน PEAK</label><div class="mask"><span>C</span><input id="q-client" type="text" inputmode="numeric" maxlength="5" placeholder="00123 (ไม่บังคับ)" style="flex:1" oninput="digits(this)"></div></div>
     </div>
     <div class="row c1">
       <div class="fg"><label>ชื่อบริษัท / หน่วยงาน (ตามที่จะออกเอกสาร) *</label><input id="q-company" type="text" maxlength="200"></div>
@@ -166,7 +166,7 @@ table.items input.r{text-align:right}
     <div id="i-balance"></div>
     <div class="row c3">
       <div class="fg"><label>Opportunity ID ใน CRM</label><div class="mask"><span>CRM-OPP-</span><input id="i-opp-y" type="text" inputmode="numeric" maxlength="4" placeholder="2026" style="width:44px" oninput="oppInput(this,'i-opp-n')" onpaste="oppPaste(event,'i')"><span class="mid">-</span><input id="i-opp-n" type="text" inputmode="numeric" maxlength="5" placeholder="00123" style="flex:1" oninput="digits(this)" onpaste="oppPaste(event,'i')"></div></div>
-      <div class="fg"><label>เลขผู้เสียภาษีของลูกค้าตาม QT</label><input id="i-tax" type="text" maxlength="13" inputmode="numeric" placeholder="13 หลัก" oninput="digits(this);taxHint('i')"><div class="sub" id="i-tax-hint"></div></div>
+      <div class="fg"><label>เลขผู้เสียภาษีของลูกค้าตาม QT *</label><input id="i-tax" type="text" maxlength="13" inputmode="numeric" placeholder="13 หลัก" oninput="digits(this);taxHint('i')"><div class="sub" id="i-tax-hint"></div></div>
       <div class="fg"><label>รหัสสาขา</label><input id="i-branch" type="text" maxlength="5" inputmode="numeric" placeholder="00000" oninput="digits(this)"></div>
     </div>
     <div class="row c1"><div class="fg"><label>ชื่อลูกค้าตาม QT *</label><input id="i-company" type="text" maxlength="200"></div></div>
@@ -371,7 +371,7 @@ function taxHint(p) {
 function lookupTax(p) {
   taxHint(p);
   const h = $(p + '-tax-hint');
-  if ($(p + '-tax').value.length === 13) h.textContent += ' · ยังไม่ได้เชื่อม PEAK กรอกชื่อและรหัสลูกค้าเองไปก่อน';
+  if ($(p + '-tax').value.length === 13) h.textContent += ' · ระบบจะหาลูกค้าใน PEAK จากเลขนี้ + สาขา ตอนสร้าง QT';
 }
 
 async function submitQT() {
@@ -388,7 +388,7 @@ async function submitQT() {
   if ((seg === 'B2B' || seg === 'B2E') && !body.opportunityId) return msg('q-msg', 'err', `ใส่ Opportunity ID จาก CRM สำหรับลูกค้า ${seg}`);
   if (body.opportunityId && !OPP_OK(body.opportunityId)) return msg('q-msg', 'err', 'Opportunity ID ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN');
   if (body.clientCode && !/^C\d{5}$/.test(body.clientCode)) return msg('q-msg', 'err', 'รหัสลูกค้าใน PEAK ต้องเป็น C ตามด้วยตัวเลข 5 หลัก');
-  if (!body.clientCode && body.taxId.length !== 13) return msg('q-msg', 'err', 'กรอกเลขประจำตัวผู้เสียภาษี 13 หลัก (หรือใส่รหัสลูกค้าใน PEAK)');
+  if (body.taxId.length !== 13) return msg('q-msg', 'err', 'กรอกเลขประจำตัวผู้เสียภาษี 13 หลัก (บังคับทุกกลุ่มลูกค้า บุคคลธรรมดาใช้เลขบัตรประชาชน)');
   if (!body.company) return msg('q-msg', 'err', 'กรอกชื่อบริษัทหรือหน่วยงาน');
   const btn = $('q-submit'); btn.disabled = true; btn.textContent = '⏳ กำลังส่ง...'; msg('q-msg', '', '');
   try {
@@ -509,7 +509,7 @@ async function submitINV() {
   };
   if (!body.qtNo) return msg('i-msg', 'err', 'ใส่เลขที่ใบเสนอราคา (QT)');
   if (!body.company) return msg('i-msg', 'err', 'ใส่ชื่อลูกค้าตาม QT');
-  if (body.taxId && body.taxId.length !== 13) return msg('i-msg', 'err', 'เลขผู้เสียภาษีของลูกค้าตาม QT ต้องมี 13 หลัก');
+  if (body.taxId.length !== 13) return msg('i-msg', 'err', 'กรอกเลขผู้เสียภาษี 13 หลักของลูกค้าตาม QT');
   if (body.opportunityId && !OPP_OK(body.opportunityId)) return msg('i-msg', 'err', 'Opportunity ID ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN');
   const f = $('i-file').files[0];
   if (!f && !body.evidenceLink) return msg('i-msg', 'err', 'แนบไฟล์หลักฐาน หรือใส่ลิงก์ Google Drive ของไฟล์');
@@ -518,7 +518,7 @@ async function submitINV() {
     const x = INVS[i];
     if (!(toNum(x.amountPreVat) > 0)) return msg('i-msg', 'err', `INV ใบที่ ${i + 1}: ใส่ยอดก่อน VAT`);
     if (x.billTo === 'other' && (!x.company || !x.relation)) return msg('i-msg', 'err', `INV ใบที่ ${i + 1}: ใส่ชื่อบริษัทและความสัมพันธ์กับลูกค้าตาม QT`);
-    if (x.billTo === 'other' && x.taxId && x.taxId.length !== 13) return msg('i-msg', 'err', `INV ใบที่ ${i + 1}: เลขผู้เสียภาษีต้องมี 13 หลัก`);
+    if (x.billTo === 'other' && (x.taxId || '').length !== 13) return msg('i-msg', 'err', `INV ใบที่ ${i + 1}: เลขผู้เสียภาษีต้องมี 13 หลัก`);
     if (x.originalDoc === 'yes' && !x.originalAddress) return msg('i-msg', 'err', `INV ใบที่ ${i + 1}: ใส่ที่อยู่ส่งเอกสารตัวจริง`);
   }
   if (!$('i-over-wrap').hidden && !body.overReason) return msg('i-msg', 'err', 'ยอดรวมเกิน QT ใส่เหตุผลก่อนส่ง');

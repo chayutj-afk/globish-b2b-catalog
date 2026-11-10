@@ -56,6 +56,13 @@ test('PEAK payload: draft, VAT 7% lines, unmapped codes reported', () => {
   assert.equal(q.dueDate, '20261212');
   assert.equal(peak.unitDiscount({ discount: 1590, qty: 2 }), '795');
   assert.equal(peak.addDays('20261215', 30), '20270114');
+  // uneven per-unit discount → document-level discountTotal, no line discounts
+  const un = peak.buildQuotation(req, [{ role: 'wh_package', packageId: '3822', description: 'x', qty: 3, unitPrice: 15900, discount: 1000 }], () => '3822').body.PeakQuotations.quotations[0];
+  assert.equal(un.discountTotal, '1000');
+  assert.equal(un.products[0].discount, undefined);
+  const ev = peak.buildQuotation(req, [{ role: 'wh_package', packageId: '3822', description: 'x', qty: 2, unitPrice: 15900, discount: 1590 }], () => '3822').body.PeakQuotations.quotations[0];
+  assert.equal(ev.discountTotal, undefined);
+  assert.equal(ev.products[0].discount, '795');
 });
 
 test('PEAK signature is HMAC-SHA1 hex of the UTC timestamp', () => {

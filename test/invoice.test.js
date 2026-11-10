@@ -24,7 +24,8 @@ test('one QT can bill several entities; another entity needs its own name, valid
   assert.equal(invoices[0].company, 'Co');
   assert.equal(invoices[0].branch, '00000');
   assert.equal(invoices[1].company, 'Sub Co');
-  assert.throws(() => validate({ ...two, invoices: [{ billTo: 'other', company: 'Sub', amountPreVat: 1 }] }), /ความสัมพันธ์/);
+  assert.throws(() => validate({ ...two, invoices: [{ billTo: 'other', company: 'Sub', taxId: '0107555000015', amountPreVat: 1 }] }), /ความสัมพันธ์/);
+  assert.throws(() => validate({ ...two, invoices: [{ billTo: 'other', company: 'Sub', relation: 'x', amountPreVat: 1 }] }), /13 หลัก/);
   assert.throws(() => validate({ ...two, invoices: [{ billTo: 'other', company: 'Sub', relation: 'x', taxId: '010755500001', amountPreVat: 1 }] }), /13 หลัก/);
   assert.equal(validate({ ...two, invoices: [{ billTo: 'other', company: 'Sub', relation: 'x', taxId: '0107555000016', amountPreVat: 1 }] }).invoices[0].taxCheckWarn, true);
 });

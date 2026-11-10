@@ -27,10 +27,14 @@ test('PEAK client code is C + 5 digits; a failed tax check digit is flagged, not
   assert.equal(validate({ ...o, clientCode: 'c00123' }).r.clientCode, 'C00123');
   assert.throws(() => validate({ ...o, clientCode: 'C123' }), /C ตามด้วย/);
   assert.match(validate({ ...o, taxId: '0105555555555' }).r.note, /ตรวจเลขภาษี/);
+  // tax ID is required in every segment, even with a client code
+  for (const segment of ['B2B', 'B2E', 'B2S', 'Others']) {
+    assert.throws(() => validate({ ...o, segment, taxId: '', clientCode: 'C01988' }), /13 หลัก/);
+  }
 });
 
 test('INV requests accept an optional, well-formed Opportunity ID', () => {
-  const base = { qtNo: 'QO-1', company: 'Co', evidenceType: 'PO จากลูกค้า', evidenceLink: 'https://drive.google.com/x', invoices: [{ amountPreVat: 100 }] };
+  const base = { qtNo: 'QO-1', company: 'Co', taxId: '0105555555554', evidenceType: 'PO จากลูกค้า', evidenceLink: 'https://drive.google.com/x', invoices: [{ amountPreVat: 100 }] };
   assert.equal(inv.validate(base).r.opportunityId, '');
   assert.throws(() => inv.validate({ ...base, opportunityId: 'x' }), /รูปแบบ/);
 });

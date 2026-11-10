@@ -52,7 +52,9 @@ function validate(b) {
   if (r.opportunityId && !OPP_RE.test(r.opportunityId)) throw bad('Opportunity ID ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN');
   if (OPP_REQUIRED.includes(r.segment) && !r.opportunityId) throw bad(`ใส่ Opportunity ID จาก CRM (CRM-OPP-YYYY-NNNNN) สำหรับลูกค้า ${r.segment}`);
   if (!r.company) throw bad('กรอกชื่อบริษัทหรือหน่วยงาน');
-  if (!r.clientCode && !/^\d{13}$/.test(r.taxId)) throw bad('เลขประจำตัวผู้เสียภาษีต้องเป็นตัวเลข 13 หลัก (หรือใส่รหัสลูกค้าใน PEAK)');
+  // The 13-digit tax ID (+ branch) is the single source of truth for the customer in every segment.
+  // Client code is only a hint; the PEAK sync matches on tax ID and flags a mismatch.
+  if (!/^\d{13}$/.test(r.taxId)) throw bad('กรอกเลขประจำตัวผู้เสียภาษี 13 หลัก (บังคับทุกกลุ่มลูกค้า บุคคลธรรมดาใช้เลขบัตรประชาชน)');
   if (r.clientCode && !/^C\d{5}$/.test(r.clientCode)) throw bad('รหัสลูกค้าใน PEAK ต้องเป็น C ตามด้วยตัวเลข 5 หลัก เช่น C00123');
   // Check digit is a warning only: flag it for accounting instead of blocking the request.
   if (r.taxId && !validTaxId(r.taxId)) r.note = `[ตรวจเลขภาษี: หลักสุดท้ายไม่ผ่าน] ${r.note}`.trim();

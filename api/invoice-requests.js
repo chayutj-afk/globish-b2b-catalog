@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const { requireUser, checkOrigin, sendError } = require('../lib/session');
 const hub = require('../lib/hub');
 const drive = require('../lib/drive');
+const { OPP_RE, normaliseOppId } = require('../lib/crm');
 
 const EVIDENCE = ['QT ที่ลูกค้าเซ็นแล้ว', 'PO จากลูกค้า', 'อีเมลยืนยันจากลูกค้า', 'อื่นๆ'];
 const bad = (m, status = 400) => Object.assign(new Error(m), { status });
@@ -42,9 +43,11 @@ function validate(b) {
     financePhone: text(b.financePhone, 40),
     deliveryAddress: text(b.deliveryAddress, 500) || 'ตามที่อยู่บริษัท',
     note: text(b.note, 1000),
+    opportunityId: normaliseOppId(b.opportunityId),
   };
   if (!r.qtNo) throw bad('ใส่เลขที่ใบเสนอราคา (QT) ที่ต้องการออก INV');
   if (!r.company) throw bad('ใส่ชื่อบริษัท');
+  if (r.opportunityId && !OPP_RE.test(r.opportunityId)) throw bad('Opportunity ID ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN');
   if (r.taxId && !/^\d{13}$/.test(r.taxId)) throw bad('เลขประจำตัวผู้เสียภาษีต้องเป็นตัวเลข 13 หลัก');
   if (!EVIDENCE.includes(r.evidenceType)) throw bad('เลือกประเภทหลักฐานที่ลูกค้ายอมรับ');
   if (r.evidenceType === 'อื่นๆ' && !r.evidenceOther) throw bad('ระบุว่าหลักฐานเป็นเอกสารอะไร');
@@ -73,6 +76,7 @@ async function create(req, res, user) {
     const rows = await hub.readTable('Requests');
     linked = rows.find((x) => x.requestId === r.requestId);
     if (!linked || (user.role !== 'op' && linked.requestedBy !== user.email)) throw bad('ไม่พบคำขอใบเสนอราคาที่เลือก');
+    if (!r.opportunityId) r.opportunityId = linked.opportunityId || '';
   }
 
   const now = new Date();
@@ -91,6 +95,7 @@ async function create(req, res, user) {
     amountPreVat: r.amountPreVat, students: r.students, creditTermDays: r.creditTermDays, poNo: r.poNo,
     financeContact: r.financeContact, financeEmail: r.financeEmail, financePhone: r.financePhone,
     deliveryAddress: r.deliveryAddress, note: r.note, status: 'new', peakIvNo: '', updatedAt: hub.sheetDateTime(now),
+    opportunityId: r.opportunityId,
   };
   await hub.appendRows('InvoiceRequests', [row]);
   if (linked) {
@@ -99,7 +104,7 @@ async function create(req, res, user) {
       peakQtNo: linked.peakQtNo || r.qtNo,
     });
   }
-  await hub.log('catalog', 'invoice_requested', ivRequestId, `${user.email} · ${r.qtNo} · ${r.company}`);
+  await hub.log('catalog', 'invoice_requested', ivRequestId, `${user.email} · ${r.qtNo} · ${r.company}${r.opportunityId ? ' · ' + r.opportunityId : ''}`);
   res.status(200).json({ ok: true, ivRequestId, evidenceLink, message: 'ส่งคำขอออก INV แล้ว ฝ่ายบัญชีจะตรวจหลักฐานและออกเอกสารใน PEAK' });
 }
 

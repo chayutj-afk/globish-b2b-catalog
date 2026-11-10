@@ -17,6 +17,13 @@
 5. ถ้า `PEAK_MODE` = `uat`/`prod` และทุกบรรทัดมีรหัสบริการ PEAK (แท็บ `Products` คอลัมน์ P, แท็บ `Components` คอลัมน์ D)
    จะสร้างใบเสนอราคา **Draft** ใน PEAK ให้บัญชีตรวจและอนุมัติ ถ้ายังไม่ครบ คำขอจะรอสถานะ `new`
 
+## เชื่อมกับ B2B CRM (Phase 1)
+
+ยังไม่เชื่อมระบบกันตรงๆ แต่ทุกคำขอเก็บ **CRM Opportunity ID** (`CRM-OPP-YYYY-NNNNN`) ไว้อ้างอิง:
+บังคับสำหรับลูกค้า B2B, ไม่บังคับสำหรับ B2S/B2E/Others, วางลิงก์หน้า Opportunity ทั้งลิงก์ได้
+คำขอ INV ที่เลือกคำขอ QT ในระบบจะได้ Opportunity ID ตามไปเอง และ Key H.S. ใน RequestLines ตรงกับ `product_code` ของ B2B Package ใน CRM
+QT ที่สร้างใน PEAK จะติด tag เป็น Opportunity ID และ Request ID
+
 ## Flow ขอออก INV
 
 1. Sales เลือกคำขอ QT ในระบบ (หรือกรอกเลข QT นอกระบบ) แล้วแนบหลักฐานที่ลูกค้ายอมรับ:

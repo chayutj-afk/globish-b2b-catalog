@@ -8,6 +8,7 @@ const { requireUser, checkOrigin, sendError } = require('../lib/session');
 const { priceItem } = require('../lib/pricing');
 const hub = require('../lib/hub');
 const peak = require('../lib/peak');
+const { OPP_RE, normaliseOppId } = require('../lib/crm');
 
 const SEGMENTS = ['B2B', 'B2S', 'B2E', 'Others'];
 const DEAL_TYPES = ['New Logo', 'Retention', 'Others'];
@@ -36,9 +37,12 @@ function validate(b) {
     creditTermDays: b.creditTermDays === '' || b.creditTermDays === undefined ? '' : Math.floor(Number(b.creditTermDays)),
     poRequired: b.poRequired === true || b.poRequired === 'yes' ? 'Yes' : 'No',
     note: text(b.note, 1000),
+    opportunityId: normaliseOppId(b.opportunityId),
   };
   if (!SEGMENTS.includes(r.segment)) throw bad('เลือกกลุ่มลูกค้า (B2B / B2S / B2E / Others)');
   if (!DEAL_TYPES.includes(r.dealType)) throw bad('เลือกประเภทดีล (New Logo / Retention / Others)');
+  if (r.opportunityId && !OPP_RE.test(r.opportunityId)) throw bad('Opportunity ID ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN');
+  if (r.segment === 'B2B' && !r.opportunityId) throw bad('ใส่ Opportunity ID จาก CRM (CRM-OPP-YYYY-NNNNN) สำหรับลูกค้า B2B');
   if (!r.company) throw bad('กรอกชื่อบริษัทหรือหน่วยงาน');
   if (!r.clientCode && !/^\d{13}$/.test(r.taxId)) throw bad('เลขประจำตัวผู้เสียภาษีต้องเป็นตัวเลข 13 หลัก (หรือใส่รหัสลูกค้าใน PEAK)');
   if (r.taxId && !/^\d{13}$/.test(r.taxId)) throw bad('เลขประจำตัวผู้เสียภาษีต้องเป็นตัวเลข 13 หลัก');

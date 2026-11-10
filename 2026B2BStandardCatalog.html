@@ -417,6 +417,10 @@ code{font-size:11px;background:#f3f4f6;padding:2px 5px;border-radius:4px;font-fa
         <select id="rq-deal"><option value="New Logo">New Logo (ลูกค้าใหม่)</option><option value="Retention">Retention (ลูกค้าเดิม)</option><option value="Others">Others</option></select></div>
     </div>
     <div class="row c2">
+      <div class="fg"><label>Opportunity ID ใน CRM (จำเป็นสำหรับ B2B)</label><input type="text" id="rq-opp" maxlength="200" placeholder="CRM-OPP-2026-00123"></div>
+      <div class="fg" style="display:flex;align-items:flex-end;padding-bottom:4px"><div class="req-supp">ดูได้ที่หน้า Opportunity ใน B2B CRM (ERPNext) วางลิงก์หน้า Opportunity ทั้งลิงก์ก็ได้</div></div>
+    </div>
+    <div class="row c2">
       <div class="fg"><label>ชื่อบริษัท / หน่วยงาน (ตามที่จะออกเอกสาร)</label><input type="text" id="rq-company" maxlength="200" placeholder="บริษัท ตัวอย่าง จำกัด (สำนักงานใหญ่)"></div>
       <div class="fg"><label>เลขประจำตัวผู้เสียภาษี (13 หลัก)</label><input type="text" id="rq-tax" inputmode="numeric" maxlength="17" placeholder="0105xxxxxxxxx"></div>
     </div>
@@ -447,6 +451,10 @@ code{font-size:11px;background:#f3f4f6;padding:2px 5px;border-radius:4px;font-fa
       <div class="fg"><label>คำขอ QT ในระบบ (ถ้ามี)</label>
         <select id="iv-req" onchange="onInvRequestPick()"><option value="">— QT นอกระบบ / กรอกเอง —</option></select></div>
       <div class="fg"><label>เลขที่ใบเสนอราคา (QT)</label><input type="text" id="iv-qt" maxlength="40" placeholder="QO-2026xxxxxxx"></div>
+    </div>
+    <div class="row c2">
+      <div class="fg"><label>Opportunity ID ใน CRM</label><input type="text" id="iv-opp" maxlength="200" placeholder="CRM-OPP-2026-00123"></div>
+      <div class="fg"></div>
     </div>
     <div class="row c2">
       <div class="fg"><label>ชื่อบริษัท</label><input type="text" id="iv-company" maxlength="200"></div>
@@ -2313,6 +2321,7 @@ let LAST_CALC = null;
 let CART = [];
 const CART_KEY = 'gc_quote_cart_v1';
 const SUPP_LABELS = ['Hero tickets','Hero duration','Private Class','Discussion Class','Speedy English','GB+: AI','GB+: LI','Engoo Standard','Engoo Premium Lite','VPA','VPA+','GECB 2 Skills','GECB 4 Skills','Workshop','Master Class','Business Simulation'];
+const normOpp = (v) => { const s = String(v || '').trim().toUpperCase(); const m = /CRM-OPP-\d{4}-\d{5}/.exec(s); return m ? m[0] : s.replace(/\s+/g, ''); };
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
 function loadCart() {
@@ -2431,8 +2440,10 @@ async function submitRequest() {
     segment: v('rq-segment'), dealType: v('rq-deal'), company: v('rq-company'),
     taxId: v('rq-tax').replace(/[\s-]/g, ''), branch: v('rq-branch'), clientCode: v('rq-client'),
     docLang: v('rq-lang'), wantedQtDate: v('rq-date'), creditTermDays: v('rq-term'),
-    poRequired: v('rq-po') === 'yes', note: v('rq-note'), items: CART,
+    poRequired: v('rq-po') === 'yes', note: v('rq-note'), items: CART, opportunityId: normOpp(v('rq-opp')),
   };
+  if (body.opportunityId && !/^CRM-OPP-\d{4}-\d{5}$/.test(body.opportunityId)) { showReqMsg('err', 'Opportunity ID ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN'); return; }
+  if (body.segment === 'B2B' && !body.opportunityId) { showReqMsg('err', 'ใส่ Opportunity ID จาก CRM สำหรับลูกค้า B2B'); return; }
   if (!body.company) { showReqMsg('err', 'กรอกชื่อบริษัทหรือหน่วยงาน'); return; }
   if (!body.clientCode && !/^\d{13}$/.test(body.taxId)) { showReqMsg('err', 'เลขประจำตัวผู้เสียภาษีต้องเป็นตัวเลข 13 หลัก (หรือใส่รหัสลูกค้าใน PEAK)'); return; }
   const badDisc = CART.find((it) => it.discount && !/^\d+(\.\d+)?%?$/.test(String(it.discount).replace(/,/g, '')));
@@ -2446,7 +2457,7 @@ async function submitRequest() {
     if (r.ok && d && d.ok) {
       showReqMsg('ok', `ส่งคำขอ ${d.requestId} แล้ว ยอดก่อน VAT ${fmt(d.total)} · ${d.message}${d.belowFloor ? ' · มีรายการต่ำกว่าราคาขั้นต่ำแคตตาล็อก (บันทึกไว้ให้ผู้อนุมัติเห็น)' : ''}`);
       CART = []; saveCart(); renderCart();
-      ['rq-company','rq-tax','rq-branch','rq-client','rq-date','rq-term','rq-note'].forEach((id) => { document.getElementById(id).value = ''; });
+      ['rq-opp','rq-company','rq-tax','rq-branch','rq-client','rq-date','rq-term','rq-note'].forEach((id) => { document.getElementById(id).value = ''; });
       loadRequests();
     } else {
       showReqMsg('err', (d && d.error) || `ส่งไม่สำเร็จ (HTTP ${r.status})`);
@@ -2480,7 +2491,7 @@ async function loadRequests() {
           <div><span class="req-list-id">${esc(q.requestId)}</span> · ${esc(q.company)}</div>
           <span class="req-status ${esc(q.status)}">${esc(STATUS_TH[q.status] || q.status)}${q.peakQtNo ? ' · ' + esc(q.peakQtNo) : ''}</span>
         </div>
-        <div class="req-list-lines">${esc(q.createdAt)} · ${esc(q.segment)} · ${esc(q.dealType)}${ME && ME.role === 'op' ? ' · ' + esc(q.salesName) : ''} · ยอดก่อน VAT ${esc(q.totalPreVat)}<br>${heroes}</div>
+        <div class="req-list-lines">${esc(q.createdAt)}${q.opportunityId ? ' · ' + esc(q.opportunityId) : ''} · ${esc(q.segment)} · ${esc(q.dealType)}${ME && ME.role === 'op' ? ' · ' + esc(q.salesName) : ''} · ยอดก่อน VAT ${esc(q.totalPreVat)}<br>${heroes}</div>
       </div>`;
     }).join('');
   } catch (e) {
@@ -2509,6 +2520,7 @@ function onInvRequestPick() {
   document.getElementById('iv-company').value = q.company || '';
   document.getElementById('iv-tax').value = q.taxId || '';
   document.getElementById('iv-term').value = q.creditTermDays || '';
+  document.getElementById('iv-opp').value = q.opportunityId || '';
   if (!q.peakQtNo) showInvMsg('err', 'คำขอนี้ยังไม่มีเลข QT ในระบบ ใส่เลขที่ QT ที่ฝ่ายบัญชีออกให้');
   else showInvMsg('', '');
 }
@@ -2535,9 +2547,10 @@ async function submitInvoiceRequest() {
     wantedIssueDate: v('iv-date'), billing: v('iv-billing'), installment: v('iv-inst'), amountPreVat: v('iv-amount'),
     students: v('iv-students'), creditTermDays: v('iv-term'), poNo: v('iv-po'),
     financeContact: v('iv-fin-name'), financeEmail: v('iv-fin-email'), financePhone: v('iv-fin-phone'),
-    deliveryAddress: v('iv-address'), note: v('iv-note'),
+    deliveryAddress: v('iv-address'), note: v('iv-note'), opportunityId: normOpp(v('iv-opp')),
   };
   if (!body.qtNo) { showInvMsg('err', 'ใส่เลขที่ใบเสนอราคา (QT)'); return; }
+  if (body.opportunityId && !/^CRM-OPP-\d{4}-\d{5}$/.test(body.opportunityId)) { showInvMsg('err', 'Opportunity ID ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN'); return; }
   if (!body.company) { showInvMsg('err', 'ใส่ชื่อบริษัท'); return; }
   const f = document.getElementById('iv-file').files[0];
   if (!f && !body.evidenceLink) { showInvMsg('err', 'แนบไฟล์หลักฐาน หรือใส่ลิงก์ Google Drive ของไฟล์'); return; }
@@ -2552,7 +2565,7 @@ async function submitInvoiceRequest() {
     const d = await r.json().catch(() => null);
     if (r.ok && d && d.ok) {
       showInvMsg('ok', `ส่งคำขอ ${d.ivRequestId} แล้ว · ${d.message}`);
-      ['iv-req','iv-qt','iv-company','iv-tax','iv-evother','iv-link','iv-date','iv-inst','iv-amount','iv-students','iv-term','iv-po','iv-fin-name','iv-fin-email','iv-fin-phone','iv-address','iv-note'].forEach((id) => { document.getElementById(id).value = ''; });
+      ['iv-req','iv-qt','iv-opp','iv-company','iv-tax','iv-evother','iv-link','iv-date','iv-inst','iv-amount','iv-students','iv-term','iv-po','iv-fin-name','iv-fin-email','iv-fin-phone','iv-address','iv-note'].forEach((id) => { document.getElementById(id).value = ''; });
       document.getElementById('iv-file').value = '';
       document.getElementById('iv-billing').value = 'full'; document.getElementById('iv-inst-row').style.display = 'none';
       loadRequests();
@@ -2582,7 +2595,7 @@ async function loadInvoiceRequests() {
     if (!d.requests.length) { el.innerHTML = '<div class="req-empty">ยังไม่มีคำขอออก INV</div>'; return; }
     el.innerHTML = d.requests.map((q) => `<div class="req-list-row">
       <div class="req-list-head">
-        <div><span class="req-list-id">${esc(q.ivRequestId)}</span> · ${esc(q.company)} · ${esc(q.qtNo)}</div>
+        <div><span class="req-list-id">${esc(q.ivRequestId)}</span> · ${esc(q.company)} · ${esc(q.qtNo)}${q.opportunityId ? ' · ' + esc(q.opportunityId) : ''}</div>
         <span class="req-status ${q.status === 'iv_issued' ? 'iv_issued' : q.status === 'rejected' ? 'cancelled' : 'new'}">${esc(IV_STATUS_TH[q.status] || q.status)}${q.peakIvNo ? ' · ' + esc(q.peakIvNo) : ''}</span>
       </div>
       <div class="req-list-lines">${esc(q.createdAt)} · ${esc(q.evidenceType)}${q.billing === 'Installment' ? ' · งวด ' + esc(q.installment) + ' ' + esc(q.amountPreVat) : ' · เต็มจำนวน'}${ME && ME.role === 'op' ? ' · ' + esc(q.salesName) : ''}

@@ -78,6 +78,7 @@ table.items input.r{text-align:right}
 .total strong{font-size:18px}
 .empty{text-align:center;color:var(--muted);padding:20px 8px;font-size:13px}
 .msg{margin-top:12px;padding:10px 12px;border-radius:8px;font-size:13px;line-height:1.6}
+.badge{display:inline-block;margin-left:4px;padding:0 6px;border-radius:9px;background:var(--primary,#E8590C);color:#fff;font-size:11px;line-height:18px}.badge[hidden]{display:none}
 .msg.info{background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe}
 .msg.ok{background:#f0fdf4;color:#166534;border:1px solid #86efac}
 .msg.err{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
@@ -112,6 +113,7 @@ table.items input.r{text-align:right}
       <button id="nav-qt" class="on" onclick="go('qt')">📄 ขอ QT</button>
       <button id="nav-inv" onclick="go('inv')">🧾 ขอ INV</button>
       <button id="nav-mine" onclick="go('mine')">📂 คำขอของฉัน</button>
+      <button id="nav-pend" onclick="go('pend')" hidden>✅ รออนุมัติ <span class="badge" id="pend-count" hidden></span></button>
     </nav>
     <div class="chip"><a href="/">เมนู</a><span id="me"></span><button type="button" onclick="signOut()">ออกจากระบบ</button></div>
   </div>
@@ -223,6 +225,20 @@ table.items input.r{text-align:right}
 </section>
 
 <!-- ═══════════════ MINE ═══════════════ -->
+<section id="tab-pend" class="tab">
+  <div class="filters">
+    <div class="seg" id="pend-seg">
+      <button class="on" onclick="setPend('qt',this)">ใบเสนอราคา <span id="pend-qt-n"></span></button>
+      <button onclick="setPend('inv',this)">ใบแจ้งหนี้ <span id="pend-inv-n"></span></button>
+    </div>
+    <button class="btn btn-g btn-sm" onclick="loadAll()">↻ รีเฟรช</button>
+  </div>
+  <p class="hint" id="pend-hint-qt">ตรวจคำขอแล้วกด <b>อนุมัติ</b> ระบบจะสร้าง QT Draft ใน PEAK ให้เฉพาะคำขอที่อนุมัติแล้ว (รอบอัตโนมัติ 11:00 และ 18:00 หรือกด Run now ที่ scheduled task) ถ้าไม่ถูกต้องให้ <b>ตีกลับ</b> พร้อมเหตุผล Sales จะเห็นในหน้าคำขอของตัวเอง</p>
+  <p class="hint" id="pend-hint-inv" hidden>ออก INV จาก QT ใน PEAK ก่อน แล้วใส่ <b>เลข INV</b> และ <b>ลิงก์เอกสาร INV ใน PEAK</b> จึงกดอนุมัติได้ Sales จะกดเลข INV เปิดเอกสารได้ทันที</p>
+  <div id="pend-qt"><div class="empty">กำลังโหลด...</div></div>
+  <div id="pend-inv" hidden><div class="empty">กำลังโหลด...</div></div>
+</section>
+
 <section id="tab-mine" class="tab">
   <div class="filters">
     <div class="seg" id="mine-seg">
@@ -264,9 +280,9 @@ async function api(url, opts = {}) {
   return d;
 }
 function go(tab) {
-  ['qt', 'inv', 'mine'].forEach((t) => { $('tab-' + t).classList.toggle('on', t === tab); $('nav-' + t).classList.toggle('on', t === tab); });
+  ['qt', 'inv', 'mine', 'pend'].forEach((t) => { $('tab-' + t).classList.toggle('on', t === tab); $('nav-' + t).classList.toggle('on', t === tab); });
   history.replaceState(null, '', '#' + tab);
-  if (tab === 'mine') loadAll();
+  if (tab === 'mine' || tab === 'pend') loadAll();
 }
 async function signOut() { try { await fetch('/api/auth/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' } }); } catch {} location.href = '/signin.html'; }
 
@@ -284,7 +300,7 @@ const CART_KEY = 'gc_quote_cart_v1';
 let CART = [];
 function loadCart() { try { const v = JSON.parse(localStorage.getItem(CART_KEY) || '[]'); CART = Array.isArray(v) ? v : []; } catch { CART = []; } }
 function saveCart() { try { localStorage.setItem(CART_KEY, JSON.stringify(CART)); } catch {} }
-const KINDS = { B2B: ['catalog', 'keyhs'], B2E: ['service'], B2S: ['service'], Others: ['catalog', 'keyhs', 'service'] };
+const KINDS = { B2B: ['catalog', 'keyhs', 'surcharge'], B2E: ['service'], B2S: ['service'], Others: ['catalog', 'keyhs', 'service', 'surcharge'] };
 const kindOf = (it) => it.kind || 'catalog';
 
 // User switched the customer segment: drop what doesn't fit the new segment, so nothing stale is sent.
@@ -310,6 +326,7 @@ function onSegment() {
   const add = [];
   if (k.includes('catalog')) add.push('<a class="btn btn-o" href="/catalog?return=request" onclick="saveDraft()">➕ เลือกจาก B2B Catalog</a>');
   if (k.includes('keyhs')) add.push('<button class="btn btn-o" type="button" onclick="addLine(\'keyhs\')">➕ Customized Package (Key H.S.)</button>');
+  if (k.includes('surcharge')) add.push('<button class="btn btn-o" type="button" onclick="addLine(\'surcharge\')">➕ ค่าเพิ่ม (โค้ชต่างชาติ / เดินทาง)</button>');
   if (k.includes('service')) add.push('<button class="btn btn-o" type="button" onclick="addLine(\'service\')">➕ แพ็กเกจ Whitehouse / รหัสบริการ PEAK</button>');
   $('q-adders').innerHTML = add.join('');
   $('q-items-hint').innerHTML = seg === 'B2B'
@@ -322,9 +339,9 @@ function onSegment() {
 
 function addLine(kind) {
   if (CART.length >= 20) { msg('q-msg', 'err', 'ใส่ได้ไม่เกิน 20 รายการต่อคำขอ'); return; }
-  CART.push(kind === 'keyhs' ? { kind, keyHS: '', name: '', qty: 1, unitPrice: '', discount: '' } : { kind, code: '', name: '', qty: 1, unitPrice: '', discount: '' });
+  CART.push(kind === 'keyhs' ? { kind, keyHS: '', name: '', qty: 1, unitPrice: '', discount: '' } : kind === 'surcharge' ? { kind, type: 'coach', note: '', qty: 1, unitPrice: '', discount: '' } : { kind, code: '', name: '', qty: 1, unitPrice: '', discount: '' });
   saveCart(); renderItems();
-  const f = document.querySelector(`[data-i="${CART.length - 1}"][data-f="${kind === 'keyhs' ? 'keyHS' : 'code'}"]`); if (f) f.focus();
+  const f = document.querySelector(`[data-i="${CART.length - 1}"][data-f="${kind === 'keyhs' ? 'keyHS' : kind === 'surcharge' ? 'note' : 'code'}"]`); if (f) f.focus();
 }
 // Typing in a line never re-renders the table (that used to steal focus): values go straight into
 // CART and only the totals/warnings are refreshed. Structural changes (add/delete) re-render.
@@ -423,6 +440,13 @@ function renderItems() {
           <input type="text" class="mono" placeholder="Private Class-24-4-Native/24-4-HERO-6-0-…" ${inp(i, 'keyHS', it.keyHS)}>
           <input type="text" placeholder="ชื่อแพ็กเกจ (ใช้บนเอกสาร)" maxlength="120" style="margin-top:4px" ${inp(i, 'name', it.name)}>
           ${p && suppText(it.keyHS) ? `<div class="small">${esc(p.hero)} · ส่วนเสริม: ${esc(suppText(it.keyHS))}</div>` : ''}`;
+      } else if (k === 'surcharge') {
+        desc = `<span class="kind keyhs">ค่าเพิ่ม</span>
+          <select data-i="${i}" data-f="type" oninput="setVal(this)" onchange="setVal(this)">
+            <option value="coach"${it.type !== 'travel' ? ' selected' : ''}>ค่าโค้ชชาวต่างชาติ (เพิ่มเติม)</option>
+            <option value="travel"${it.type === 'travel' ? ' selected' : ''}>ค่าเดินทางนอกกรุงเทพฯ</option></select>
+          <input type="text" placeholder="รายละเอียด เช่น Native coach สำหรับ Workshop 2 ครั้ง / ชลบุรี" maxlength="120" style="margin-top:4px" ${inp(i, 'note', it.note)}>
+          <div class="small">ใช้กับ Customized Package ที่มีค่าเพิ่ม (แพ็กเกจจาก Catalog คิดค่าเพิ่มให้เอง)</div>`;
       } else {
         desc = `<span class="kind service" id="svk-${i}">Whitehouse Package</span>
           <input type="text" class="mono" placeholder="Package ID เช่น 3822" maxlength="40" autocomplete="off" ${inp(i, 'code', it.code)}>
@@ -669,7 +693,7 @@ async function submitINV() {
 }
 
 // ─── Mine ─────────────────────────────────────────────────
-const QT_ST = { new: ['รอระบบสร้าง QT', 'new'], qt_creating: ['กำลังสร้าง QT ใน PEAK', 'blue'],
+const QT_ST = { new: ['รอฝ่ายบัญชีอนุมัติ', 'new'], approved: ['อนุมัติแล้ว · รอระบบสร้าง QT', 'blue'], qt_creating: ['กำลังสร้าง QT ใน PEAK', 'blue'],
   needs_contact: ['รอฝ่ายบัญชี: ลูกค้าใน PEAK', 'new'], needs_service_code: ['รอฝ่ายบัญชี: รหัสบริการ', 'new'], qt_error: ['รอฝ่ายบัญชีตรวจ', 'red'],
   qt_draft: ['QT Draft · รอบัญชีอนุมัติ', 'blue'], qt_approved: ['QT อนุมัติแล้ว · ส่งลูกค้าได้', 'green'], rejected: ['ตีกลับ', 'red'], changes_requested: ['ขอแก้ไข', 'new'],
   accepted: ['ลูกค้าตอบรับ', 'green'], iv_requested: ['ขอ INV แล้ว', 'green'], iv_issued: ['ออก INV แล้ว', 'green'], cancelled: ['ยกเลิก', 'red'] };
@@ -685,7 +709,7 @@ async function loadAll() {
     REQS = a.requests; IVS = b.requests;
     $('i-file-wrap').hidden = !b.uploads;
     $('i-link-label').textContent = b.uploads ? 'หรือวางลิงก์ Google Drive (ถ้าไฟล์อยู่ใน Drive แล้ว)' : 'ลิงก์ Google Drive ของไฟล์หลักฐาน (แชร์ให้ฝ่ายบัญชีเปิดได้)';
-    fillQTPicker(); renderMine(); updateSum();
+    fillQTPicker(); renderMine(); renderPending(); updateSum();
   } catch (e) {
     $('mine-qt').innerHTML = $('mine-inv').innerHTML = `<div class="empty">${esc(e.message)}</div>`;
   }
@@ -694,20 +718,15 @@ async function loadAll() {
 function renderMine() {
   const op = ME && ME.role === 'op';
   $('mine-qt').innerHTML = REQS.length ? REQS.map((q) => {
-    const heroes = (q.lines || []).filter((l) => l.role !== 'supplement' && l.role !== 'surcharge').map((l) => `${esc(l.packageId === 'CUSTOM' ? 'Customized' : l.packageId)} × ${esc(l.qty)}`).join(', ');
+    const heroes = (q.lines || []).filter((l) => l.role !== 'supplement').map((l) => `${esc(l.packageId === 'CUSTOM' ? 'Customized' : l.packageId === 'SURCHARGE' ? 'ค่าเพิ่ม' : l.packageId)} × ${esc(l.qty)}`).join(', ');
     const total = toNum(q.totalPreVat), done = toNum(q.invoicedPreVat);
     const mineIvs = IVS.filter((v) => v.requestId === q.requestId);
     return `<div class="list-row">
-      <div class="list-head"><div>${q.peakQtNo ? `<span class="list-id">QT ${docLink(q.peakQtNo, q.peakDocLink)}</span>` : '<span class="small">ยังไม่มีเลข QT</span>'} · ${esc(q.company)}</div>${st(QT_ST, q.peakQtNo && q.status === 'new' ? 'qt_draft' : q.status)}</div>
+      <div class="list-head"><div>${q.peakQtNo ? `<span class="list-id">QT ${docLink(q.peakQtNo, q.peakDocLink)}</span>` : '<span class="small">ยังไม่มีเลข QT</span>'} · ${esc(q.company)}</div>${st(QT_ST, q.status)}</div>
       <div class="list-sub">${esc(q.requestId)} · ${esc(q.createdAt)} · ${esc(q.segment)}${q.opportunityId ? ' · ' + esc(q.opportunityId) : ''}${op ? ' · ' + esc(q.salesName) : ''}<br>
         ${heroes}<br>ยอดก่อน VAT <b>${fmt(total)}</b> · ขอ INV แล้ว ${fmt(done)} · คงเหลือ <b>${fmt(total - done)}</b>${q.peakNote ? `<br><span class="small">หมายเหตุ: ${esc(q.peakNote)}</span>` : ''}</div>
       ${mineIvs.length ? `<div class="inv-mini">${mineIvs.map((v) => `<div class="inv-mini-row"><span class="mono">${esc(v.ivRequestId)}</span><span>${esc(v.company)} · ${fmt(toNum(v.amountPreVat))}</span><span>${st(IV_ST, v.status)} ${st(ORIG_ST, v.originalStatus)}</span></div>`).join('')}</div>` : ''}
       ${q.peakQtNo && !['cancelled', 'rejected'].includes(q.status) ? `<div style="margin-top:8px"><button class="btn btn-o btn-sm" onclick="startInvFor('${esc(q.requestId)}')">🧾 ขอ INV จาก QT นี้</button></div>` : ''}
-      ${op ? `<div class="op-bar"><span class="small">ฝ่ายบัญชี:</span>
-        ${q.status !== 'qt_approved' && q.peakQtNo ? `<button class="btn btn-p btn-sm" onclick="qtAction('${esc(q.requestId)}','approved')">✓ อนุมัติใน PEAK แล้ว</button>` : ''}
-        ${!['rejected', 'qt_approved'].includes(q.status) ? `<input id="qn-${esc(q.requestId)}" type="text" maxlength="300" placeholder="เหตุผลที่ตีกลับ"><button class="btn btn-g btn-sm" onclick="qtAction('${esc(q.requestId)}','reject')">ตีกลับ</button>` : ''}
-        ${['needs_contact', 'needs_service_code', 'qt_error', 'rejected'].includes(q.status) ? `<button class="btn btn-g btn-sm" onclick="qtAction('${esc(q.requestId)}','reopen')">↻ ให้ระบบสร้าง QT ใหม่</button>` : ''}
-        <span id="qm-${esc(q.requestId)}"></span></div>` : ''}
     </div>`;
   }).join('') : '<div class="empty">ยังไม่มีคำขอใบเสนอราคา</div>';
 
@@ -723,16 +742,55 @@ function renderMine() {
         ${canOrig && v.originalStatus !== 'not_needed' ? `<button class="btn btn-g btn-sm" onclick="setOrig('${esc(v.ivRequestId)}','no')">ไม่ต้องส่งตัวจริง</button>` : ''}
         ${op && v.originalStatus === 'requested' ? `<input id="trk-${esc(v.ivRequestId)}" type="text" placeholder="เลขพัสดุ (ถ้ามี)" style="padding:5px 8px;border:1.5px solid var(--line2);border-radius:6px;font:inherit;font-size:12px"><button class="btn btn-p btn-sm" onclick="markSent('${esc(v.ivRequestId)}')">✅ ส่งตัวจริงแล้ว</button>` : ''}
       </div>
-      ${op && !['iv_issued', 'rejected'].includes(v.status) ? `<div class="op-bar"><span class="small">ฝ่ายบัญชี: ออก INV จาก QT ${esc(v.qtNo)} ใน PEAK แล้วใส่เลข</span>
-        <input id="ivn-${esc(v.ivRequestId)}" type="text" maxlength="40" placeholder="IV-2026…" style="width:140px">
-        <input id="ivl-${esc(v.ivRequestId)}" type="text" maxlength="500" placeholder="ลิงก์เอกสาร PEAK (ถ้ามี)" style="width:200px">
-        <button class="btn btn-p btn-sm" onclick="ivAction('${esc(v.ivRequestId)}','issued')">✓ ออก INV แล้ว</button>
-        <input id="ivr-${esc(v.ivRequestId)}" type="text" maxlength="300" placeholder="เหตุผลที่ตีกลับ"><button class="btn btn-g btn-sm" onclick="ivAction('${esc(v.ivRequestId)}','reject')">ตีกลับ</button>
-        <span id="ivm-${esc(v.ivRequestId)}"></span></div>` : ''}
-      ${op && v.status === 'rejected' ? `<div class="op-bar"><button class="btn btn-g btn-sm" onclick="ivAction('${esc(v.ivRequestId)}','reopen')">↻ เปิดคำขอใหม่</button><span id="ivm-${esc(v.ivRequestId)}"></span></div>` : ''}
       <div id="orig-${esc(v.ivRequestId)}"></div>
     </div>`;
   }).join('') : '<div class="empty">ยังไม่มีคำขอออก INV</div>';
+}
+
+// ─── Accountant / Admin: requests waiting for approval ────
+function setPend(w, btn) { document.querySelectorAll('#pend-seg button').forEach((b) => b.classList.toggle('on', b === btn)); $('pend-qt').hidden = w !== 'qt'; $('pend-inv').hidden = w !== 'inv'; $('pend-hint-qt').hidden = w !== 'qt'; $('pend-hint-inv').hidden = w !== 'inv'; }
+function renderPending() {
+  const op = ME && ME.role === 'op';
+  $('nav-pend').hidden = !op;
+  if (!op) return;
+  const waitQ = REQS.filter((q) => q.status === 'new');
+  const fixQ = REQS.filter((q) => ['needs_contact', 'needs_service_code', 'qt_error'].includes(q.status));
+  const waitI = IVS.filter((v) => v.status === 'new');
+  const n = waitQ.length + waitI.length;
+  $('pend-count').textContent = n; $('pend-count').hidden = !n;
+  $('pend-qt-n').textContent = waitQ.length ? `(${waitQ.length})` : '';
+  $('pend-inv-n').textContent = waitI.length ? `(${waitI.length})` : '';
+  const lineRows = (q) => (q.lines || []).map((l) => `<tr><td>${esc(l.description).replace(/\n/g, '<br>')}${l.peakServiceCode ? `<div class="small mono">${esc(l.peakServiceCode)}</div>` : '<div class="err-line">ยังไม่มีรหัสบริการ PEAK</div>'}</td><td class="num">${esc(l.qty)}</td><td class="num">${esc(l.unitPrice)}</td><td class="num">${esc(l.discount || '')}</td></tr>`).join('');
+  const qCard = (q, fix) => `<div class="list-row">
+    <div class="list-head"><div><span class="list-id">${esc(q.company)}</span> · ${esc(q.segment)}</div>${st(QT_ST, q.status)}</div>
+    <div class="list-sub">${esc(q.requestId)} · ${esc(q.createdAt)} · โดย ${esc(q.salesName)}${q.opportunityId ? ' · ' + esc(q.opportunityId) : ''}<br>
+      เลขภาษี ${esc(q.taxId)} · สาขา ${esc(q.branch)} · รหัส PEAK ${esc(q.clientCode || '— (ระบบจะหาจากเลขภาษี)')} · ภาษาเอกสาร ${esc(q.docLang)}${q.creditTermDays ? ' · เครดิต ' + esc(q.creditTermDays) + ' วัน' : ''}${q.poRequired === 'Yes' ? ' · ต้องมี PO' : ''}
+      ${q.note ? `<br>หมายเหตุจาก Sales: ${esc(q.note)}` : ''}${q.belowFloor ? `<br><span class="warn">ต่ำกว่าราคาขั้นต่ำ Catalog: ${esc(q.belowFloor)}</span>` : ''}${fix && q.peakNote ? `<br><span class="err-line">${esc(q.peakNote)}</span>` : ''}</div>
+    <div style="overflow-x:auto;margin-top:6px"><table class="items"><thead><tr><th>รายการ (ข้อความที่จะลงใน QT)</th><th class="num">จำนวน</th><th class="num">ราคา/หน่วย</th><th class="num">ส่วนลด</th></tr></thead><tbody>${lineRows(q)}</tbody></table></div>
+    <div class="total"><span>ยอดก่อน VAT</span><strong>${fmt(toNum(q.totalPreVat))}</strong></div>
+    <div class="op-bar">
+      ${fix ? `<button class="btn btn-p btn-sm" onclick="qtAction('${esc(q.requestId)}','reopen')">↻ แก้แล้ว ให้ระบบสร้าง QT ใหม่</button>` : `<button class="btn btn-p btn-sm" onclick="qtAction('${esc(q.requestId)}','approve')">✓ อนุมัติ</button>`}
+      <input id="qn-${esc(q.requestId)}" type="text" maxlength="300" placeholder="เหตุผลที่ตีกลับ" style="flex:1;min-width:160px"><button class="btn btn-g btn-sm" onclick="qtAction('${esc(q.requestId)}','reject')">ตีกลับ</button>
+      <span id="qm-${esc(q.requestId)}"></span></div>
+  </div>`;
+  $('pend-qt').innerHTML = (waitQ.length ? waitQ.map((q) => qCard(q, false)).join('') : '<div class="empty">ไม่มีคำขอ QT รออนุมัติ</div>')
+    + (fixQ.length ? `<h3 style="margin:18px 0 8px;font-size:15px">ต้องแก้ใน PEAK ก่อนสร้าง QT (${fixQ.length})</h3>` + fixQ.map((q) => qCard(q, true)).join('') : '');
+  $('pend-inv').innerHTML = waitI.length ? waitI.map((v) => {
+    const q = REQS.find((x) => x.requestId === v.requestId);
+    return `<div class="list-row">
+      <div class="list-head"><div><span class="list-id">${esc(v.company)}</span>${v.billToRelation ? ` <span class="small">(${esc(v.billToRelation)})</span>` : ''}</div>${st(IV_ST, v.status)}</div>
+      <div class="list-sub">${esc(v.ivRequestId)} · ${esc(v.createdAt)} · โดย ${esc(v.salesName)}<br>
+        จาก QT ${q ? docLink(v.qtNo, q.peakDocLink) : esc(v.qtNo)} · เลขภาษี ${esc(v.taxId)} · สาขา ${esc(v.branch)}<br>
+        ยอดก่อน VAT <b>${fmt(toNum(v.amountPreVat))}</b>${v.installment ? ' · ' + esc(v.installment) : ''}${v.students ? ' · ' + esc(v.students) + ' ผู้เรียน' : ''}${v.creditTermDays ? ' · เครดิต ' + esc(v.creditTermDays) + ' วัน' : ''}${v.poNo ? ' · PO ' + esc(v.poNo) : ''}${v.wantedIssueDate ? ' · ต้องการวันที่ ' + esc(v.wantedIssueDate) : ''}<br>
+        หลักฐาน: ${esc(v.evidenceType)}${v.evidenceLink && /^https:\/\//.test(v.evidenceLink) ? ` · <a href="${esc(v.evidenceLink)}" target="_blank" rel="noopener">เปิดดู</a>` : ''} · ตัวจริง: ${st(ORIG_ST, v.originalStatus)}${v.note ? `<br>หมายเหตุ: ${esc(v.note)}` : ''}${v.overReason ? `<br><span class="warn">เกินยอด QT: ${esc(v.overReason)}</span>` : ''}</div>
+      <div class="op-bar">
+        <input id="ivn-${esc(v.ivRequestId)}" type="text" maxlength="40" placeholder="เลข INV เช่น IV-20261100014" style="width:180px">
+        <input id="ivl-${esc(v.ivRequestId)}" type="text" maxlength="500" placeholder="ลิงก์เอกสาร INV ใน PEAK *" style="flex:1;min-width:200px">
+        <button class="btn btn-p btn-sm" onclick="ivAction('${esc(v.ivRequestId)}','issued')">✓ อนุมัติ (ออก INV แล้ว)</button>
+      </div>
+      <div class="op-bar" style="margin-top:6px"><input id="ivr-${esc(v.ivRequestId)}" type="text" maxlength="300" placeholder="เหตุผลที่ตีกลับ" style="flex:1;min-width:160px"><button class="btn btn-g btn-sm" onclick="ivAction('${esc(v.ivRequestId)}','reject')">ตีกลับ</button><span id="ivm-${esc(v.ivRequestId)}"></span></div>
+    </div>`;
+  }).join('') : '<div class="empty">ไม่มีคำขอ INV รออนุมัติ</div>';
 }
 
 // PEAK document link (the public doc.peakaccount.com link PEAK returns), opens / downloads the document.
@@ -748,7 +806,7 @@ async function qtAction(id, action) {
 }
 async function ivAction(id, action) {
   const body = { ivRequestId: id, action };
-  if (action === 'issued') { body.peakIvNo = $('ivn-' + id).value.trim(); body.peakDocLink = $('ivl-' + id).value.trim(); if (!body.peakIvNo) { $('ivm-' + id).innerHTML = '<span class="err-line">ใส่เลข INV</span>'; return; } }
+  if (action === 'issued') { body.peakIvNo = $('ivn-' + id).value.trim(); body.peakDocLink = $('ivl-' + id).value.trim(); if (!body.peakIvNo || !body.peakDocLink) { $('ivm-' + id).innerHTML = '<span class="err-line">ใส่เลข INV และลิงก์เอกสาร INV ใน PEAK</span>'; return; } }
   if (action === 'reject') { body.note = $('ivr-' + id).value.trim(); if (!body.note) { $('ivm-' + id).innerHTML = '<span class="err-line">ใส่เหตุผลก่อน</span>'; return; } }
   try { await api('/api/invoice-requests', { method: 'PATCH', body: JSON.stringify(body) }); await loadAll(); }
   catch (e) { $('ivm-' + id).innerHTML = `<span class="err-line">${esc(e.message)}</span>`; }
@@ -792,8 +850,8 @@ function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch {} }
   try { const r = await fetch('/packages.json', { cache: 'no-store' }); if (r.ok) { PKGS = await r.json(); renderItems(); } } catch {}
   try { const d = await api('/api/auth/me'); ME = d.user; $('me').textContent = ME.email; } catch {}
   const h = (location.hash || '').slice(1);
-  if (['qt', 'inv', 'mine'].includes(h)) go(h);
-  window.addEventListener('hashchange', () => { const t = location.hash.slice(1); if (['qt', 'inv', 'mine'].includes(t)) go(t); });
+  if (['qt', 'inv', 'mine', 'pend'].includes(h)) go(h);
+  window.addEventListener('hashchange', () => { const t = location.hash.slice(1); if (['qt', 'inv', 'mine', 'pend'].includes(t)) go(t); });
   if ($('q-tax').value.length === 13) onTaxInput('q');
   loadAll();
 })();

@@ -6,7 +6,7 @@
 const crypto = require('crypto');
 const { checkOrigin, sendError } = require('../lib/session');
 const { requireUser } = require('../lib/users');
-const { priceItem, priceCustomKeyHS, priceService } = require('../lib/pricing');
+const { priceItem, priceCustomKeyHS, priceService, priceSurcharge } = require('../lib/pricing');
 const { validTaxId, normBranch } = require('../lib/taxid');
 const hub = require('../lib/hub');
 const peak = require('../lib/peak');
@@ -21,7 +21,7 @@ const OPP_REQUIRED = ['B2B', 'B2E'];
 const OPP_NONE = ['B2S'];
 // Line kinds a segment may use. catalog = B2B Standard Catalog package, keyhs = customized
 // B2B package with its own Key H.S., service = Whitehouse Package ID or PEAK service code.
-const KINDS = { B2B: ['catalog', 'keyhs'], B2E: ['service'], B2S: ['service'], Others: ['catalog', 'keyhs', 'service'] };
+const KINDS = { B2B: ['catalog', 'keyhs', 'surcharge'], B2E: ['service'], B2S: ['service'], Others: ['catalog', 'keyhs', 'service', 'surcharge'] };
 
 const bad = (m, status = 400) => Object.assign(new Error(m), { status });
 const text = (v, max) => String(v ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').trim().slice(0, max);
@@ -110,11 +110,13 @@ async function create(req, res, user) {
 
   const priced = items.map((it) => {
     const kind = it.kind || 'catalog';
-    if (kind === 'keyhs') return priceCustomKeyHS({ keyHS: it.keyHS, name: it.name, qty: it.qty, unitPrice: it.unitPrice, discount: it.discount });
+    const lang = r.docLang;
+    if (kind === 'keyhs') return priceCustomKeyHS({ keyHS: it.keyHS, name: it.name, qty: it.qty, unitPrice: it.unitPrice, discount: it.discount, lang });
+    if (kind === 'surcharge') return priceSurcharge({ type: it.type, note: it.note, qty: it.qty, unitPrice: it.unitPrice, discount: it.discount, lang });
     if (kind === 'service') return priceService({ code: it.code, name: it.name, qty: it.qty, unitPrice: it.unitPrice, discount: it.discount });
     return priceItem({
       packageId: text(it.packageId, 60), students: it.students, classes: it.classes,
-      unitPrice: it.unitPrice, discount: it.discount, intl: it.intl, loc: it.loc,
+      unitPrice: it.unitPrice, discount: it.discount, intl: it.intl, loc: it.loc, lang,
     });
   });
   const lines = priced.flatMap((p) => p.lines);
@@ -133,11 +135,11 @@ async function create(req, res, user) {
   // PEAK Draft quotation (only when PEAK_MODE is uat/prod and every line has a service code).
   let peakNote = 'ระบบจะสร้าง QT Draft ใน PEAK ให้ฝ่ายบัญชีตรวจและอนุมัติ แล้วเลข QT จะขึ้นในคำขอของฉัน';
   // WH packages and PEAK services carry their own code; catalog lines map through Products.
-  let serviceCodeOf = (l) => l.peakCode || '';
+  // Own code (WH package / PEAK service) → per-package override in Products → per-component code
+  // (Components tab). Always resolved, so RequestLines carry the code the PEAK sync will use.
+  const codes = await hub.readServiceCodes();
+  const serviceCodeOf = (l) => l.peakCode || (l.role === 'hero' && codes.byKeyHS.get(l.keyHS)) || codes.byComponent.get(l.component) || '';
   if (peak.mode() !== 'off') {
-    const codes = await hub.readServiceCodes();
-    // Own code (WH package / PEAK service) → per-package override in Products → per-component code.
-    serviceCodeOf = (l) => l.peakCode || (l.role === 'hero' && codes.byKeyHS.get(l.keyHS)) || codes.byComponent.get(l.component) || '';
     const { missing, body } = peak.buildQuotation({ ...request, wantedQtDate: r.wantedQtDate }, lines, serviceCodeOf, now);
     if (missing.length) {
       peakNote = `ยังสร้างใน PEAK ไม่ได้: ยังไม่มีรหัสบริการ PEAK ของ ${missing.join(', ')}`;
@@ -192,11 +194,13 @@ async function list(req, res, user) {
   });
 }
 
-// PATCH (Operation only) { requestId, action, note? }
-//   reject  → status rejected, note shown to sales (required)
-//   approved → status qt_approved (QT approved in PEAK)
-//   reopen  → status new (send it back to the sync)
-const OP_ACTIONS = { reject: 'rejected', approved: 'qt_approved', reopen: 'new' };
+// PATCH (Accountant / Admin only) { requestId, action, note? }
+//   approve     → approved: accounting checked the request; the PEAK sync creates the Draft QT
+//                 only for approved rows (status new = waiting for this approval)
+//   reject      → rejected, with the reason shown to sales (required)
+//   reopen      → approved again (re-run the sync after fixing a contact / service code)
+//   qt_approved → the Draft was approved in PEAK
+const OP_ACTIONS = { approve: 'approved', reject: 'rejected', reopen: 'approved', qt_approved: 'qt_approved' };
 async function update(req, res, user) {
   checkOrigin(req);
   if (user.role !== 'op') throw bad('เฉพาะฝ่ายบัญชี / Admin', 403);
@@ -210,8 +214,11 @@ async function update(req, res, user) {
   if (!row) throw bad('ไม่พบคำขอนี้', 404);
   const at = hub.sheetDateTime();
   const fields = { status, updatedAt: at };
-  if (b.action === 'approved') fields.qtApprovedAt = at;
-  fields.peakNote = note ? `${note} — ${user.name || user.email}` : (b.action === 'approved' ? `อนุมัติ QT ใน PEAK แล้ว — ${user.name || user.email}` : row.peakNote);
+  if (b.action === 'approve' && row.status !== 'new') throw bad('อนุมัติได้เฉพาะคำขอที่รออนุมัติ');
+  if (b.action === 'qt_approved') fields.qtApprovedAt = at;
+  const who = user.name || user.email;
+  const auto = { approve: `ฝ่ายบัญชีอนุมัติคำขอแล้ว รอระบบสร้าง QT Draft ใน PEAK — ${who}`, reopen: `ให้ระบบสร้าง QT ใหม่ — ${who}`, qt_approved: `อนุมัติ QT ใน PEAK แล้ว — ${who}` };
+  fields.peakNote = note ? `${note} — ${who}` : (auto[b.action] || row.peakNote);
   await hub.updateRow('Requests', row._row, fields);
   await hub.log('catalog', `qt_${b.action}`, row.requestId, `${user.email}${note ? ' · ' + note : ''}`);
   res.status(200).json({ ok: true, status });

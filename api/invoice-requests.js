@@ -237,9 +237,10 @@ async function update(req, res, user) {
     } else {
       const ivNo = text(b.peakIvNo, 40).toUpperCase();
       if (!/^[A-Z]{1,6}-?\d{6,}$/.test(ivNo)) throw bad('ใส่เลข INV จาก PEAK เช่น IV-20261100014');
+      // Accounting issues the INV from the QT in PEAK; approving here needs the link to that INV.
       const link = text(b.peakDocLink, 500);
-      if (link && !/^https:\/\/(doc|secure)\.peakaccount\.com\//.test(link)) throw bad('ลิงก์เอกสารต้องเป็นลิงก์ของ PEAK');
-      await hub.updateRow('InvoiceRequests', row._row, { status: 'iv_issued', peakIvNo: ivNo, peakDocLink: link || row.peakDocLink, accountNote: note || row.accountNote, updatedAt: at });
+      if (!/^https:\/\/(doc|secure)\.peakaccount\.com\//.test(link)) throw bad('ใส่ลิงก์เอกสาร INV จาก PEAK (https://doc.peakaccount.com/… หรือ https://secure.peakaccount.com/…)');
+      await hub.updateRow('InvoiceRequests', row._row, { status: 'iv_issued', peakIvNo: ivNo, peakDocLink: link, accountNote: note || row.accountNote, updatedAt: at });
     }
     await hub.log('catalog', `iv_${b.action}`, id, `${user.email}${note ? ' · ' + note : ''}`);
     return res.status(200).json({ ok: true });

@@ -124,6 +124,9 @@ async function create(req, res, user) {
       unitPrice: it.unitPrice, discount: it.discount, intl: it.intl, loc: it.loc, lang,
     });
   });
+  // Sales' extra description for a package goes on its first (priced) line. The PEAK sync (Claude)
+  // blends it into the generated description before creating the QT (RequestLines L → M).
+  priced.forEach((p, i) => { const note = text(items[i].extra, 500); if (note && p.lines[0]) p.lines[0].salesNote = note; });
   const lines = priced.flatMap((p) => p.lines);
   const total = Math.round(priced.reduce((s, p) => s + p.total, 0) * 100) / 100;
   const catalogTotal = priced.reduce((s, p) => s + p.catalogTotal, 0);
@@ -168,7 +171,7 @@ async function create(req, res, user) {
   await hub.appendRows('RequestLines', lines.map((l, i) => ({
     requestId: request.requestId, line: i + 1, role: l.role, keyHS: l.keyHS, packageId: l.packageId,
     peakServiceCode: serviceCodeOf(l), description: l.description, qty: l.qty, unitPrice: l.unitPrice,
-    discount: l.discount, listPrice: l.listPrice,
+    discount: l.discount, listPrice: l.listPrice, salesNote: l.salesNote || '', qtDescription: '',
   })));
   await hub.log('catalog', 'request_created', request.requestId, `${user.email} · ${r.company} · ${total}${belowFloor ? ' · below catalog floor: ' + belowFloor : ''}`);
 

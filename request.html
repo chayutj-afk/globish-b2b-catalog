@@ -27,7 +27,7 @@ main{max-width:980px;margin:0 auto;padding:20px 16px 60px}
 .card h2{font-size:15px;margin-bottom:4px}
 .hint{font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.6}
 .row{display:grid;gap:12px;margin-bottom:12px;grid-template-columns:1fr 1fr}
-.row.c3{grid-template-columns:1fr 1fr 1fr}.row.c4{grid-template-columns:1fr 1.4fr 1.2fr .8fr}
+.row.c3{grid-template-columns:1fr 1fr 1fr}textarea.extra{width:100%;margin-top:6px;padding:6px 8px;border:1.5px solid var(--line2);border-radius:7px;font:inherit;font-size:13px;resize:vertical}.row.c4{grid-template-columns:1fr 1.4fr 1.2fr .8fr}
 .row.c1{grid-template-columns:1fr}
 @media(max-width:680px){.row,.row.c3,.row.c4{grid-template-columns:1fr}}
 .fg label{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px}
@@ -457,6 +457,7 @@ function renderItems() {
       }
       qtyCell = `<input class="r" type="number" min="1" ${inp(i, 'qty', it.qty)}><div class="small">จำนวน</div>`;
     }
+    desc += `<textarea class="extra" rows="2" maxlength="500" placeholder="คำอธิบายเพิ่มเติม (ถ้ามี) เช่น เงื่อนไขพิเศษ ช่วงเวลาเรียน สิ่งที่ตกลงกับลูกค้า — ระบบจะเกลาให้เข้ากับคำอธิบายแพ็กเกจตอนสร้าง QT" data-i="${i}" data-f="extra" oninput="setVal(this)">${esc(it.extra || '')}</textarea>`;
     return `<tr>
       <td>${desc}<div id="lw-${i}"></div></td>
       <td class="num" style="width:90px">${qtyCell}</td>
@@ -777,7 +778,7 @@ function renderPending() {
   $('pend-count').textContent = n; $('pend-count').hidden = !n;
   $('pend-qt-n').textContent = waitQ.length ? `(${waitQ.length})` : '';
   $('pend-inv-n').textContent = waitI.length ? `(${waitI.length})` : '';
-  const lineRows = (q) => (q.lines || []).map((l) => `<tr><td>${esc(l.description).replace(/\n/g, '<br>')}${l.peakServiceCode ? `<div class="small mono">${esc(l.peakServiceCode)}</div>` : '<div class="err-line">ยังไม่มีรหัสบริการ PEAK</div>'}</td><td class="num">${esc(l.qty)}</td><td class="num">${esc(l.unitPrice)}</td><td class="num">${esc(l.discount || '')}</td></tr>`).join('');
+  const lineRows = (q) => (q.lines || []).map((l) => `<tr><td>${esc(l.qtDescription || l.description).replace(/\n/g, '<br>')}${l.salesNote && !l.qtDescription ? `<div class="small" style="margin-top:4px;padding:4px 6px;background:#fff7ed;border-radius:6px">✍️ Sales เขียนเพิ่ม (ระบบจะเกลารวมกับคำอธิบายตอนสร้าง QT): ${esc(l.salesNote)}</div>` : ''}${l.peakServiceCode ? `<div class="small mono">${esc(l.peakServiceCode)}</div>` : '<div class="err-line">ยังไม่มีรหัสบริการ PEAK</div>'}</td><td class="num">${esc(l.qty)}</td><td class="num">${esc(l.unitPrice)}</td><td class="num">${esc(l.discount || '')}</td></tr>`).join('');
   const qCard = (q, fix) => `<div class="list-row">
     <div class="list-head"><div><span class="list-id">${esc(q.company)}</span> · ${esc(q.segment)}</div>${st(QT_ST, q.status)}</div>
     <div class="list-sub">${esc(q.requestId)} · ${esc(q.createdAt)} · โดย ${esc(q.salesName)}${q.opportunityId ? ' · ' + esc(q.opportunityId) : ''}<br>

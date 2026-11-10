@@ -87,3 +87,9 @@ test('Thai tax ID check digit and branch code', () => {
   assert.equal(normBranch('1'), '00001');
   assert.equal(normBranch('สาขาบางนา'), null);
 });
+
+test('hero component comes from the HERO slot, or Business Group Class', () => {
+  assert.equal(p.heroComponent('Speedy English-36-3-X/36-3-0-0-HERO-TRUE-0-0-0-0-0-0-0-0-0-0'), 'Speedy English');
+  assert.equal(p.heroComponent('Business Group Class Online-10-0-Thai/10-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0'), 'Business Group Class');
+  assert.equal(p.heroComponent('Master Class 60 minutes-1-0-X/1-0-0-0-0-0-0-0-0-0-0-0-0-0-HERO-0'), 'Master Class');
+});

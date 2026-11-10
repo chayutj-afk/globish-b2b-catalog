@@ -117,7 +117,8 @@ async function create(req, res, user) {
   let serviceCodeOf = (l) => l.peakCode || '';
   if (peak.mode() !== 'off') {
     const codes = await hub.readServiceCodes();
-    serviceCodeOf = (l) => (l.peakCode ? l.peakCode : l.role === 'supplement' ? codes.byComponent.get(l.component) : l.role === 'hero' ? codes.byKeyHS.get(l.keyHS) : codes.byComponent.get('Surcharge')) || '';
+    // Own code (WH package / PEAK service) → per-package override in Products → per-component code.
+    serviceCodeOf = (l) => l.peakCode || (l.role === 'hero' && codes.byKeyHS.get(l.keyHS)) || codes.byComponent.get(l.component) || '';
     const { missing, body } = peak.buildQuotation({ ...request, wantedQtDate: r.wantedQtDate }, lines, serviceCodeOf, now);
     if (missing.length) {
       peakNote = `ยังสร้างใน PEAK ไม่ได้: ยังไม่มีรหัสบริการ PEAK ของ ${missing.join(', ')}`;

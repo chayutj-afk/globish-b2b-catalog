@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Globish Sales Desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--primary:#E8590C;--ink:#1f2937;--muted:#6b7280;--line:#e5e7eb;--bg:#f8fafc}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:var(--bg);font-family:'Sarabun',system-ui,sans-serif;color:var(--ink)}
+  header{background:#fff;border-bottom:1px solid var(--line);padding:12px 16px}
+  .hdr{max-width:880px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700}
+  .logo{width:34px;height:34px;border-radius:9px;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px}
+  .chip{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+  .chip span{max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .chip button{border:1px solid var(--line);background:#fff;border-radius:7px;padding:5px 10px;font:inherit;font-size:13px;cursor:pointer}
+  main{max-width:880px;margin:0 auto;padding:36px 16px}
+  h1{font-size:22px;margin:0 0 4px}
+  .sub{color:var(--muted);margin:0 0 24px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:640px){.grid{grid-template-columns:1fr}}
+  a.tile{display:block;background:#fff;border:1.5px solid var(--line);border-radius:16px;padding:24px;text-decoration:none;color:inherit;transition:border-color .15s,box-shadow .15s}
+  a.tile:hover{border-color:var(--primary);box-shadow:0 8px 24px rgba(232,89,12,.10)}
+  .ico{font-size:30px;margin-bottom:10px}
+  .tt{font-size:18px;font-weight:700;margin-bottom:6px}
+  .dd{color:var(--muted);font-size:14px;line-height:1.6}
+  .badge{display:inline-block;margin-left:6px;padding:0 7px;border-radius:9px;background:var(--primary);color:#fff;font-size:12px;line-height:20px;vertical-align:2px}
+  .badge[hidden]{display:none}
+</style>
+</head>
+<body>
+<header>
+  <div class="hdr">
+    <div class="brand"><div class="logo">G</div>Globish Sales Desk</div>
+    <div class="chip"><span id="me"></span><button type="button" onclick="signOut()">ออกจากระบบ</button></div>
+  </div>
+</header>
+<main>
+  <h1 id="hello">สวัสดีครับ</h1>
+  <p class="sub">เลือกสิ่งที่ต้องการทำ</p>
+  <div class="grid">
+    <a class="tile" href="/request">
+      <div class="ico">📝</div>
+      <div class="tt">ขอเอกสาร <span class="badge" id="cart" hidden></span></div>
+      <div class="dd">ขอใบเสนอราคา (QT) ขอใบแจ้งหนี้ (INV) และติดตามคำขอของคุณ ใช้ได้ทั้ง B2B, B2E, B2S</div>
+    </a>
+    <a class="tile" href="/catalog">
+      <div class="ico">📋</div>
+      <div class="tt">B2B Standard Catalog</div>
+      <div class="dd">คำนวณราคาแพ็กเกจ B2B ดู Catalog และ Key H.S. แล้วส่งแพ็กเกจเข้าคำขอ QT</div>
+    </a>
+  </div>
+</main>
+<script>
+  fetch('/api/auth/me', { cache: 'no-store' }).then(function (r) {
+    if (r.status === 401) { location.href = '/signin.html?next=/'; return null; }
+    return r.json();
+  }).then(function (d) {
+    if (!d || !d.user) return;
+    document.getElementById('me').textContent = d.user.email;
+    if (d.user.name) document.getElementById('hello').textContent = 'สวัสดีครับ คุณ' + d.user.name.split(' ')[0];
+  }).catch(function () {});
+  try {
+    var n = (JSON.parse(localStorage.getItem('gc_quote_cart_v1') || '[]') || []).length;
+    if (n) { var b = document.getElementById('cart'); b.textContent = n; b.hidden = false; }
+  } catch (e) {}
+  function signOut() {
+    fetch('/api/auth/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' } }).finally(function () { location.href = '/signin.html'; });
+  }
+</script>
+</body>
+</html>

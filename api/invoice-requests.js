@@ -1,24 +1,42 @@
 // /api/invoice-requests
-//   GET  → the signed-in user's invoice requests (Operation sees everyone's), newest first
-//   POST → ask accounting to issue an invoice. Needs evidence that the customer accepted
-//          the quotation: a signed QT, or an equivalent (PO, confirmation email, other),
-//          uploaded as a file or given as a link.
+//   GET   → the signed-in user's invoice requests (Operation sees everyone's), newest first
+//   POST  → ask accounting to issue one or more invoices against a quotation. One QT can
+//           become several INVs: partial billing (customer draws credit over time) or a
+//           different billing entity per INV (e.g. subsidiaries). Needs evidence that the
+//           customer accepted the QT (signed QT, PO, confirmation email, other).
+//   PATCH → follow-ups on one INV: the customer now wants the original document
+//           (sales), or the original has been sent (Operation / accounting).
 
 const crypto = require('crypto');
 const { requireUser, checkOrigin, sendError } = require('../lib/session');
 const hub = require('../lib/hub');
 const drive = require('../lib/drive');
+const notify = require('../lib/notify');
 const { OPP_RE, normaliseOppId } = require('../lib/crm');
+const { validTaxId, normBranch } = require('../lib/taxid');
 
 const EVIDENCE = ['QT ที่ลูกค้าเซ็นแล้ว', 'PO จากลูกค้า', 'อีเมลยืนยันจากลูกค้า', 'อื่นๆ'];
+const ORIGINAL = { no: 'not_needed', yes: 'requested', unknown: 'pending_decision' };
+const MAX_INVOICES = 12;
 const bad = (m, status = 400) => Object.assign(new Error(m), { status });
 const text = (v, max) => String(v ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').trim().slice(0, max);
 const dmy = (s) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ''); return m ? `${m[3]}/${m[2]}/${m[1]}` : ''; };
+const num = (v) => (v === '' || v === undefined || v === null ? '' : Number(String(v).replace(/,/g, '')));
+const money = (n) => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
+const round2 = (n) => Math.round(n * 100) / 100;
 
-function newId(now = new Date()) {
+function newBatchId(now = new Date()) {
   const t = new Date(now.getTime() + 7 * 3600e3);
   const p = (x) => String(x).padStart(2, '0');
   return `INVREQ-${String(t.getUTCFullYear()).slice(2)}${p(t.getUTCMonth() + 1)}${p(t.getUTCDate())}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+}
+
+function checkEntity(e, label) {
+  if (!e.company) throw bad(`${label}: ใส่ชื่อบริษัทตามที่จะออก INV`);
+  if (e.taxId && !validTaxId(e.taxId)) throw bad(`${label}: เลขประจำตัวผู้เสียภาษีไม่ถูกต้อง`);
+  const br = normBranch(e.branch);
+  if (br === null) throw bad(`${label}: สาขาต้องเป็นรหัส 5 หลัก เช่น 00000 (สำนักงานใหญ่)`);
+  e.branch = br;
 }
 
 function validate(b) {
@@ -26,86 +44,184 @@ function validate(b) {
   const r = {
     requestId: text(b.requestId, 40),
     qtNo: text(b.qtNo, 40),
+    opportunityId: normaliseOppId(b.opportunityId),
     company: text(b.company, 200),
     taxId: text(b.taxId, 20).replace(/[\s-]/g, ''),
+    branch: text(b.branch, 20),
     evidenceType: text(b.evidenceType, 40),
     evidenceOther: text(b.evidenceOther, 120),
     evidenceLink: text(b.evidenceLink, 500),
-    wantedIssueDate: text(b.wantedIssueDate, 10),
-    billing: b.billing === 'installment' ? 'Installment' : 'Full',
-    installment: text(b.installment, 20),
-    amountPreVat: b.amountPreVat === '' || b.amountPreVat === undefined ? '' : Number(b.amountPreVat),
-    students: b.students === '' || b.students === undefined ? '' : Math.floor(Number(b.students)),
-    creditTermDays: b.creditTermDays === '' || b.creditTermDays === undefined ? '' : Math.floor(Number(b.creditTermDays)),
-    poNo: text(b.poNo, 60),
     financeContact: text(b.financeContact, 120),
     financeEmail: text(b.financeEmail, 120),
     financePhone: text(b.financePhone, 40),
-    deliveryAddress: text(b.deliveryAddress, 500) || 'ตามที่อยู่บริษัท',
     note: text(b.note, 1000),
-    opportunityId: normaliseOppId(b.opportunityId),
+    overReason: text(b.overReason, 300),
   };
   if (!r.qtNo) throw bad('ใส่เลขที่ใบเสนอราคา (QT) ที่ต้องการออก INV');
-  if (!r.company) throw bad('ใส่ชื่อบริษัท');
   if (r.opportunityId && !OPP_RE.test(r.opportunityId)) throw bad('Opportunity ID ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN');
-  if (r.taxId && !/^\d{13}$/.test(r.taxId)) throw bad('เลขประจำตัวผู้เสียภาษีต้องเป็นตัวเลข 13 หลัก');
+  checkEntity(r, 'ลูกค้าตาม QT');
   if (!EVIDENCE.includes(r.evidenceType)) throw bad('เลือกประเภทหลักฐานที่ลูกค้ายอมรับ');
   if (r.evidenceType === 'อื่นๆ' && !r.evidenceOther) throw bad('ระบุว่าหลักฐานเป็นเอกสารอะไร');
   if (!b.file && !r.evidenceLink) throw bad('แนบไฟล์หลักฐาน หรือใส่ลิงก์ไฟล์ (Google Drive)');
   if (r.evidenceLink && !/^https:\/\/(drive|docs)\.google\.com\//.test(r.evidenceLink)) throw bad('ลิงก์หลักฐานต้องเป็นลิงก์ Google Drive หรือ Google Docs');
-  if (r.wantedIssueDate && !/^\d{4}-\d{2}-\d{2}$/.test(r.wantedIssueDate)) throw bad('วันที่ออก INV ไม่ถูกต้อง');
-  if (r.billing === 'Installment') {
-    if (!r.installment) throw bad('ระบุงวด เช่น 1/2 หรือ 30%');
-    if (!(r.amountPreVat > 0)) throw bad('ระบุยอดก่อน VAT ของงวดนี้');
-  }
-  if (r.amountPreVat !== '' && !(r.amountPreVat >= 0 && r.amountPreVat < 1e9)) throw bad('ยอดก่อน VAT ไม่ถูกต้อง');
-  if (r.students !== '' && !(r.students >= 1 && r.students <= 5000)) throw bad('จำนวนผู้เรียนไม่ถูกต้อง');
-  if (r.creditTermDays !== '' && !(r.creditTermDays >= 0 && r.creditTermDays <= 180)) throw bad('เครดิตเทอมต้องอยู่ระหว่าง 0 ถึง 180 วัน');
   if (r.financeEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r.financeEmail)) throw bad('อีเมลฝ่ายการเงินไม่ถูกต้อง');
-  return r;
+
+  const list = Array.isArray(b.invoices) ? b.invoices : [];
+  if (list.length < 1) throw bad('เพิ่มใบแจ้งหนี้อย่างน้อย 1 ใบ');
+  if (list.length > MAX_INVOICES) throw bad(`ขอได้ไม่เกิน ${MAX_INVOICES} ใบต่อครั้ง`);
+  const invoices = list.map((x, i) => {
+    const label = `INV ใบที่ ${i + 1}`;
+    const same = !x || x.billTo !== 'other';
+    const v = {
+      billTo: same ? 'same' : 'other',
+      company: same ? r.company : text(x.company, 200),
+      taxId: same ? r.taxId : text(x.taxId, 20).replace(/[\s-]/g, ''),
+      branch: same ? r.branch : text(x.branch, 20),
+      relation: same ? '' : text(x.relation, 80),
+      label: text(x && x.label, 40),
+      amountPreVat: num(x && x.amountPreVat),
+      students: num(x && x.students),
+      wantedIssueDate: text(x && x.wantedIssueDate, 10),
+      creditTermDays: num(x && x.creditTermDays),
+      poNo: text(x && x.poNo, 60),
+      originalDoc: Object.prototype.hasOwnProperty.call(ORIGINAL, x && x.originalDoc) ? x.originalDoc : 'unknown',
+      originalRecipient: text(x && x.originalRecipient, 120),
+      originalAddress: text(x && x.originalAddress, 500),
+      note: text(x && x.note, 500),
+    };
+    if (!same) checkEntity(v, label);
+    if (!same && !v.relation) throw bad(`${label}: ระบุความสัมพันธ์กับลูกค้าตาม QT เช่น บริษัทลูก`);
+    if (!(v.amountPreVat > 0 && v.amountPreVat < 1e9)) throw bad(`${label}: ใส่ยอดก่อน VAT`);
+    v.amountPreVat = round2(v.amountPreVat);
+    if (v.students !== '' && !(Number.isInteger(v.students) && v.students >= 1 && v.students <= 5000)) throw bad(`${label}: จำนวนผู้เรียนไม่ถูกต้อง`);
+    if (v.wantedIssueDate && !/^\d{4}-\d{2}-\d{2}$/.test(v.wantedIssueDate)) throw bad(`${label}: วันที่ออก INV ไม่ถูกต้อง`);
+    if (v.creditTermDays !== '' && !(Number.isInteger(v.creditTermDays) && v.creditTermDays >= 0 && v.creditTermDays <= 180)) throw bad(`${label}: เครดิตเทอมต้องอยู่ระหว่าง 0 ถึง 180 วัน`);
+    if (v.originalDoc === 'yes' && !v.originalAddress) throw bad(`${label}: ใส่ที่อยู่สำหรับส่งเอกสารตัวจริง`);
+    return v;
+  });
+  return { r, invoices };
+}
+
+// Pre-VAT amount already requested against a QT (rejected requests don't count).
+function alreadyInvoiced(rows, { requestId, qtNo }) {
+  return round2(rows
+    .filter((x) => x.status !== 'rejected' && ((requestId && x.requestId === requestId) || (!requestId && qtNo && x.qtNo === qtNo)))
+    .reduce((s, x) => s + (Number(String(x.amountPreVat).replace(/,/g, '')) || 0), 0));
 }
 
 async function create(req, res, user) {
   checkOrigin(req);
   const b = req.body || {};
-  const r = validate(b);
+  const { r, invoices } = validate(b);
 
-  // A linked catalog request must be one this user may see.
+  const [requests, existing] = await Promise.all([r.requestId ? hub.readTable('Requests') : [], hub.readTable('InvoiceRequests')]);
   let linked = null;
   if (r.requestId) {
-    const rows = await hub.readTable('Requests');
-    linked = rows.find((x) => x.requestId === r.requestId);
+    linked = requests.find((x) => x.requestId === r.requestId);
     if (!linked || (user.role !== 'op' && linked.requestedBy !== user.email)) throw bad('ไม่พบคำขอใบเสนอราคาที่เลือก');
     if (!r.opportunityId) r.opportunityId = linked.opportunityId || '';
   }
 
+  // Balance check: never silently bill more than the QT.
+  const prior = alreadyInvoiced(existing, r);
+  const asked = round2(invoices.reduce((s, v) => s + v.amountPreVat, 0));
+  const qtTotal = linked ? Number(String(linked.totalPreVat).replace(/,/g, '')) || 0 : 0;
+  const over = linked && qtTotal > 0 && prior + asked > qtTotal + 0.01;
+  if (over && !r.overReason) {
+    throw bad(`ยอดรวม INV (${money(prior + asked)}) เกินยอด QT (${money(qtTotal)}) ใส่เหตุผลก่อนส่ง หรือแก้ยอด`);
+  }
+
   const now = new Date();
-  const ivRequestId = newId(now);
+  const at = hub.sheetDateTime(now);
+  const batchId = newBatchId(now);
   let evidenceLink = r.evidenceLink;
   if (b.file) {
     if (!drive.enabled()) throw bad('ยังอัปโหลดไฟล์ไม่ได้ ใส่ลิงก์ Google Drive ของไฟล์แทน');
-    evidenceLink = await drive.upload(b.file, `${ivRequestId} ${r.qtNo} ${r.company}`.slice(0, 120));
+    evidenceLink = await drive.upload(b.file, `${batchId} ${r.qtNo} ${r.company}`.slice(0, 120));
   }
+  const evidenceType = r.evidenceType === 'อื่นๆ' ? `อื่นๆ: ${r.evidenceOther}` : r.evidenceType;
+  const partial = invoices.length > 1 || prior > 0 || (qtTotal > 0 && Math.abs(asked - qtTotal) > 0.01);
 
-  const row = {
-    ivRequestId, createdAt: hub.sheetDateTime(now), requestedBy: user.email, salesName: user.name,
-    requestId: r.requestId, qtNo: r.qtNo, company: r.company, taxId: r.taxId,
-    evidenceType: r.evidenceType === 'อื่นๆ' ? `อื่นๆ: ${r.evidenceOther}` : r.evidenceType, evidenceLink,
-    wantedIssueDate: dmy(r.wantedIssueDate), billing: r.billing, installment: r.billing === 'Installment' ? r.installment : '',
-    amountPreVat: r.amountPreVat, students: r.students, creditTermDays: r.creditTermDays, poNo: r.poNo,
+  const rows = invoices.map((v, i) => ({
+    ivRequestId: `${batchId}-${i + 1}`, createdAt: at, requestedBy: user.email, salesName: user.name,
+    requestId: r.requestId, qtNo: r.qtNo, company: v.company, taxId: v.taxId,
+    evidenceType, evidenceLink, wantedIssueDate: dmy(v.wantedIssueDate),
+    billing: partial ? 'Partial' : 'Full', installment: v.label || (invoices.length > 1 ? `${i + 1}/${invoices.length}` : ''),
+    amountPreVat: v.amountPreVat, students: v.students, creditTermDays: v.creditTermDays, poNo: v.poNo,
     financeContact: r.financeContact, financeEmail: r.financeEmail, financePhone: r.financePhone,
-    deliveryAddress: r.deliveryAddress, note: r.note, status: 'new', peakIvNo: '', updatedAt: hub.sheetDateTime(now),
-    opportunityId: r.opportunityId,
-  };
-  await hub.appendRows('InvoiceRequests', [row]);
+    deliveryAddress: v.originalAddress, note: [v.note, r.note].filter(Boolean).join(' · '),
+    status: 'new', peakIvNo: '', updatedAt: at, opportunityId: r.opportunityId,
+    batchId, branch: v.branch, billToRelation: v.billTo === 'other' ? v.relation : '',
+    originalDoc: v.originalDoc, originalStatus: ORIGINAL[v.originalDoc], originalRecipient: v.originalRecipient,
+    originalAddress: v.originalAddress, originalRequestedAt: v.originalDoc === 'yes' ? at : '', originalSentAt: '', trackingNo: '',
+    overReason: over ? r.overReason : '',
+  }));
+  await hub.appendRows('InvoiceRequests', rows);
+
   if (linked) {
     await hub.updateRow('Requests', linked._row, {
-      status: 'iv_requested', ivRequestedAt: row.createdAt, updatedAt: row.createdAt,
+      status: 'iv_requested', ivRequestedAt: linked.ivRequestedAt || at, updatedAt: at,
       peakQtNo: linked.peakQtNo || r.qtNo,
     });
   }
-  await hub.log('catalog', 'invoice_requested', ivRequestId, `${user.email} · ${r.qtNo} · ${r.company}${r.opportunityId ? ' · ' + r.opportunityId : ''}`);
-  res.status(200).json({ ok: true, ivRequestId, evidenceLink, message: 'ส่งคำขอออก INV แล้ว ฝ่ายบัญชีจะตรวจหลักฐานและออกเอกสารใน PEAK' });
+  const remaining = qtTotal > 0 ? round2(qtTotal - prior - asked) : null;
+  await hub.log('catalog', 'invoice_requested', batchId,
+    `${user.email} · ${r.qtNo} · ${rows.length} INV · ${asked}${over ? ' · over QT: ' + r.overReason : ''}`);
+
+  const entities = [...new Set(rows.map((x) => x.company))];
+  const originals = rows.filter((x) => x.originalDoc === 'yes').length;
+  await notify.chat([
+    `🧾 ขอออก INV ใหม่ ${batchId} จาก ${user.name || user.email}`,
+    `QT ${r.qtNo} · ${rows.length} ใบ · รวมก่อน VAT ${money(asked)}${remaining !== null ? ` · คงเหลือ ${money(remaining)}` : ''}`,
+    `ออกในนาม: ${entities.join(', ')}`,
+    originals ? `📮 ต้องส่งตัวจริง ${originals} ใบ` : '',
+    over ? `⚠️ เกินยอด QT: ${r.overReason}` : '',
+  ].filter(Boolean).join('\n'));
+
+  res.status(200).json({
+    ok: true, batchId, ivRequestIds: rows.map((x) => x.ivRequestId), evidenceLink, asked, remaining,
+    message: `ส่งคำขอออก INV ${rows.length} ใบแล้ว ฝ่ายบัญชีจะตรวจหลักฐานและออกเอกสารใน PEAK`,
+  });
+}
+
+// PATCH { ivRequestId, action: 'original', originalDoc: 'yes'|'no', recipient?, address? }  (owner or op)
+//       { ivRequestId, action: 'original_sent', trackingNo? }                                (op only)
+async function update(req, res, user) {
+  checkOrigin(req);
+  const b = req.body || {};
+  const id = text(b.ivRequestId, 60);
+  const rows = await hub.readTable('InvoiceRequests');
+  const row = rows.find((x) => x.ivRequestId === id);
+  if (!row || (user.role !== 'op' && row.requestedBy !== user.email)) throw bad('ไม่พบคำขอ INV นี้', 404);
+  const at = hub.sheetDateTime();
+
+  if (b.action === 'original') {
+    const want = b.originalDoc === 'no' ? 'no' : 'yes';
+    if (row.originalStatus === 'sent') throw bad('ส่งตัวจริงไปแล้ว');
+    const address = text(b.address, 500) || row.originalAddress;
+    const recipient = text(b.recipient, 120) || row.originalRecipient;
+    if (want === 'yes' && !address) throw bad('ใส่ที่อยู่สำหรับส่งเอกสารตัวจริง');
+    await hub.updateRow('InvoiceRequests', row._row, {
+      originalDoc: want, originalStatus: ORIGINAL[want], originalRecipient: recipient, originalAddress: address,
+      deliveryAddress: address, originalRequestedAt: want === 'yes' ? at : '', updatedAt: at,
+    });
+    await hub.log('catalog', want === 'yes' ? 'original_requested' : 'original_not_needed', id, user.email);
+    if (want === 'yes') {
+      await notify.chat(`📮 ลูกค้าขอเอกสารตัวจริง ${id}\n${row.company} · QT ${row.qtNo}${row.peakIvNo ? ' · ' + row.peakIvNo : ''}\nส่งถึง: ${recipient ? recipient + ' · ' : ''}${address}\nแจ้งโดย ${user.name || user.email}`);
+    }
+    return res.status(200).json({ ok: true, originalStatus: ORIGINAL[want] });
+  }
+
+  if (b.action === 'original_sent') {
+    if (user.role !== 'op') throw bad('เฉพาะฝ่ายบัญชี / Operation', 403);
+    const trackingNo = text(b.trackingNo, 60);
+    await hub.updateRow('InvoiceRequests', row._row, { originalStatus: 'sent', originalSentAt: at, trackingNo, updatedAt: at });
+    await hub.log('catalog', 'original_sent', id, `${user.email}${trackingNo ? ' · ' + trackingNo : ''}`);
+    await notify.chat(`✅ ส่งเอกสารตัวจริงแล้ว ${id} · ${row.company}${trackingNo ? ' · เลขพัสดุ ' + trackingNo : ''} (แจ้ง ${row.salesName || row.requestedBy})`);
+    return res.status(200).json({ ok: true, originalStatus: 'sent' });
+  }
+
+  throw bad('คำสั่งไม่ถูกต้อง');
 }
 
 async function list(req, res, user) {
@@ -113,7 +229,7 @@ async function list(req, res, user) {
   const out = rows
     .filter((r) => user.role === 'op' || r.requestedBy === user.email)
     .reverse()
-    .slice(0, 50)
+    .slice(0, 100)
     .map(({ _row, ...r }) => r);
   res.status(200).json({ ok: true, uploads: drive.enabled(), requests: out });
 }
@@ -123,6 +239,7 @@ module.exports = async function handler(req, res) {
   try {
     const user = requireUser(req);
     if (req.method === 'POST') return await create(req, res, user);
+    if (req.method === 'PATCH') return await update(req, res, user);
     if (req.method === 'GET') return await list(req, res, user);
     res.status(405).json({ ok: false, error: 'Method not allowed' });
   } catch (e) {
@@ -130,4 +247,4 @@ module.exports = async function handler(req, res) {
   }
 };
 
-module.exports._test = { validate };
+module.exports._test = { validate, alreadyInvoiced };

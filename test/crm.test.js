@@ -10,17 +10,20 @@ test('Opportunity ID is normalised from typed text or a pasted CRM link', () => 
   assert.ok(!OPP_RE.test(normaliseOppId('OPP-123')));
 });
 
-const qt = { segment: 'B2B', dealType: 'Retention', company: 'Co', taxId: '0105555555555', docLang: 'TH', items: [{ packageId: 'SPD-03-36', students: 10 }] };
+const qt = { segment: 'B2B', dealType: 'Retention', company: 'Co', taxId: '0105555555554', docLang: 'TH', items: [{ packageId: 'SPD-03-36', students: 10 }] };
+const svc = [{ kind: 'service', code: '3822', name: 'Essential', qty: 5, unitPrice: 15900 }];
 
-test('B2B QT requests need an Opportunity ID; other segments may leave it blank', () => {
+test('B2B and B2E need an Opportunity ID; B2S never carries one', () => {
   assert.throws(() => validate(qt), /Opportunity ID/);
   assert.equal(validate({ ...qt, opportunityId: 'crm-opp-2026-00001' }).r.opportunityId, 'CRM-OPP-2026-00001');
-  assert.ok(validate({ ...qt, segment: 'B2E' }));
-  assert.throws(() => validate({ ...qt, segment: 'B2E', opportunityId: 'nope' }), /รูปแบบ/);
+  assert.throws(() => validate({ ...qt, segment: 'B2E', items: svc }), /Opportunity ID/);
+  assert.throws(() => validate({ ...qt, segment: 'B2E', items: svc, opportunityId: 'nope' }), /รูปแบบ/);
+  assert.equal(validate({ ...qt, segment: 'B2S', items: svc, opportunityId: 'CRM-OPP-2026-00001' }).r.opportunityId, '');
+  assert.ok(validate({ ...qt, segment: 'Others', items: svc }));
 });
 
 test('INV requests accept an optional, well-formed Opportunity ID', () => {
-  const base = { qtNo: 'QO-1', company: 'Co', evidenceType: 'PO จากลูกค้า', evidenceLink: 'https://drive.google.com/x' };
-  assert.equal(inv.validate(base).opportunityId, '');
+  const base = { qtNo: 'QO-1', company: 'Co', evidenceType: 'PO จากลูกค้า', evidenceLink: 'https://drive.google.com/x', invoices: [{ amountPreVat: 100 }] };
+  assert.equal(inv.validate(base).r.opportunityId, '');
   assert.throws(() => inv.validate({ ...base, opportunityId: 'x' }), /รูปแบบ/);
 });

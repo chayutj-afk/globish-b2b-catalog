@@ -1,6 +1,8 @@
 {
   "rewrites": [
-    { "source": "/", "destination": "/2026B2BStandardCatalog.html" }
+    { "source": "/", "destination": "/home.html" },
+    { "source": "/catalog", "destination": "/2026B2BStandardCatalog.html" },
+    { "source": "/request", "destination": "/request.html" }
   ],
   "functions": {
     "api/invoice-requests.js": { "maxDuration": 30 }

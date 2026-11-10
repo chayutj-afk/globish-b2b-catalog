@@ -34,7 +34,8 @@ http.createServer(async (req, res) => {
     const r = await middleware(new Request(url, { headers: { cookie: req.headers.cookie || '' } }));
     if (r) { res.writeHead(r.status, { Location: r.headers.get('location') }); return res.end(); }
   }
-  let p = url.pathname === '/' ? '/2026B2BStandardCatalog.html' : url.pathname;
+  const REWRITES = { '/': '/home.html', '/catalog': '/2026B2BStandardCatalog.html', '/request': '/request.html' };
+  let p = REWRITES[url.pathname] || url.pathname;
   const file = path.join(root, p);
   if (!file.startsWith(root) || !fs.existsSync(file)) { res.statusCode = 404; return res.end('not found'); }
   res.setHeader('Content-Type', TYPES[path.extname(file)] || 'application/octet-stream');

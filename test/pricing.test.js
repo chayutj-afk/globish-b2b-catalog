@@ -58,3 +58,32 @@ test('PEAK signature is HMAC-SHA1 hex of the UTC timestamp', () => {
   assert.equal(peak.stamp(new Date(Date.UTC(2016, 7, 30, 7, 26, 30))), '20160830072630');
   assert.match(peak.signature('20160830072630', 'abc'), /^[0-9a-f]{40}$/);
 });
+
+const { priceCustomKeyHS, priceService } = require('../lib/pricing');
+const { validTaxId, normBranch } = require('../lib/taxid');
+
+test('customized Key H.S.: full price on the hero line, supplements at 0', () => {
+  const p = priceCustomKeyHS({ keyHS: 'Private Class-24-4-Native/24-4-HERO-6-12-TRUE-0-0-0-0-0-0-0-0-0-0', name: 'PTT custom', qty: 10, unitPrice: 20000, discount: '5%' });
+  assert.equal(p.lines[0].role, 'hero');
+  assert.equal(p.lines[0].unitPrice, 20000);
+  assert.ok(p.lines.slice(1).every((l) => l.unitPrice === 0));
+  assert.equal(p.total, 190000);
+  assert.throws(() => priceCustomKeyHS({ keyHS: 'nope', qty: 1, unitPrice: 1 }), /Key H.S./);
+});
+
+test('Whitehouse package lines carry the package ID as the PEAK service code', () => {
+  const p = priceService({ code: '3822', name: 'Essential Communication Development', qty: 3, unitPrice: 15900 });
+  assert.equal(p.lines[0].role, 'wh_package');
+  assert.equal(p.lines[0].peakCode, '3822');
+  assert.equal(p.total, 47700);
+  assert.equal(priceService({ code: 'b2scamp001', name: 'Camp', qty: 1, unitPrice: 800 }).lines[0].peakCode, 'B2SCAMP001');
+  assert.throws(() => priceService({ code: '3822', name: 'x', qty: 1 }), /ราคา/);
+});
+
+test('Thai tax ID check digit and branch code', () => {
+  assert.ok(validTaxId('0105555555554'));
+  assert.ok(!validTaxId('0105555555555'));
+  assert.equal(normBranch(''), '00000');
+  assert.equal(normBranch('1'), '00001');
+  assert.equal(normBranch('สาขาบางนา'), null);
+});

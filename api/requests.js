@@ -5,7 +5,8 @@
 
 const crypto = require('crypto');
 const { requireUser, checkOrigin, sendError } = require('../lib/session');
-const { priceItem } = require('../lib/pricing');
+const { priceItem, priceCustomKeyHS, priceService } = require('../lib/pricing');
+const { validTaxId, normBranch } = require('../lib/taxid');
 const hub = require('../lib/hub');
 const peak = require('../lib/peak');
 const { OPP_RE, normaliseOppId } = require('../lib/crm');
@@ -13,6 +14,12 @@ const { OPP_RE, normaliseOppId } = require('../lib/crm');
 const SEGMENTS = ['B2B', 'B2S', 'B2E', 'Others'];
 const DEAL_TYPES = ['New Logo', 'Retention', 'Others'];
 const LIMIT_PER_HOUR = 30;
+// Which segments carry a CRM Opportunity ID: B2B and B2E always, B2S never.
+const OPP_REQUIRED = ['B2B', 'B2E'];
+const OPP_NONE = ['B2S'];
+// Line kinds a segment may use. catalog = B2B Standard Catalog package, keyhs = customized
+// B2B package with its own Key H.S., service = Whitehouse Package ID or PEAK service code.
+const KINDS = { B2B: ['catalog', 'keyhs'], B2E: ['service'], B2S: ['service'], Others: ['catalog', 'keyhs', 'service'] };
 
 const bad = (m, status = 400) => Object.assign(new Error(m), { status });
 const text = (v, max) => String(v ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').trim().slice(0, max);
@@ -41,17 +48,29 @@ function validate(b) {
   };
   if (!SEGMENTS.includes(r.segment)) throw bad('เลือกกลุ่มลูกค้า (B2B / B2S / B2E / Others)');
   if (!DEAL_TYPES.includes(r.dealType)) throw bad('เลือกประเภทดีล (New Logo / Retention / Others)');
+  if (OPP_NONE.includes(r.segment)) r.opportunityId = '';
   if (r.opportunityId && !OPP_RE.test(r.opportunityId)) throw bad('Opportunity ID ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN');
-  if (r.segment === 'B2B' && !r.opportunityId) throw bad('ใส่ Opportunity ID จาก CRM (CRM-OPP-YYYY-NNNNN) สำหรับลูกค้า B2B');
+  if (OPP_REQUIRED.includes(r.segment) && !r.opportunityId) throw bad(`ใส่ Opportunity ID จาก CRM (CRM-OPP-YYYY-NNNNN) สำหรับลูกค้า ${r.segment}`);
   if (!r.company) throw bad('กรอกชื่อบริษัทหรือหน่วยงาน');
   if (!r.clientCode && !/^\d{13}$/.test(r.taxId)) throw bad('เลขประจำตัวผู้เสียภาษีต้องเป็นตัวเลข 13 หลัก (หรือใส่รหัสลูกค้าใน PEAK)');
-  if (r.taxId && !/^\d{13}$/.test(r.taxId)) throw bad('เลขประจำตัวผู้เสียภาษีต้องเป็นตัวเลข 13 หลัก');
+  if (r.taxId && !validTaxId(r.taxId)) throw bad('เลขประจำตัวผู้เสียภาษีไม่ถูกต้อง (เลขตรวจสอบหลักสุดท้ายไม่ตรง) ตรวจเลขอีกครั้ง');
+  const br = normBranch(r.branch);
+  if (br === null) throw bad('สาขาต้องเป็นรหัส 5 หลัก เช่น 00000 (สำนักงานใหญ่) หรือ 00001');
+  r.branch = br;
   if (!['TH', 'EN'].includes(r.docLang)) throw bad('เลือกภาษาเอกสาร (TH / EN)');
   if (r.wantedQtDate && !/^\d{4}-\d{2}-\d{2}$/.test(r.wantedQtDate)) throw bad('วันที่ใบเสนอราคาไม่ถูกต้อง');
   if (r.creditTermDays !== '' && (!Number.isFinite(r.creditTermDays) || r.creditTermDays < 0 || r.creditTermDays > 180)) throw bad('เครดิตเทอมต้องอยู่ระหว่าง 0 ถึง 180 วัน');
   const items = Array.isArray(b.items) ? b.items : [];
   if (items.length < 1) throw bad('ยังไม่มีแพ็กเกจในคำขอ');
   if (items.length > 20) throw bad('ใส่แพ็กเกจได้ไม่เกิน 20 รายการต่อคำขอ');
+  for (const it of items) {
+    const kind = (it && it.kind) || 'catalog';
+    if (!KINDS[r.segment].includes(kind)) {
+      throw bad(kind === 'service'
+        ? `ลูกค้า ${r.segment} ใช้แพ็กเกจจาก Catalog หรือ Key H.S. เท่านั้น`
+        : `ลูกค้า ${r.segment} ใช้ Package ID ของ Whitehouse หรือรหัสบริการใน PEAK`);
+    }
+  }
   return { r, items };
 }
 
@@ -70,10 +89,15 @@ async function create(req, res, user) {
   const recent = existing.filter((x) => x.requestedBy === user.email && (parseSheetDate(x.createdAt) || 0) > hourAgo).length;
   if (recent >= LIMIT_PER_HOUR) throw bad(`ส่งคำขอได้ไม่เกิน ${LIMIT_PER_HOUR} ครั้งต่อชั่วโมง`, 429);
 
-  const priced = items.map((it) => priceItem({
-    packageId: text(it.packageId, 60), students: it.students, classes: it.classes,
-    unitPrice: it.unitPrice, discount: it.discount, intl: it.intl, loc: it.loc,
-  }));
+  const priced = items.map((it) => {
+    const kind = it.kind || 'catalog';
+    if (kind === 'keyhs') return priceCustomKeyHS({ keyHS: it.keyHS, name: it.name, qty: it.qty, unitPrice: it.unitPrice, discount: it.discount });
+    if (kind === 'service') return priceService({ code: it.code, name: it.name, qty: it.qty, unitPrice: it.unitPrice, discount: it.discount });
+    return priceItem({
+      packageId: text(it.packageId, 60), students: it.students, classes: it.classes,
+      unitPrice: it.unitPrice, discount: it.discount, intl: it.intl, loc: it.loc,
+    });
+  });
   const lines = priced.flatMap((p) => p.lines);
   const total = Math.round(priced.reduce((s, p) => s + p.total, 0) * 100) / 100;
   const catalogTotal = priced.reduce((s, p) => s + p.catalogTotal, 0);
@@ -89,10 +113,11 @@ async function create(req, res, user) {
 
   // PEAK Draft quotation (only when PEAK_MODE is uat/prod and every line has a service code).
   let peakNote = 'PEAK ยังไม่เปิดใช้ คำขอรอฝ่ายบัญชีออกใบเสนอราคา';
-  let serviceCodeOf = () => '';
+  // WH packages and PEAK services carry their own code; catalog lines map through Products.
+  let serviceCodeOf = (l) => l.peakCode || '';
   if (peak.mode() !== 'off') {
     const codes = await hub.readServiceCodes();
-    serviceCodeOf = (l) => (l.role === 'supplement' ? codes.byComponent.get(l.component) : l.role === 'hero' ? codes.byKeyHS.get(l.keyHS) : codes.byComponent.get('Surcharge')) || '';
+    serviceCodeOf = (l) => (l.peakCode ? l.peakCode : l.role === 'supplement' ? codes.byComponent.get(l.component) : l.role === 'hero' ? codes.byKeyHS.get(l.keyHS) : codes.byComponent.get('Surcharge')) || '';
     const { missing, body } = peak.buildQuotation({ ...request, wantedQtDate: r.wantedQtDate }, lines, serviceCodeOf, now);
     if (missing.length) {
       peakNote = `ยังสร้างใน PEAK ไม่ได้: ยังไม่มีรหัสบริการ PEAK ของ ${missing.join(', ')}`;
@@ -130,7 +155,9 @@ function parseSheetDate(s) {
 }
 
 async function list(req, res, user) {
-  const [rows, lines] = await Promise.all([hub.readTable('Requests'), hub.readTable('RequestLines')]);
+  const [rows, lines, ivs] = await Promise.all([hub.readTable('Requests'), hub.readTable('RequestLines'), hub.readTable('InvoiceRequests')]);
+  const invoiced = {};
+  ivs.filter((v) => v.requestId && v.status !== 'rejected').forEach((v) => { invoiced[v.requestId] = (invoiced[v.requestId] || 0) + (Number(String(v.amountPreVat).replace(/,/g, '')) || 0); });
   const mine = rows
     .filter((r) => user.role === 'op' || r.requestedBy === user.email)
     .map((r) => ({ ...r, _createdMs: parseSheetDate(r.createdAt) }))
@@ -141,7 +168,7 @@ async function list(req, res, user) {
   lines.filter((l) => ids.has(l.requestId)).forEach((l) => { (byId[l.requestId] = byId[l.requestId] || []).push(l); });
   res.status(200).json({
     ok: true,
-    requests: mine.map(({ _row, _createdMs, ...r }) => ({ ...r, lines: (byId[r.requestId] || []).map(({ _row: _, ...l }) => l) })),
+    requests: mine.map(({ _row, _createdMs, ...r }) => ({ ...r, invoicedPreVat: Math.round((invoiced[r.requestId] || 0) * 100) / 100, lines: (byId[r.requestId] || []).map(({ _row: _, ...l }) => l) })),
   });
 }
 
@@ -157,4 +184,4 @@ module.exports = async function handler(req, res) {
   }
 };
 
-module.exports._test = { validate, newId, parseSheetDate };
+module.exports._test = { validate, newId, parseSheetDate, KINDS };

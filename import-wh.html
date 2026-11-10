@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>นำเข้าแพ็กเกจ Whitehouse</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--primary:#E8590C;--ink:#1f2937;--muted:#6b7280;--line:#e5e7eb;--bg:#f8fafc}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);font-family:'Sarabun',system-ui,sans-serif;color:var(--ink)}
+  main{max-width:760px;margin:0 auto;padding:28px 16px}
+  a{color:var(--primary)}
+  h1{font-size:21px;margin:0 0 6px}
+  .sub{color:var(--muted);font-size:14px;line-height:1.6}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px;margin-top:16px}
+  .msg{margin-top:12px;padding:10px 12px;border-radius:9px;font-size:14px}
+  .msg.ok{background:#f0fdf4;color:#166534;border:1px solid #86efac}
+  .msg.err{background:#fef2f2;color:#991b1b;border:1px solid #fca5a5}
+  .msg.info{background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe}
+</style>
+</head>
+<body>
+<main>
+  <p class="sub"><a href="/">← เมนู</a></p>
+  <h1>นำเข้าแพ็กเกจจาก Whitehouse</h1>
+  <p class="sub">อัปเดตแท็บ WHPackages ใน Revenue Hub (จำนวนคลาส ระยะเวลา และสิ่งที่รวมในแต่ละแพ็กเกจ) ระบบใช้ข้อมูลนี้เขียนคำอธิบายรายการใน QT / INV ของแพ็กเกจ Whitehouse ให้ลูกค้าอ่านเข้าใจ หน้านี้รับข้อมูลที่ส่งมาจากแท็บ Whitehouse เท่านั้น (ให้ Claude ช่วยดึงให้)</p>
+  <div class="card"><div id="status"><div class="msg info">รอข้อมูลจากแท็บ Whitehouse…</div></div></div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const say = (cls, text) => { $('status').innerHTML = ''; const d = document.createElement('div'); d.className = 'msg ' + cls; d.textContent = text; $('status').appendChild(d); };
+const WH = 'https://whitehouse-app.globish.co.th';
+let busy = false;
+window.addEventListener('message', async (ev) => {
+  if (ev.origin !== WH) return;
+  const d = ev.data || {};
+  if (d.type !== 'wh-packages' || !Array.isArray(d.rows) || busy) return;
+  busy = true;
+  say('info', `ได้รับ ${d.rows.length.toLocaleString('th-TH')} แพ็กเกจ กำลังบันทึก…`);
+  try {
+    const r = await fetch('/api/wh-packages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rows: d.rows }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.ok) throw new Error(j.error || 'HTTP ' + r.status);
+    say('ok', `บันทึกแล้ว ${j.written.toLocaleString('th-TH')} แพ็กเกจ ลงแท็บ WHPackages`);
+    try { ev.source.postMessage({ type: 'wh-packages-done', written: j.written }, WH); } catch (e) {}
+  } catch (e) {
+    say('err', 'นำเข้าไม่สำเร็จ: ' + e.message);
+    try { ev.source.postMessage({ type: 'wh-packages-error', error: e.message }, WH); } catch (x) {}
+  } finally { busy = false; }
+});
+if (window.opener) try { window.opener.postMessage({ type: 'import-wh-ready' }, WH); } catch (e) {}
+fetch('/api/auth/me', { cache: 'no-store' }).then((r) => {
+  if (r.status === 401) location.href = '/signin.html?next=/import-wh';
+  return r.json();
+}).then((d) => {
+  if (d && d.user && d.user.role !== 'op') say('err', 'หน้านี้สำหรับฝ่ายบัญชี / Admin เท่านั้น');
+}).catch(() => {});
+</script>
+</body>
+</html>

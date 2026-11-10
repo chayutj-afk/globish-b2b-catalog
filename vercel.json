@@ -19,6 +19,10 @@
     {
       "source": "/users",
       "destination": "/users.html"
+    },
+    {
+      "source": "/import-wh",
+      "destination": "/import-wh.html"
     }
   ],
   "functions": {
@@ -30,6 +34,9 @@
     },
     "api/catalog.js": {
       "includeFiles": "2026B2BStandardCatalog.html"
+    },
+    "api/wh-packages.js": {
+      "maxDuration": 30
     }
   }
 }

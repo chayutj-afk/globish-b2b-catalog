@@ -63,6 +63,11 @@
       <div class="tt">นำเข้ารายชื่อลูกค้า PEAK</div>
       <div class="dd">สำหรับฝ่ายบัญชี: อัปเดตแท็บ PeakContacts จากไฟล์ export ของ PEAK ให้ฟอร์มเติมรหัสลูกค้าจากเลขภาษีได้</div>
     </a>
+    <a class="tile" href="/import-wh" id="op-wh" hidden>
+      <div class="ico">📦</div>
+      <div class="tt">แพ็กเกจ Whitehouse</div>
+      <div class="dd">สำหรับฝ่ายบัญชี: ข้อมูลแพ็กเกจ WH (จำนวนคลาส ระยะเวลา สิ่งที่รวม) ที่ใช้เขียนคำอธิบายใน QT / INV</div>
+    </a>
   </div>
 </main>
 <script>
@@ -72,7 +77,7 @@
   }).then(function (d) {
     if (!d || !d.user) return;
     document.getElementById('me').textContent = d.user.email;
-    if (d.user.role === 'op') document.getElementById('op-import').hidden = false;
+    if (d.user.role === 'op') { document.getElementById('op-import').hidden = false; document.getElementById('op-wh').hidden = false; }
     if (d.user.catalog === false) document.getElementById('tile-catalog').hidden = true;
     if (d.user.admin) document.getElementById('admin-users').hidden = false;
     if (d.user.name) document.getElementById('hello').textContent = 'สวัสดีครับ คุณ' + d.user.name.split(' ')[0];

@@ -107,6 +107,10 @@ async function create(req, res, user) {
       it.code = code;
       it.name = s.name;
     }
+    // Customer-readable description from the Whitehouse package details (WHPackages tab, imported on /import-wh).
+    let wh = new Map();
+    try { wh = new Map((await hub.readTable('WHPackages')).map((x) => [String(x.id), x])); } catch (e) { console.error('WHPackages read failed', e); }
+    for (const it of items.filter((x) => x.kind === 'service')) it.wh = wh.get(it.code.replace(/_.*$/, '')) || null;
   }
 
   const priced = items.map((it) => {
@@ -114,7 +118,7 @@ async function create(req, res, user) {
     const lang = r.docLang;
     if (kind === 'keyhs') return priceCustomKeyHS({ keyHS: it.keyHS, name: it.name, qty: it.qty, unitPrice: it.unitPrice, discount: it.discount, lang });
     if (kind === 'surcharge') return priceSurcharge({ type: it.type, note: it.note, qty: it.qty, unitPrice: it.unitPrice, discount: it.discount, lang });
-    if (kind === 'service') return priceService({ code: it.code, name: it.name, qty: it.qty, unitPrice: it.unitPrice, discount: it.discount });
+    if (kind === 'service') return priceService({ code: it.code, name: it.name, qty: it.qty, unitPrice: it.unitPrice, discount: it.discount, wh: it.wh, lang });
     return priceItem({
       packageId: text(it.packageId, 60), students: it.students, classes: it.classes,
       unitPrice: it.unitPrice, discount: it.discount, intl: it.intl, loc: it.loc, lang,

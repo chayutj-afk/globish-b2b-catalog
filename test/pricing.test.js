@@ -104,3 +104,18 @@ test('hero component comes from the HERO slot, or Business Group Class', () => {
   assert.equal(p.heroComponent('Business Group Class Online-10-0-Thai/10-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0'), 'Business Group Class');
   assert.equal(p.heroComponent('Master Class 60 minutes-1-0-X/1-0-0-0-0-0-0-0-0-0-0-0-0-0-HERO-0'), 'Master Class');
 });
+
+test('Whitehouse package lines get a customer-readable description from WHPackages', () => {
+  const { priceService, describeWh } = require('../lib/pricing');
+  const wh = { id: '3822', packageName: 'Essential Communication Development', product: 'Build Up', privateClass: '12', freeTalk: '3', discussion: '2', realwork: '0', months: '3', extras: 'MC' };
+  const th = describeWh(wh, { title: 'Essential Communication Development', code: '3822' });
+  assert.match(th, /^Essential Communication Development \(3822\)/);
+  assert.match(th, /หลักสูตร Build Up · ระยะเวลาเรียน 3 เดือน/);
+  assert.match(th, /คลาสเรียนส่วนตัว 1:1 \(Private Class\) 12 ครั้ง/);
+  assert.match(th, /Master Class/);
+  assert.doesNotMatch(th, /Real-world/);
+  assert.match(describeWh({ ...wh, months: '240' }, { lang: 'EN' }), /no expiry/);
+  const line = priceService({ code: '3822', name: 'Essential', qty: 2, unitPrice: 15900, wh, lang: 'EN' }).lines[0];
+  assert.match(line.description, /Private 1:1 classes: 12 sessions/);
+  assert.equal(priceService({ code: 'B2SCAMP001', name: 'Camp', qty: 1, unitPrice: 1 }).lines[0].description, 'B2SCAMP001 · Camp');
+});

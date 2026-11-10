@@ -230,13 +230,16 @@ table.items input.r{text-align:right}
     <div class="seg" id="pend-seg">
       <button class="on" onclick="setPend('qt',this)">ใบเสนอราคา <span id="pend-qt-n"></span></button>
       <button onclick="setPend('inv',this)">ใบแจ้งหนี้ <span id="pend-inv-n"></span></button>
+      <button onclick="setPend('orig',this)">ส่งตัวจริง <span id="pend-orig-n"></span></button>
     </div>
     <button class="btn btn-g btn-sm" onclick="loadAll()">↻ รีเฟรช</button>
   </div>
   <p class="hint" id="pend-hint-qt">ตรวจคำขอแล้วกด <b>อนุมัติ</b> ระบบจะสร้าง QT Draft ใน PEAK ให้เฉพาะคำขอที่อนุมัติแล้ว (รอบอัตโนมัติ 11:00 และ 18:00 หรือกด Run now ที่ scheduled task) ถ้าไม่ถูกต้องให้ <b>ตีกลับ</b> พร้อมเหตุผล Sales จะเห็นในหน้าคำขอของตัวเอง</p>
   <p class="hint" id="pend-hint-inv" hidden>ออก INV จาก QT ใน PEAK ก่อน แล้วใส่ <b>เลข INV</b> และ <b>ลิงก์เอกสาร INV ใน PEAK</b> จึงกดอนุมัติได้ Sales จะกดเลข INV เปิดเอกสารได้ทันที</p>
   <div id="pend-qt"><div class="empty">กำลังโหลด...</div></div>
+  <p class="hint" id="pend-hint-orig" hidden>INV ที่ลูกค้าขอเอกสารตัวจริง ส่งแล้วใส่ <b>เลขพัสดุ</b> (ถ้ามี) แล้วกด <b>ส่งตัวจริงแล้ว</b> Sales จะเห็นเลขพัสดุในหน้าคำขอของตัวเอง</p>
   <div id="pend-inv" hidden><div class="empty">กำลังโหลด...</div></div>
+  <div id="pend-orig" hidden><div class="empty">กำลังโหลด...</div></div>
 </section>
 
 <section id="tab-mine" class="tab">
@@ -747,7 +750,6 @@ function renderMine() {
       <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
         ${canOrig && v.originalStatus !== 'requested' ? `<button class="btn btn-o btn-sm" onclick="openOrig('${esc(v.ivRequestId)}')">📮 ลูกค้าขอตัวจริง</button>` : ''}
         ${canOrig && v.originalStatus !== 'not_needed' ? `<button class="btn btn-g btn-sm" onclick="setOrig('${esc(v.ivRequestId)}','no')">ไม่ต้องส่งตัวจริง</button>` : ''}
-        ${op && v.originalStatus === 'requested' ? `<input id="trk-${esc(v.ivRequestId)}" type="text" placeholder="เลขพัสดุ (ถ้ามี)" style="padding:5px 8px;border:1.5px solid var(--line2);border-radius:6px;font:inherit;font-size:12px"><button class="btn btn-p btn-sm" onclick="markSent('${esc(v.ivRequestId)}')">✅ ส่งตัวจริงแล้ว</button>` : ''}
       </div>
       <div id="orig-${esc(v.ivRequestId)}"></div>
     </div>`;
@@ -755,7 +757,7 @@ function renderMine() {
 }
 
 // ─── Accountant / Admin: requests waiting for approval ────
-function setPend(w, btn) { document.querySelectorAll('#pend-seg button').forEach((b) => b.classList.toggle('on', b === btn)); $('pend-qt').hidden = w !== 'qt'; $('pend-inv').hidden = w !== 'inv'; $('pend-hint-qt').hidden = w !== 'qt'; $('pend-hint-inv').hidden = w !== 'inv'; }
+function setPend(w, btn) { document.querySelectorAll('#pend-seg button').forEach((b) => b.classList.toggle('on', b === btn)); ['qt', 'inv', 'orig'].forEach((k) => { $('pend-' + k).hidden = w !== k; $('pend-hint-' + k).hidden = w !== k; }); }
 function renderPending() {
   const op = ME && ME.role === 'op';
   $('nav-pend').hidden = !op;
@@ -763,7 +765,15 @@ function renderPending() {
   const waitQ = REQS.filter((q) => q.status === 'new');
   const fixQ = REQS.filter((q) => ['needs_contact', 'needs_service_code', 'qt_error'].includes(q.status));
   const waitI = IVS.filter((v) => v.status === 'new');
-  const n = waitQ.length + waitI.length;
+  const waitO = IVS.filter((v) => v.originalStatus === 'requested');
+  const n = waitQ.length + waitI.length + waitO.length;
+  $('pend-orig-n').textContent = waitO.length ? `(${waitO.length})` : '';
+  $('pend-orig').innerHTML = waitO.length ? waitO.map((v) => `<div class="list-row">
+      <div class="list-head"><div><span class="list-id">${esc(v.company)}</span> · ${esc(v.ivRequestId)}</div>${st(ORIG_ST, v.originalStatus)}</div>
+      <div class="list-sub">QT ${esc(v.qtNo)}${v.peakIvNo ? ' · INV ' + docLink(v.peakIvNo, v.peakDocLink) : ' · <span class="warn">ยังไม่ได้ออก INV</span>'} · โดย ${esc(v.salesName)}${v.originalRequestedAt ? ' · ขอเมื่อ ' + esc(v.originalRequestedAt) : ''}<br>
+        ส่งถึง: <b>${esc(v.originalRecipient)}</b> ${esc(v.originalAddress)}</div>
+      <div class="op-bar"><input id="trk-${esc(v.ivRequestId)}" type="text" maxlength="60" placeholder="เลขพัสดุ (ถ้ามี)" style="flex:1;min-width:160px"><button class="btn btn-p btn-sm" onclick="markSent('${esc(v.ivRequestId)}')">✅ ส่งตัวจริงแล้ว</button></div>
+    </div>`).join('') : '<div class="empty">ไม่มีเอกสารตัวจริงที่ต้องส่ง</div>';
   $('pend-count').textContent = n; $('pend-count').hidden = !n;
   $('pend-qt-n').textContent = waitQ.length ? `(${waitQ.length})` : '';
   $('pend-inv-n').textContent = waitI.length ? `(${waitI.length})` : '';

@@ -96,6 +96,7 @@ async function create(req, res, user) {
   const hourAgo = Date.now() - 3600e3;
   const recent = existing.filter((x) => x.requestedBy === user.email && (parseSheetDate(x.createdAt) || 0) > hourAgo).length;
   if (recent >= LIMIT_PER_HOUR) throw bad(`ส่งคำขอได้ไม่เกิน ${LIMIT_PER_HOUR} ครั้งต่อชั่วโมง`, 429);
+  const dupCheck = req.body && req.body.confirmDuplicate !== true;
 
   // Whitehouse Package ID / PEAK service code must exist in PEAK; the name always comes from PEAK.
   if (items.some((it) => it.kind === 'service')) {
@@ -131,6 +132,19 @@ async function create(req, res, user) {
   const total = Math.round(priced.reduce((s, p) => s + p.total, 0) * 100) / 100;
   const catalogTotal = priced.reduce((s, p) => s + p.catalogTotal, 0);
   const belowFloor = priced.map((p) => p.belowFloor).filter(Boolean).join('; ');
+
+  // Same customer + segment + total in the last 14 days (not rejected) → probably sent twice. Ask first.
+  if (dupCheck) {
+    const since = Date.now() - 14 * 86400e3;
+    const same = existing.filter((x) => x.taxId === r.taxId && x.branch === r.branch && x.segment === r.segment
+      && Math.abs((Number(String(x.totalPreVat).replace(/,/g, '')) || 0) - total) < 0.01
+      && !['rejected', 'cancelled'].includes(x.status) && (parseSheetDate(x.createdAt) || 0) > since);
+    if (same.length) {
+      return res.status(409).json({ ok: false, duplicate: true,
+        error: `มีคำขอ QT ของลูกค้านี้ ยอดเท่ากันอยู่แล้ว ${same.length} ใบ`,
+        matches: same.slice(-5).map((x) => ({ id: x.requestId, createdAt: x.createdAt, by: x.salesName || x.requestedBy, status: x.status, qtNo: x.peakQtNo })) });
+    }
+  }
 
   const now = new Date();
   const request = {
@@ -222,7 +236,17 @@ async function update(req, res, user) {
   if (!row) throw bad('ไม่พบคำขอนี้', 404);
   const at = hub.sheetDateTime();
   const fields = { status, updatedAt: at };
-  if (b.action === 'approve' && row.status !== 'new') throw bad('อนุมัติได้เฉพาะคำขอที่รออนุมัติ');
+  // Status guards: a second click, a stale page or two accountants at once must not move a request backwards.
+  const FROM = {
+    approve: ['new'],
+    reject: ['new', 'approved', 'needs_contact', 'needs_service_code', 'needs_review', 'qt_error'],
+    reopen: ['needs_contact', 'needs_service_code', 'needs_review', 'qt_error'],
+    qt_approved: ['qt_draft'],
+  };
+  if (!FROM[b.action].includes(row.status)) {
+    const done = { approve: 'คำขอนี้อนุมัติไปแล้วหรือไม่ได้รออนุมัติ', reject: 'ตีกลับไม่ได้: คำขอนี้ไม่ได้อยู่ในสถานะที่ตีกลับได้ (อาจสร้าง QT ใน PEAK แล้ว)', reopen: 'คำขอนี้ไม่ได้ติดปัญหาแล้ว', qt_approved: 'QT นี้ไม่ได้อยู่ในสถานะ Draft' };
+    throw bad(`${done[b.action]} (สถานะตอนนี้: ${row.status}) รีเฟรชหน้าเพื่อดูข้อมูลล่าสุด`, 409);
+  }
   if (b.action === 'qt_approved') fields.qtApprovedAt = at;
   const who = user.name || user.email;
   const auto = { approve: `ฝ่ายบัญชีอนุมัติคำขอแล้ว รอระบบสร้าง QT Draft ใน PEAK — ${who}`, reopen: `ให้ระบบสร้าง QT ใหม่ — ${who}`, qt_approved: `อนุมัติ QT ใน PEAK แล้ว — ${who}` };

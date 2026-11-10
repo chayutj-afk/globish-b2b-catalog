@@ -50,6 +50,21 @@ main{max-width:980px;margin:0 auto;padding:20px 16px 60px}
 a.doc{color:var(--primary);font-weight:700;text-decoration:none}a.doc:hover{text-decoration:underline}
 .op-bar{margin-top:8px;padding:8px;border:1px dashed #fdba74;border-radius:8px;background:#fff7ed;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .op-bar input{padding:5px 8px;border:1.5px solid var(--line2);border-radius:6px;font:inherit;font-size:12px}
+
+/* modal + loading */
+.ov{position:fixed;inset:0;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;z-index:1000;padding:16px}
+.ov[hidden]{display:none}
+.modal{background:#fff;border-radius:14px;max-width:480px;width:100%;padding:20px 20px 16px;box-shadow:0 20px 50px rgba(0,0,0,.25)}
+.modal h3{margin:0 0 8px;font-size:17px}
+.modal .mb{font-size:14px;line-height:1.6;color:var(--ink);max-height:55vh;overflow:auto}
+.modal .mb table{width:100%;border-collapse:collapse;margin-top:6px;font-size:13px}.modal .mb td{padding:4px 2px;border-top:1px solid var(--line)}
+.modal .mf{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+.modal.warn h3{color:#b45309}.modal.danger h3{color:#b91c1c}
+.btn-danger{background:#dc2626;color:#fff;border:0}.btn-danger:hover{background:#b91c1c}
+.spin{width:38px;height:38px;border:4px solid #fed7aa;border-top-color:var(--primary);border-radius:50%;animation:sp 0.8s linear infinite;margin:0 auto 12px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.ldbox{background:#fff;border-radius:14px;padding:22px 26px;text-align:center;min-width:220px;font-size:14px}
+.ldbox small{display:block;color:var(--muted);margin-top:4px}
 .done-card{margin-top:12px;padding:16px;border-radius:12px;background:#f0fdf4;border:1px solid #86efac}
 .done-card b{font-size:16px}
 .back-banner{background:var(--primary-light);border:1px solid #fed7aa;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px}
@@ -106,6 +121,8 @@ table.items input.r{text-align:right}
 </style>
 </head>
 <body>
+<div class="ov" id="ov-modal" hidden><div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="m-title"><h3 id="m-title"></h3><div class="mb" id="m-body"></div><div class="mf"><button class="btn btn-g" id="m-cancel">ยกเลิก</button><button class="btn btn-p" id="m-ok">ยืนยัน</button></div></div></div>
+<div class="ov" id="ov-load" hidden><div class="ldbox" role="status" aria-live="polite"><div class="spin"></div><b id="ld-text">กำลังดำเนินการ…</b><small id="ld-sub">กรุณารอสักครู่ อย่าปิดหน้านี้</small></div></div>
 <header>
   <div class="hdr">
     <a class="brand" href="/"><div class="logo">G</div>ขอเอกสาร</a>
@@ -197,7 +214,7 @@ table.items input.r{text-align:right}
       <div class="fg" id="i-evother-wrap" hidden><label>ระบุเอกสาร</label><input id="i-evother" type="text" maxlength="120"></div>
     </div>
     <div class="row">
-      <div class="fg" id="i-file-wrap"><label>📎 อัปโหลดไฟล์หลักฐาน (PDF / JPG / PNG ไม่เกิน 3 MB) — เก็บเข้า Drive ของฝ่ายบัญชีให้อัตโนมัติ</label><input id="i-file" type="file" accept=".pdf,.jpg,.jpeg,.png"></div>
+      <div class="fg" id="i-file-wrap"><label>📎 อัปโหลดไฟล์หลักฐาน * (PDF / JPG / PNG ไม่เกิน 3 MB) — เก็บเข้า Drive ของฝ่ายบัญชีให้อัตโนมัติ</label><input id="i-file" type="file" accept=".pdf,.jpg,.jpeg,.png"></div>
     </div>
   </div>
 
@@ -234,7 +251,7 @@ table.items input.r{text-align:right}
     </div>
     <button class="btn btn-g btn-sm" onclick="loadAll()">↻ รีเฟรช</button>
   </div>
-  <p class="hint" id="pend-hint-qt">ตรวจคำขอแล้วกด <b>อนุมัติ</b> ระบบจะสร้าง QT Draft ใน PEAK ให้เฉพาะคำขอที่อนุมัติแล้ว (รอบอัตโนมัติ 11:00 และ 18:00 หรือกด Run now ที่ scheduled task) ถ้าไม่ถูกต้องให้ <b>ตีกลับ</b> พร้อมเหตุผล Sales จะเห็นในหน้าคำขอของตัวเอง</p>
+  <p class="hint" id="pend-hint-qt">ตรวจคำขอแล้วกด <b>อนุมัติ</b> ระบบจะสร้าง QT Draft ใน PEAK ให้เฉพาะคำขอที่อนุมัติแล้ว (รอบอัตโนมัติ 10:49 และ 17:49 ทุกวัน หรือกด Run now ที่ scheduled task) ถ้าไม่ถูกต้องให้ <b>ตีกลับ</b> พร้อมเหตุผล Sales จะเห็นในหน้าคำขอของตัวเอง</p>
   <p class="hint" id="pend-hint-inv" hidden>ออก INV จาก QT ใน PEAK ก่อน แล้วใส่ <b>เลข INV</b> และ <b>ลิงก์เอกสาร INV ใน PEAK</b> จึงกดอนุมัติได้ Sales จะกดเลข INV เปิดเอกสารได้ทันที</p>
   <div id="pend-qt"><div class="empty">กำลังโหลด...</div></div>
   <p class="hint" id="pend-hint-orig" hidden>INV ที่ลูกค้าขอเอกสารตัวจริง ส่งแล้วใส่ <b>เลขพัสดุ</b> (ถ้ามี) แล้วกด <b>ส่งตัวจริงแล้ว</b> Sales จะเห็นเลขพัสดุในหน้าคำขอของตัวเอง</p>
@@ -290,6 +307,47 @@ function go(tab) {
 async function signOut() { try { await fetch('/api/auth/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' } }); } catch {} location.href = '/signin.html'; }
 
 let ME = null, PKGS = [], REQS = [], IVS = [];
+
+
+// ─── modal + loading ──────────────────────────────────────
+// ask({ title, html, ok, kind: 'warn'|'danger', cancel }) → Promise<boolean>
+function ask({ title, html = '', ok = 'ยืนยัน', cancel = 'ยกเลิก', kind = '' }) {
+  return new Promise((resolve) => {
+    $('m-title').textContent = title; $('m-body').innerHTML = html;
+    $('modal').className = 'modal ' + kind;
+    const okB = $('m-ok'), noB = $('m-cancel');
+    okB.textContent = ok; okB.className = 'btn ' + (kind === 'danger' ? 'btn-danger' : 'btn-p');
+    noB.textContent = cancel; noB.hidden = cancel === null;
+    $('ov-modal').hidden = false; setTimeout(() => okB.focus(), 30);
+    const done = (v) => { $('ov-modal').hidden = true; okB.onclick = noB.onclick = null; document.removeEventListener('keydown', key); resolve(v); };
+    const key = (e) => { if (e.key === 'Escape') done(false); };
+    okB.onclick = () => done(true); noB.onclick = () => done(false);
+    document.addEventListener('keydown', key);
+  });
+}
+let LOADING = 0;
+async function withLoading(text, fn, sub) {
+  LOADING++; $('ld-text').textContent = text; $('ld-sub').textContent = sub || 'กรุณารอสักครู่ อย่าปิดหน้านี้'; $('ov-load').hidden = false;
+  try { return await fn(); } finally { if (--LOADING <= 0) { LOADING = 0; $('ov-load').hidden = true; } }
+}
+const dupTable = (m, iv) => `<table>${m.map((x) => `<tr><td class="mono">${esc(x.id)}</td><td>${esc(x.createdAt)}</td><td>${esc(x.by || '')}</td><td>${iv ? fmt(toNum(x.amount)) + ' · ' + st(IV_ST, x.status) : st(QT_ST, x.status)}${x.qtNo || x.ivNo ? ' · ' + esc(x.qtNo || x.ivNo) : ''}</td></tr>`).join('')}</table>`;
+// POST with a duplicate check: on 409 duplicate the server lists the earlier requests; ask, then resend with confirmDuplicate.
+async function postChecked(url, body, iv) {
+  const send = (b) => fetch(url, { method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
+  let r = await send(body);
+  if (r.status === 401) { location.href = '/signin.html?next=' + encodeURIComponent(location.pathname + location.hash); throw new Error('ต้องเข้าสู่ระบบใหม่'); }
+  let d = await r.json().catch(() => null);
+  if (r.status === 409 && d && d.duplicate) {
+    $('ov-load').hidden = true;
+    const again = await ask({ kind: 'warn', title: '⚠️ เหมือนเคยส่งคำขอนี้ไปแล้ว', ok: 'ส่งซ้ำอีกใบ', cancel: 'ไม่ส่ง',
+      html: `<p>${esc(d.error)}:</p>${dupTable(d.matches || [], iv)}<p style="margin-top:10px">ถ้าเผลอกดซ้ำ ให้กด <b>ไม่ส่ง</b> ดูสถานะได้ที่ "คำขอของฉัน" · ถ้าตั้งใจขอเพิ่มจริง (เช่น งวดใหม่ยอดเท่าเดิม) กด <b>ส่งซ้ำอีกใบ</b></p>` });
+    if (!again) return null;
+    $('ov-load').hidden = LOADING <= 0;
+    r = await send({ ...body, confirmDuplicate: true }); d = await r.json().catch(() => null);
+  }
+  if (!r.ok || !d || !d.ok) throw new Error((d && d.error) || `HTTP ${r.status}`);
+  return d;
+}
 
 // ─── catalog price helpers (reference only) ────────────────
 const BS = [5, 11, 21, 51, 101, 201, 501], BB = [10, 15, 20, 25, 30, 35, 40];
@@ -366,7 +424,12 @@ function setVal(el) {
   } else it[f] = v.trim();
   saveCart(); recalc();
 }
-function delItem(i) { CART.splice(i, 1); saveCart(); renderItems(); }
+async function delItem(i) {
+  const it = CART[i] || {};
+  const has = it.packageId || it.keyHS || it.code || it.unitPrice || it.extra;
+  if (has && !(await ask({ title: 'ลบรายการนี้?', ok: 'ลบ', kind: 'danger', html: `<p>${esc(it.packageId || it.code || it.keyHS || it.name || 'รายการที่ ' + (i + 1))}</p>` }))) return;
+  CART.splice(i, 1); saveCart(); renderItems();
+}
 
 // Whitehouse Package ID / PEAK service code → PEAK name (read-only). The QT uses PEAK's name.
 async function lookupSvc(i) {
@@ -374,10 +437,10 @@ async function lookupSvc(i) {
   const code = it.code;
   it.svc = 'loading'; showSvc(i);
   try {
-    const r = await fetch('/api/services?code=' + encodeURIComponent(code), { cache: 'no-store' });
+    const r = await fetch('/api/services?code=' + encodeURIComponent(code) + '&lang=' + encodeURIComponent($('q-lang').value), { cache: 'no-store' });
     const d = await r.json();
     if (CART[i] !== it || it.code !== code) return;
-    if (r.ok && d.found) { it.name = d.name; it.svc = d.inactive ? 'inactive' : 'ok'; }
+    if (r.ok && d.found) { it.name = d.name; it.svc = d.inactive ? 'inactive' : 'ok'; it.preview = d.preview || ''; }
     else { it.name = ''; it.svc = 'missing'; }
   } catch { it.svc = 'missing'; }
   saveCart(); showSvc(i); recalc();
@@ -387,7 +450,7 @@ function showSvc(i) {
   const tag = $('svk-' + i); if (tag) tag.textContent = /^\d+$/.test(it.code || '') ? 'Whitehouse Package' : 'รหัสบริการ PEAK';
   if (!it.code) { el.className = 'svc-name'; el.textContent = 'ใส่ Package ID แล้วระบบดึงชื่อจาก PEAK ให้'; return; }
   if (it.svc === 'loading') { el.className = 'svc-name'; el.textContent = 'กำลังค้นใน PEAK…'; return; }
-  if (it.svc === 'ok') { el.className = 'svc-name'; el.textContent = '✓ ' + it.name; return; }
+  if (it.svc === 'ok') { el.className = 'svc-name'; el.innerHTML = '✓ ' + esc(it.name) + (it.preview ? `<details style="margin-top:4px"><summary class="small" style="cursor:pointer">ดูข้อความที่จะลงใน QT</summary><div class="small" style="white-space:pre-line;margin-top:4px">${esc(it.preview)}</div></details>` : ''); return; }
   if (it.svc === 'inactive') { el.className = 'svc-name warnbg'; el.textContent = '⚠ ' + it.name + ' — รหัสนี้กำลังจะปิดใช้งานใน PEAK ตรวจกับฝ่ายบัญชี'; return; }
   if (it.svc === 'missing') { el.className = 'svc-name bad'; el.textContent = `✕ ไม่พบรหัส ${it.code} ใน PEAK ตรวจ Package ID อีกครั้ง`; return; }
   el.className = 'svc-name'; el.textContent = '…';
@@ -553,9 +616,17 @@ async function submitQT() {
   const badSvc = CART.find((it) => kindOf(it) === 'service' && it.svc !== 'ok' && it.svc !== 'inactive');
   if (badSvc) return msg('q-msg', 'err', `รหัส ${badSvc.code || '(ว่าง)'} ไม่พบใน PEAK แก้ก่อนส่ง`);
   if (!body.company) return msg('q-msg', 'err', 'กรอกชื่อบริษัทหรือหน่วยงาน');
-  const btn = $('q-submit'); btn.disabled = true; btn.textContent = '⏳ กำลังส่ง...'; msg('q-msg', '', '');
+  const ok = await ask({ title: 'ยืนยันส่งคำขอใบเสนอราคา', ok: '📨 ส่งคำขอ', html: `<table>
+    <tr><td>ลูกค้า</td><td><b>${esc(body.company)}</b> (${esc(seg)})</td></tr>
+    <tr><td>เลขภาษี / สาขา</td><td>${esc(body.taxId)} / ${esc(body.branch)}${body.clientCode ? ' · ' + esc(body.clientCode) : ''}</td></tr>
+    <tr><td>รายการ</td><td>${CART.length} รายการ · ยอดก่อน VAT <b>${esc($('q-total').textContent)}</b></td></tr>
+    <tr><td>วันที่ QT / เครดิต</td><td>${esc(body.wantedQtDate)} · ${esc(body.creditTermDays)} วัน</td></tr></table>
+    <p class="small" style="margin-top:8px">ส่งแล้วแก้ไม่ได้ ถ้าต้องแก้ ให้ฝ่ายบัญชีตีกลับแล้วส่งใหม่</p>` });
+  if (!ok) return;
+  const btn = $('q-submit'); btn.disabled = true; msg('q-msg', '', '');
   try {
-    const d = await api('/api/requests', { method: 'POST', body: JSON.stringify(body) });
+    const d = await withLoading('กำลังส่งคำขอใบเสนอราคา…', () => postChecked('/api/requests', body, false));
+    if (!d) { msg('q-msg', 'info', 'ยังไม่ได้ส่ง ดูคำขอเดิมได้ที่ "คำขอของฉัน"'); return; }
     $('q-msg').innerHTML = `<div class="done-card"><b>✓ ส่งคำขอ ${esc(d.requestId)} แล้ว</b><div style="margin:6px 0 10px">ยอดก่อน VAT ${fmt(d.total)} · ${esc(d.message)}${d.belowFloor ? '<br>มีรายการต่ำกว่าราคาขั้นต่ำ Catalog (บันทึกไว้ให้ผู้อนุมัติเห็น)' : ''}</div><button class="btn btn-o btn-sm" onclick="go('mine')">ดูสถานะในคำขอของฉัน</button></div>`;
     CART = []; saveCart(); renderItems();
     ['q-opp-y', 'q-opp-n', 'q-tax', 'q-branch', 'q-client', 'q-company', 'q-date', 'q-term', 'q-note'].forEach((id) => { $(id).value = ''; });
@@ -563,15 +634,19 @@ async function submitQT() {
     clearDraft();
     taxHint('q'); loadAll();
   } catch (e) { msg('q-msg', 'err', e.message); }
-  finally { btn.disabled = false; btn.textContent = '📨 ส่งคำขอใบเสนอราคา'; }
+  finally { btn.disabled = false; }
 }
 
 // ─── INV: several invoices per QT ─────────────────────────
-let INVS = [];
+let INVS = [], INV_DIRTY = false;
 const blankInv = () => ({ billTo: 'same', company: '', taxId: '', branch: '', relation: '', label: '', amountPreVat: '', students: '', wantedIssueDate: '', creditTermDays: '', poNo: '', originalDoc: 'unknown', originalRecipient: '', originalAddress: '', note: '' });
 function addInv() { if (INVS.length >= 12) return; INVS.push(blankInv()); if (INVS.length === 1) prefillAmount(); renderInvs(); }
-function delInv(i) { INVS.splice(i, 1); if (!INVS.length) INVS.push(blankInv()); renderInvs(); }
-function setInv(i, f, v) { INVS[i][f] = v; if (['billTo', 'originalDoc'].includes(f)) renderInvs(); else updateSum(); }
+async function delInv(i) {
+  const x = INVS[i] || {};
+  if ((x.amountPreVat || x.wantedIssueDate || x.company) && !(await ask({ title: `ลบ INV ใบที่ ${i + 1}?`, ok: 'ลบ', kind: 'danger', html: `<p>ยอด ${fmt(toNum(x.amountPreVat))}</p>` }))) return;
+  INVS.splice(i, 1); if (!INVS.length) INVS.push(blankInv()); renderInvs();
+}
+function setInv(i, f, v) { INVS[i][f] = v; INV_DIRTY = true; if (['billTo', 'originalDoc'].includes(f)) renderInvs(); else updateSum(); }
 function currentQT() { return REQS.find((q) => q.requestId === $('i-req').value) || null; }
 function qtBalance() {
   const q = currentQT(); if (!q) return null;
@@ -692,17 +767,37 @@ async function submitINV() {
     if (x.billTo === 'other' && (x.taxId || '').length !== 13) return msg('i-msg', 'err', `INV ใบที่ ${i + 1}: เลขผู้เสียภาษีต้องมี 13 หลัก`);
     if (x.originalDoc === 'yes' && !x.originalAddress) return msg('i-msg', 'err', `INV ใบที่ ${i + 1}: ใส่ที่อยู่ส่งเอกสารตัวจริง`);
   }
+  // Accidental re-send: same QT + same amount already requested (checked here first, so the user sees
+  // "already sent" rather than an over-QT error). The server checks again.
+  const prev = IVS.filter((x) => x.status !== 'rejected' && (body.requestId ? x.requestId === body.requestId : x.qtNo === body.qtNo)
+    && INVS.some((v) => Math.abs(toNum(x.amountPreVat) - toNum(v.amountPreVat)) < 0.01));
+  if (prev.length && !body.confirmDuplicate) {
+    const again = await ask({ kind: 'warn', title: '⚠️ เหมือนเคยส่งคำขอนี้ไปแล้ว', ok: 'ส่งซ้ำอีกใบ', cancel: 'ไม่ส่ง',
+      html: `<p>QT ${esc(body.qtNo)} มีคำขอ INV ยอดเดียวกันอยู่แล้ว ${prev.length} ใบ:</p>${dupTable(prev.slice(-5).map((x) => ({ id: x.ivRequestId, createdAt: x.createdAt, by: x.salesName, status: x.status, amount: x.amountPreVat, ivNo: x.peakIvNo })), true)}<p style="margin-top:10px">ถ้าเผลอกดซ้ำ ให้กด <b>ไม่ส่ง</b> · ถ้าตั้งใจขอเพิ่มจริง (เช่น งวดใหม่ยอดเท่าเดิม) กด <b>ส่งซ้ำอีกใบ</b></p>` });
+    if (!again) return msg('i-msg', 'info', 'ยังไม่ได้ส่ง ดูคำขอเดิมได้ที่ "คำขอของฉัน"');
+    body.confirmDuplicate = true;
+  }
   if (!$('i-over-wrap').hidden && !body.overReason) return msg('i-msg', 'err', 'ยอดรวมเกิน QT ใส่เหตุผลก่อนส่ง');
-  const btn = $('i-submit'); btn.disabled = true; btn.textContent = '⏳ กำลังส่ง...'; msg('i-msg', '', '');
+  if (f.size > 3 * 1024 * 1024) return msg('i-msg', 'err', 'ไฟล์ใหญ่เกิน 3 MB ลองย่อหรือแปลงเป็น PDF ก่อน');
+  const sum = INVS.reduce((s, x) => s + toNum(x.amountPreVat), 0);
+  const ok = await ask({ title: 'ยืนยันส่งคำขอออก INV', ok: '📨 ส่งคำขอ', html: `<table>
+    <tr><td>QT</td><td><b>${esc(body.qtNo)}</b> · ${esc(body.company)}</td></tr>
+    <tr><td>จำนวน INV</td><td>${INVS.length} ใบ · รวมก่อน VAT <b>${fmt(sum)}</b></td></tr>
+    ${INVS.map((x, i) => `<tr><td>ใบที่ ${i + 1}</td><td>${fmt(toNum(x.amountPreVat))} · ${esc(x.students)} ผู้เรียน · วันที่ ${esc(x.wantedIssueDate)} · เครดิต ${esc(x.creditTermDays)} วัน${x.billTo === 'other' ? ' · ออกในนาม ' + esc(x.company) : ''}</td></tr>`).join('')}
+    <tr><td>หลักฐาน</td><td>${esc(body.evidenceType)} · ${esc(f.name)}</td></tr></table>` });
+  if (!ok) return;
+  const btn = $('i-submit'); btn.disabled = true; msg('i-msg', '', '');
   try {
-    if (f) body.file = { name: f.name, type: f.type, data: await readFileB64(f) };
-    const d = await api('/api/invoice-requests', { method: 'POST', body: JSON.stringify(body) });
+    body.file = { name: f.name, type: f.type, data: await readFileB64(f) };
+    const d = await withLoading('กำลังส่งคำขอ INV และอัปโหลดไฟล์…', () => postChecked('/api/invoice-requests', body, true), 'อัปโหลดไฟล์อาจใช้เวลา 5–15 วินาที อย่าปิดหน้านี้');
+    if (!d) { msg('i-msg', 'info', 'ยังไม่ได้ส่ง ดูคำขอเดิมได้ที่ "คำขอของฉัน"'); return; }
+    INV_DIRTY = false;
     $('i-msg').innerHTML = `<div class="done-card"><b>✓ ส่งคำขอ ${esc(d.batchId)} (${d.ivRequestIds.length} ใบ) แล้ว</b><div style="margin:6px 0 10px">${d.remaining !== null && d.remaining !== undefined ? `QT คงเหลือ ${fmt(d.remaining)} · ` : ''}${esc(d.message)}</div><button class="btn btn-o btn-sm" onclick="go('mine');setMine('inv',document.querySelectorAll('#mine-seg button')[1])">ดูสถานะในคำขอของฉัน</button></div>`;
     ['i-req', 'i-qt', 'i-seg', 'i-opp-y', 'i-opp-n', 'i-company', 'i-tax', 'i-branch', 'i-evother', 'i-fin-name', 'i-fin-email', 'i-fin-phone', 'i-note', 'i-over'].forEach((id) => { $(id).value = ''; });
     $('i-file').value = ''; $('i-qt').readOnly = false; $('i-seg').disabled = false; onInvSeg(); $('i-qt-hint').textContent = ''; INVS = [blankInv()]; renderInvs(); taxHint('i');
     loadAll();
   } catch (e) { msg('i-msg', 'err', e.message); }
-  finally { btn.disabled = false; btn.textContent = '📨 ส่งคำขอออก INV'; }
+  finally { btn.disabled = false; }
 }
 
 // ─── Mine ─────────────────────────────────────────────────
@@ -816,7 +911,20 @@ function docLink(no, url) {
   return url && /^https:\/\/(doc|secure)\.peakaccount\.com\//.test(url)
     ? `<a class="doc" href="${esc(url)}" target="_blank" rel="noopener" title="เปิดเอกสารใน PEAK (พิมพ์ / ดาวน์โหลด PDF ได้)">${esc(no)} ↗</a>` : esc(no);
 }
+const QT_ASK = {
+  approve: { title: 'อนุมัติคำขอนี้?', ok: '✓ อนุมัติ', body: 'ระบบจะสร้าง QT Draft ใน PEAK ในรอบถัดไป (10:49 / 17:49 หรือกด Run now)' },
+  reject: { title: 'ตีกลับคำขอนี้?', ok: 'ตีกลับ', kind: 'danger', body: 'Sales จะเห็นเหตุผล และต้องส่งคำขอใหม่' },
+  reopen: { title: 'ให้ระบบสร้าง QT ใหม่?', ok: '↻ สร้างใหม่', body: 'ใช้เมื่อแก้ลูกค้า / รหัสบริการใน PEAK แล้ว ระบบจะลองสร้าง QT อีกครั้งในรอบถัดไป' },
+};
 async function qtAction(id, action) {
+  const q = REQS.find((x) => x.requestId === id) || {};
+  const note0 = (($('qn-' + id) || {}).value || '').trim();
+  if (action === 'reject' && !note0) { $('qm-' + id).innerHTML = '<span class="err-line">ใส่เหตุผลก่อน</span>'; return; }
+  const a = QT_ASK[action];
+  if (a && !(await ask({ title: a.title, ok: a.ok, kind: a.kind, html: `<p><b>${esc(q.company)}</b> · ${esc(q.segment)} · ${esc(id)}<br>ยอดก่อน VAT ${fmt(toNum(q.totalPreVat))}</p>${note0 ? `<p>เหตุผล: ${esc(note0)}</p>` : ''}<p class="small">${a.body}</p>` }))) return;
+  return withLoading('กำลังบันทึก…', () => qtActionDo(id, action));
+}
+async function qtActionDo(id, action) {
   const note = ($('qn-' + id) || {}).value || '';
   if (action === 'reject' && !note.trim()) { $('qm-' + id).innerHTML = '<span class="err-line">ใส่เหตุผลก่อน</span>'; return; }
   try { await api('/api/requests', { method: 'PATCH', body: JSON.stringify({ requestId: id, action, note }) }); await loadAll(); }
@@ -824,9 +932,14 @@ async function qtAction(id, action) {
 }
 async function ivAction(id, action) {
   const body = { ivRequestId: id, action };
+  const v = IVS.find((x) => x.ivRequestId === id) || {};
   if (action === 'issued') { body.peakIvNo = $('ivn-' + id).value.trim(); body.peakDocLink = $('ivl-' + id).value.trim(); if (!body.peakIvNo || !body.peakDocLink) { $('ivm-' + id).innerHTML = '<span class="err-line">ใส่เลข INV และลิงก์เอกสาร INV ใน PEAK</span>'; return; } }
   if (action === 'reject') { body.note = $('ivr-' + id).value.trim(); if (!body.note) { $('ivm-' + id).innerHTML = '<span class="err-line">ใส่เหตุผลก่อน</span>'; return; } }
-  try { await api('/api/invoice-requests', { method: 'PATCH', body: JSON.stringify(body) }); await loadAll(); }
+  const ok = await ask(action === 'issued'
+    ? { title: 'ยืนยันว่าออก INV แล้ว?', ok: '✓ อนุมัติ', html: `<p><b>${esc(v.company)}</b> · ${fmt(toNum(v.amountPreVat))}</p><p>เลข INV: <b class="mono">${esc(body.peakIvNo)}</b><br><span class="small">ลิงก์: ${esc(body.peakDocLink)}</span></p><p class="small">Sales จะเห็นเลข INV และเปิดเอกสารได้ทันที</p>` }
+    : { title: 'ตีกลับคำขอ INV นี้?', ok: 'ตีกลับ', kind: 'danger', html: `<p><b>${esc(v.company)}</b> · ${fmt(toNum(v.amountPreVat))}</p><p>เหตุผล: ${esc(body.note)}</p>` });
+  if (!ok) return;
+  try { await withLoading('กำลังบันทึก…', async () => { await api('/api/invoice-requests', { method: 'PATCH', body: JSON.stringify(body) }); await loadAll(); }); }
   catch (e) { $('ivm-' + id).innerHTML = `<span class="err-line">${esc(e.message)}</span>`; }
 }
 
@@ -841,12 +954,19 @@ function openOrig(id) {
 async function setOrig(id, want) {
   const body = { ivRequestId: id, action: 'original', originalDoc: want };
   if (want === 'yes') { body.recipient = $('or-rec-' + id).value.trim(); body.address = $('or-adr-' + id).value.trim(); if (!body.address) return msg('or-msg-' + id, 'err', 'ใส่ที่อยู่จัดส่ง'); }
-  try { await api('/api/invoice-requests', { method: 'PATCH', body: JSON.stringify(body) }); await loadAll(); }
+  const ok = await ask(want === 'yes'
+    ? { title: 'แจ้งฝ่ายบัญชีให้ส่งเอกสารตัวจริง?', ok: '📮 แจ้งส่งตัวจริง', html: `<p>ส่งถึง: <b>${esc(body.recipient || '-')}</b><br>${esc(body.address)}</p>` }
+    : { title: 'ลูกค้าไม่ต้องการเอกสารตัวจริง?', ok: 'ยืนยัน', html: '<p>ฝ่ายบัญชีจะไม่ส่งเอกสารตัวจริงสำหรับ INV นี้</p>' });
+  if (!ok) return;
+  try { await withLoading('กำลังบันทึก…', async () => { await api('/api/invoice-requests', { method: 'PATCH', body: JSON.stringify(body) }); await loadAll(); }); }
   catch (e) { const el = $('or-msg-' + id) || $('orig-' + id); el.innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
 }
 async function markSent(id) {
-  try { await api('/api/invoice-requests', { method: 'PATCH', body: JSON.stringify({ ivRequestId: id, action: 'original_sent', trackingNo: $('trk-' + id).value.trim() }) }); await loadAll(); }
-  catch (e) { $('orig-' + id).innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
+  const v = IVS.find((x) => x.ivRequestId === id) || {};
+  const trackingNo = $('trk-' + id).value.trim();
+  if (!(await ask({ title: 'บันทึกว่าส่งเอกสารตัวจริงแล้ว?', ok: '✅ ส่งแล้ว', html: `<p><b>${esc(v.company)}</b>${v.peakIvNo ? ' · ' + esc(v.peakIvNo) : ''}<br>ส่งถึง ${esc(v.originalRecipient || '')} ${esc(v.originalAddress || '')}</p><p>เลขพัสดุ: <b>${esc(trackingNo || '— (ไม่ระบุ)')}</b></p>` }))) return;
+  try { await withLoading('กำลังบันทึก…', async () => { await api('/api/invoice-requests', { method: 'PATCH', body: JSON.stringify({ ivRequestId: id, action: 'original_sent', trackingNo }) }); await loadAll(); }); }
+  catch (e) { const el = $('pend-orig'); el.insertAdjacentHTML('afterbegin', `<div class="msg err">${esc(e.message)}</div>`); }
 }
 
 // ─── QT draft: kept in this browser so a trip to the catalog doesn't lose it ─
@@ -864,9 +984,12 @@ function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch {} }
   let hasDraft = false; try { hasDraft = !!localStorage.getItem(DRAFT_KEY); } catch {}
   if (!hasDraft && CART.length && CART.every((it) => kindOf(it) === 'service')) $('q-segment').value = 'B2E';
   ['input', 'change'].forEach((ev) => $('tab-qt').addEventListener(ev, saveDraft));
+  $('tab-inv').addEventListener('input', () => { INV_DIRTY = true; });
+  // INV form isn't kept as a draft: warn before leaving with unsent data, or while something is still saving.
+  window.addEventListener('beforeunload', (e) => { if (LOADING > 0 || (INV_DIRTY && $('i-qt').value.trim())) { e.preventDefault(); e.returnValue = ''; } });
   onSegment(); renderInvs(); taxHint('q');
   try { const r = await fetch('/packages.json', { cache: 'no-store' }); if (r.ok) { PKGS = await r.json(); renderItems(); } } catch {}
-  try { const d = await api('/api/auth/me'); ME = d.user; $('me').textContent = ME.email; } catch {}
+  try { const d = await api('/api/auth/me'); ME = d.user; $('me').textContent = ME.email; onSegment(); } catch {}
   const h = (location.hash || '').slice(1);
   if (['qt', 'inv', 'mine', 'pend'].includes(h)) go(h);
   window.addEventListener('hashchange', () => { const t = location.hash.slice(1); if (['qt', 'inv', 'mine', 'pend'].includes(t)) go(t); });

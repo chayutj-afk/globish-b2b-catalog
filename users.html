@@ -69,6 +69,10 @@ function render() {
 async function setAccess(email, field, value, el) {
   const m = document.getElementById('m-' + email);
   const u = USERS.find((x) => x.email === email);
+  const label = { role: { sales: 'Sales', op: 'Accountant / Admin' }, team: { b2b: 'B2B', b2c: 'B2C (ไม่เห็น Catalog)', both: 'Both' } };
+  const show = (label[field] && label[field][value]) || (field === 'salesPerf' ? (PERF.find((p) => p.code === value) || {}).name || 'ไม่ติด' : value);
+  const what = { role: 'Role', team: 'ทีม', salesPerf: 'Sales Performance' }[field];
+  if (!confirm(`เปลี่ยน${what}ของ ${u ? u.name : email} เป็น "${show}" ?`)) { if (u) el.value = u[field] || ''; return; }
   el.disabled = true;
   try { await api('/api/users', { method: 'PATCH', body: JSON.stringify({ email, [field]: value }) }); if (u) u[field] = value; render(); const m2 = document.getElementById('m-' + email); if (m2) m2.innerHTML = '<span class="ok">✓ บันทึกแล้ว</span>'; }
   catch (e) { m.innerHTML = `<span class="err">${esc(e.message)}</span>`; if (u) el.value = u[field]; }

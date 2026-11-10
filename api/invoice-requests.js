@@ -124,10 +124,7 @@ async function create(req, res, user) {
   const now = new Date();
   const at = hub.sheetDateTime(now);
   const batchId = newBatchId(now);
-  // The upload is the slow part: run it alongside the sheet reads. If a check below fails the
-  // file is already in Drive (harmless; it's named by batch ID and nothing links to it).
-  const uploading = drive.upload(b.file, `${batchId} ${r.qtNo} ${r.company}`.slice(0, 120));
-  uploading.catch(() => {});
+  // Checks first (sheet reads are quick), so a duplicate or over-QT request never leaves a stray file in Drive.
   const [requests, existing] = await Promise.all([r.requestId ? hub.readTable('Requests') : [], hub.readTable('InvoiceRequests')]);
   let linked = null;
   if (r.requestId) {
@@ -140,6 +137,18 @@ async function create(req, res, user) {
   if (r.segment === 'B2S') r.opportunityId = '';
   else if (!r.opportunityId) throw bad('ใส่ Opportunity ID จาก CRM (CRM-OPP-YYYY-NNNNN) ยกเว้นลูกค้า B2S');
 
+  // Same QT + same billed tax ID + same amount already requested (not rejected) → probably sent twice.
+  if (b.confirmDuplicate !== true) {
+    const ref = (x) => (r.requestId ? x.requestId === r.requestId : x.qtNo === r.qtNo);
+    const same = existing.filter((x) => x.status !== 'rejected' && ref(x)
+      && invoices.some((v) => x.taxId === v.taxId && Math.abs((Number(String(x.amountPreVat).replace(/,/g, '')) || 0) - v.amountPreVat) < 0.01));
+    if (same.length) {
+      const e = bad(`QT ${r.qtNo} มีคำขอ INV ยอดเดียวกันอยู่แล้ว ${same.length} ใบ`, 409);
+      e.extra = { duplicate: true, matches: same.slice(-5).map((x) => ({ id: x.ivRequestId, createdAt: x.createdAt, by: x.salesName || x.requestedBy, status: x.status, amount: x.amountPreVat, ivNo: x.peakIvNo })) };
+      throw e;
+    }
+  }
+
   // Balance check: never silently bill more than the QT.
   const prior = alreadyInvoiced(existing, r);
   const asked = round2(invoices.reduce((s, v) => s + v.amountPreVat, 0));
@@ -149,7 +158,7 @@ async function create(req, res, user) {
     throw bad(`ยอดรวม INV (${money(prior + asked)}) เกินยอด QT (${money(qtTotal)}) ใส่เหตุผลก่อนส่ง หรือแก้ยอด`);
   }
 
-  const evidenceLink = await uploading;
+  const evidenceLink = await drive.upload(b.file, `${batchId} ${r.qtNo} ${r.company}`.slice(0, 120));
   const evidenceType = r.evidenceType === 'อื่นๆ' ? `อื่นๆ: ${r.evidenceOther}` : r.evidenceType;
   const partial = invoices.length > 1 || prior > 0 || (qtTotal > 0 && Math.abs(asked - qtTotal) > 0.01);
 
@@ -209,7 +218,8 @@ async function update(req, res, user) {
 
   if (b.action === 'original') {
     const want = b.originalDoc === 'no' ? 'no' : 'yes';
-    if (row.originalStatus === 'sent') throw bad('ส่งตัวจริงไปแล้ว');
+    if (row.originalStatus === 'sent') throw bad('ส่งตัวจริงไปแล้ว', 409);
+    if (row.status === 'rejected') throw bad('คำขอ INV นี้ถูกตีกลับแล้ว', 409);
     const address = text(b.address, 500) || row.originalAddress;
     const recipient = text(b.recipient, 120) || row.originalRecipient;
     if (want === 'yes' && !address) throw bad('ใส่ที่อยู่สำหรับส่งเอกสารตัวจริง');
@@ -226,6 +236,8 @@ async function update(req, res, user) {
 
   if (b.action === 'original_sent') {
     if (user.role !== 'op') throw bad('เฉพาะฝ่ายบัญชี / Admin', 403);
+    if (row.originalStatus === 'sent') throw bad(`บันทึกว่าส่งตัวจริงไปแล้ว${row.trackingNo ? ' (เลขพัสดุ ' + row.trackingNo + ')' : ''} รีเฟรชหน้าเพื่อดูข้อมูลล่าสุด`, 409);
+    if (row.originalStatus !== 'requested') throw bad('ลูกค้ายังไม่ได้ขอเอกสารตัวจริงสำหรับ INV นี้', 409);
     const trackingNo = text(b.trackingNo, 60);
     await hub.updateRow('InvoiceRequests', row._row, { originalStatus: 'sent', originalSentAt: at, trackingNo, updatedAt: at });
     await hub.log('catalog', 'original_sent', id, `${user.email}${trackingNo ? ' · ' + trackingNo : ''}`);
@@ -237,6 +249,10 @@ async function update(req, res, user) {
   if (b.action === 'issued' || b.action === 'reject' || b.action === 'reopen') {
     if (user.role !== 'op') throw bad('เฉพาะฝ่ายบัญชี / Admin', 403);
     const note = text(b.note, 500);
+    const FROM = { issued: ['new', 'iv_draft'], reject: ['new', 'iv_draft'], reopen: ['rejected'] };
+    if (!FROM[b.action].includes(row.status)) {
+      throw bad(`ทำรายการนี้ไม่ได้: คำขอ INV อยู่ในสถานะ ${row.status}${row.peakIvNo ? ' (' + row.peakIvNo + ')' : ''} แล้ว รีเฟรชหน้าเพื่อดูข้อมูลล่าสุด`, 409);
+    }
     if (b.action === 'reject') {
       if (!note) throw bad('ใส่เหตุผลที่ตีกลับ');
       await hub.updateRow('InvoiceRequests', row._row, { status: 'rejected', accountNote: `${note} — ${user.name || user.email}`, updatedAt: at });

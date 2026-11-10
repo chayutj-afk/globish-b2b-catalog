@@ -5,12 +5,20 @@
 const { sendError } = require('../lib/session');
 const { requireUser } = require('../lib/users');
 const hub = require('../lib/hub');
+const { describeWh } = require('../lib/pricing');
 
 let cache = null; // { at, map } per instance, 5 min
 async function services() {
   if (cache && Date.now() - cache.at < 300e3) return cache.map;
   cache = { at: Date.now(), map: await hub.readServices() };
   return cache.map;
+}
+
+let whCache = null; // { at, map } per instance, 5 min
+async function whPackages() {
+  if (whCache && Date.now() - whCache.at < 300e3) return whCache.map;
+  whCache = { at: Date.now(), map: new Map((await hub.readTable('WHPackages')).map((x) => [String(x.id), x])) };
+  return whCache.map;
 }
 
 function lookup(map, code) {
@@ -27,7 +35,16 @@ module.exports = async function handler(req, res) {
     const code = new URL(req.url, 'http://x').searchParams.get('code') || '';
     if (!/^[A-Za-z0-9_-]{1,40}$/.test(code)) return res.status(400).json({ ok: false, error: 'รหัสไม่ถูกต้อง' });
     res.setHeader('Cache-Control', 'no-store');
-    return res.status(200).json({ ok: true, ...lookup(await services(), code) });
+    const out = lookup(await services(), code);
+    // Preview of the line text the QT will carry (from the WHPackages tab) so sales see it before sending.
+    if (out.found) {
+      try {
+        const wh = (await whPackages()).get(out.code.replace(/_.*$/, ''));
+        const lang = new URL(req.url, 'http://x').searchParams.get('lang') === 'EN' ? 'EN' : 'TH';
+        if (wh) out.preview = describeWh(wh, { lang, title: out.name, code: out.code });
+      } catch (e) { console.error('WHPackages read failed', e); }
+    }
+    return res.status(200).json({ ok: true, ...out });
   } catch (e) {
     return sendError(res, e);
   }

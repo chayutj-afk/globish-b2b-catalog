@@ -33,13 +33,13 @@
 <main>
   <p class="sub"><a href="/">← เมนู</a></p>
   <h1>จัดการสิทธิ์ผู้ใช้</h1>
-  <p class="sub">ทุกคนที่เคยเข้าสู่ระบบด้วยบัญชี @globish.co.th จะอยู่ในรายการนี้ และเริ่มต้นเป็น Sales ผู้ดูแลสิทธิ์ (finance@ และ chayut.j@) เปลี่ยน role ได้ มีผลกับผู้ใช้คนนั้นภายในไม่เกิน 1 นาที ไม่ต้องเข้าสู่ระบบใหม่</p>
+  <p class="sub">ทุกคนที่เคยเข้าสู่ระบบด้วยบัญชี @globish.co.th จะอยู่ในรายการนี้ และเริ่มต้นเป็น Sales ทีม Both ทีม B2C จะไม่เห็น B2B Product Catalog ผู้ดูแลสิทธิ์ (finance@ และ chayut.j@) เปลี่ยน role ได้ มีผลกับผู้ใช้คนนั้นภายในไม่เกิน 1 นาที ไม่ต้องเข้าสู่ระบบใหม่</p>
   <div class="legend">
     <div><b>Sales</b><br>ขอ QT / INV และเห็นเฉพาะคำขอของตัวเอง</div>
     <div><b>Accountant / Admin</b><br>เห็นคำขอของทุกคน กดอนุมัติ / ตีกลับ / ใส่เลข INV นำเข้ารายชื่อลูกค้า PEAK และแก้ Catalog</div>
   </div>
   <input type="search" id="q" placeholder="ค้นหาชื่อหรืออีเมล" oninput="render()">
-  <div class="card"><table><thead><tr><th>ผู้ใช้</th><th>เข้าใช้ล่าสุด</th><th>Role</th><th></th></tr></thead><tbody id="rows"><tr><td colspan="4" class="small">กำลังโหลด…</td></tr></tbody></table></div>
+  <div class="card"><table><thead><tr><th>ผู้ใช้</th><th>เข้าใช้ล่าสุด</th><th>Role</th><th>ทีม</th><th></th></tr></thead><tbody id="rows"><tr><td colspan="5" class="small">กำลังโหลด…</td></tr></tbody></table></div>
 </main>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -59,20 +59,23 @@ function render() {
     <td class="who"><b>${esc(u.name)}</b><br><span class="small">${esc(u.email)}</span></td>
     <td class="small">${esc(u.lastLogin)}</td>
     <td>${u.admin ? '<span class="pill">ผู้ดูแลสิทธิ์ · Accountant / Admin</span>'
-      : `<select onchange="setRole('${esc(u.email)}', this.value, this)"><option value="sales"${u.role === 'sales' ? ' selected' : ''}>Sales</option><option value="op"${u.role === 'op' ? ' selected' : ''}>Accountant / Admin</option></select>`}</td>
+      : `<select onchange="setAccess('${esc(u.email)}', 'role', this.value, this)"><option value="sales"${u.role === 'sales' ? ' selected' : ''}>Sales</option><option value="op"${u.role === 'op' ? ' selected' : ''}>Accountant / Admin</option></select>`}</td>
+    <td>${u.admin || u.role === 'op' ? '<span class="small">เห็นทุกอย่าง</span>'
+      : `<select onchange="setAccess('${esc(u.email)}', 'team', this.value, this)">${[['b2b', 'B2B'], ['b2c', 'B2C (ไม่เห็น Catalog)'], ['both', 'Both']].map(([v, t]) => `<option value="${v}"${u.team === v ? ' selected' : ''}>${t}</option>`).join('')}</select>`}</td>
     <td id="m-${esc(u.email)}">${u.updatedBy ? `<span class="small">แก้โดย ${esc(u.updatedBy)}</span>` : ''}</td></tr>`).join('')
-    : '<tr><td colspan="4" class="small">ไม่พบผู้ใช้</td></tr>';
+    : '<tr><td colspan="5" class="small">ไม่พบผู้ใช้</td></tr>';
 }
-async function setRole(email, role, el) {
+async function setAccess(email, field, value, el) {
   const m = document.getElementById('m-' + email);
+  const u = USERS.find((x) => x.email === email);
   el.disabled = true;
-  try { await api('/api/users', { method: 'PATCH', body: JSON.stringify({ email, role }) }); m.innerHTML = '<span class="ok">✓ บันทึกแล้ว</span>'; const u = USERS.find((x) => x.email === email); if (u) u.role = role; }
-  catch (e) { m.innerHTML = `<span class="err">${esc(e.message)}</span>`; el.value = role === 'op' ? 'sales' : 'op'; }
+  try { await api('/api/users', { method: 'PATCH', body: JSON.stringify({ email, [field]: value }) }); if (u) u[field] = value; render(); const m2 = document.getElementById('m-' + email); if (m2) m2.innerHTML = '<span class="ok">✓ บันทึกแล้ว</span>'; }
+  catch (e) { m.innerHTML = `<span class="err">${esc(e.message)}</span>`; if (u) el.value = u[field]; }
   finally { el.disabled = false; }
 }
 (async () => {
   try { USERS = (await api('/api/users')).users.sort((a, b) => (b.admin - a.admin) || String(a.name).localeCompare(String(b.name))); render(); }
-  catch (e) { $('rows').innerHTML = `<tr><td colspan="4" class="err">${esc(e.message)}</td></tr>`; }
+  catch (e) { $('rows').innerHTML = `<tr><td colspan="5" class="err">${esc(e.message)}</td></tr>`; }
 })();
 </script>
 </body>

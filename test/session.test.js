@@ -37,11 +37,18 @@ test('roles from the Users tab: default sales, admins fixed, only admins can cha
   await users.touch('new.sales@globish.co.th', 'New');
   assert.equal(await users.roleOf('new.sales@globish.co.th'), 'sales');
   const admin = { email: 'finance@globish.co.th', admin: true };
-  await users.setRole(admin, 'new.sales@globish.co.th', 'op');
+  const who = (e) => users.requireUser({ headers: { cookie: 'gc_session=' + encodeURIComponent(s.sign({ email: e, name: 'N', exp: Date.now() + 1e6 })) } });
+  assert.equal((await who('new.sales@globish.co.th')).team, 'both');
+  assert.equal((await who('new.sales@globish.co.th')).catalog, true);
+  await users.setRole(admin, 'new.sales@globish.co.th', { team: 'b2c' });
+  assert.equal((await who('new.sales@globish.co.th')).catalog, false, 'b2c sales cannot see the catalog');
+  await assert.rejects(users.setRole(admin, 'new.sales@globish.co.th', { team: 'b2e' }), /team/);
+  await users.setRole(admin, 'new.sales@globish.co.th', { role: 'op' });
   assert.equal(await users.roleOf('new.sales@globish.co.th'), 'op');
-  await assert.rejects(users.setRole({ email: 'x@globish.co.th', admin: false }, 'new.sales@globish.co.th', 'sales'), /ผู้ดูแลสิทธิ์/);
-  await assert.rejects(users.setRole(admin, 'chayut.j@globish.co.th', 'sales'), /เปลี่ยนไม่ได้/);
-  await assert.rejects(users.setRole(admin, 'nobody@globish.co.th', 'op'), /ไม่พบ/);
+  assert.equal((await who('new.sales@globish.co.th')).catalog, true, 'Accountant / Admin always see the catalog');
+  await assert.rejects(users.setRole({ email: 'x@globish.co.th', admin: false }, 'new.sales@globish.co.th', { role: 'sales' }), /ผู้ดูแลสิทธิ์/);
+  await assert.rejects(users.setRole(admin, 'chayut.j@globish.co.th', { role: 'sales' }), /เปลี่ยนไม่ได้/);
+  await assert.rejects(users.setRole(admin, 'nobody@globish.co.th', { role: 'op' }), /ไม่พบ/);
   await users.touch('new.sales@globish.co.th', 'New Name'); // re-login keeps the role
   assert.equal(await users.roleOf('new.sales@globish.co.th'), 'op');
   assert.equal((await users.list()).length, 1);

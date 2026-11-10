@@ -48,7 +48,7 @@
       <div class="tt">ขอเอกสาร <span class="badge" id="cart" hidden></span></div>
       <div class="dd">ขอใบเสนอราคา (QT) ขอใบแจ้งหนี้ (INV) และติดตามคำขอของคุณ ใช้ได้ทั้ง B2B, B2E, B2S</div>
     </a>
-    <a class="tile" href="/catalog">
+    <a class="tile" href="/catalog" id="tile-catalog">
       <div class="ico">📋</div>
       <div class="tt">B2B Standard Catalog</div>
       <div class="dd">คำนวณราคาแพ็กเกจ B2B ดู Catalog และ Key H.S. แล้วส่งแพ็กเกจเข้าคำขอ QT</div>
@@ -56,7 +56,7 @@
     <a class="tile" href="/users" id="admin-users" hidden>
       <div class="ico">👥</div>
       <div class="tt">จัดการสิทธิ์ผู้ใช้</div>
-      <div class="dd">กำหนดว่าใครเป็น Sales หรือ Accountant / Admin (เฉพาะผู้ดูแลสิทธิ์)</div>
+      <div class="dd">กำหนด role (Sales / Accountant / Admin) และทีม (B2B / B2C / Both) ของผู้ใช้ (เฉพาะผู้ดูแลสิทธิ์)</div>
     </a>
     <a class="tile" href="/import-contacts" id="op-import" hidden>
       <div class="ico">🔄</div>
@@ -73,6 +73,7 @@
     if (!d || !d.user) return;
     document.getElementById('me').textContent = d.user.email;
     if (d.user.role === 'op') document.getElementById('op-import').hidden = false;
+    if (d.user.catalog === false) document.getElementById('tile-catalog').hidden = true;
     if (d.user.admin) document.getElementById('admin-users').hidden = false;
     if (d.user.name) document.getElementById('hello').textContent = 'สวัสดีครับ คุณ' + d.user.name.split(' ')[0];
   }).catch(function () {});

@@ -50,8 +50,10 @@ export default async function middleware(request) {
   const domain = (process.env.ALLOWED_EMAIL_DOMAIN || 'globish.co.th').toLowerCase();
   const token = readCookie(request.headers.get('cookie'), 'gc_session');
   const user = await verifySession(token, process.env.AUTH_SECRET, domain);
-  if (user) return; // continue to the page
   const url = new URL(request.url);
+  // The catalog is served through /api/catalog (team check); never the raw file.
+  if (/^\/2026B2BStandardCatalog\.html$/i.test(url.pathname)) return Response.redirect(new URL('/catalog' + url.search + url.hash, url), 302);
+  if (user) return; // continue to the page
   const next = url.pathname + url.search + url.hash;
   return Response.redirect(new URL('/signin.html?next=' + encodeURIComponent(next), url), 302);
 }

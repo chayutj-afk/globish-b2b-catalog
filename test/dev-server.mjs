@@ -16,6 +16,7 @@ http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   res.status = (c) => { res.statusCode = c; return res; };
   res.json = (o) => { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(o)); return res; };
+  res.send = (b) => { res.end(b); return res; };
 
   if (url.pathname.startsWith('/api/')) {
     const file = path.join(root, url.pathname + '.js');
@@ -34,7 +35,13 @@ http.createServer(async (req, res) => {
     const r = await middleware(new Request(url, { headers: { cookie: req.headers.cookie || '' } }));
     if (r) { res.writeHead(r.status, { Location: r.headers.get('location') }); return res.end(); }
   }
-  const REWRITES = { '/': '/home.html', '/catalog': '/2026B2BStandardCatalog.html', '/request': '/request.html', '/import-contacts': '/import-contacts.html', '/users': '/users.html' };
+  if (url.pathname === '/catalog') {
+    const file = path.join(root, 'api/catalog.js');
+    req.headers['x-forwarded-proto'] = 'http';
+    delete require.cache[file];
+    return require(file)(req, res);
+  }
+  const REWRITES = { '/': '/home.html', '/request': '/request.html', '/import-contacts': '/import-contacts.html', '/users': '/users.html' };
   let p = REWRITES[url.pathname] || url.pathname;
   const file = path.join(root, p);
   if (!file.startsWith(root) || !fs.existsSync(file)) { res.statusCode = 404; return res.end('not found'); }

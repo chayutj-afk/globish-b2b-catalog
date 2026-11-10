@@ -324,7 +324,7 @@ function onSegment() {
   $('q-opp-label').textContent = `Opportunity ID ใน CRM${seg === 'B2B' || seg === 'B2E' ? ' *' : ' (ถ้ามี)'}`;
   const k = KINDS[seg];
   const add = [];
-  if (k.includes('catalog')) add.push('<a class="btn btn-o" href="/catalog?return=request" onclick="saveDraft()">➕ เลือกจาก B2B Catalog</a>');
+  if (k.includes('catalog') && !(ME && ME.catalog === false)) add.push('<a class="btn btn-o" href="/catalog?return=request" onclick="saveDraft()">➕ เลือกจาก B2B Catalog</a>');
   if (k.includes('keyhs')) add.push('<button class="btn btn-o" type="button" onclick="addLine(\'keyhs\')">➕ Customized Package (Key H.S.)</button>');
   if (k.includes('surcharge')) add.push('<button class="btn btn-o" type="button" onclick="addLine(\'surcharge\')">➕ ค่าเพิ่ม (โค้ชต่างชาติ / เดินทาง)</button>');
   if (k.includes('service')) add.push('<button class="btn btn-o" type="button" onclick="addLine(\'service\')">➕ แพ็กเกจ Whitehouse / รหัสบริการ PEAK</button>');

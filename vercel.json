@@ -6,7 +6,7 @@
     },
     {
       "source": "/catalog",
-      "destination": "/2026B2BStandardCatalog.html"
+      "destination": "/api/catalog"
     },
     {
       "source": "/request",
@@ -27,6 +27,9 @@
     },
     "api/contacts.js": {
       "maxDuration": 30
+    },
+    "api/catalog.js": {
+      "includeFiles": "2026B2BStandardCatalog.html"
     }
   }
 }

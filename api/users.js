@@ -1,6 +1,6 @@
 // /api/users  (admins only: finance@ / chayut.j@)
 //   GET   → everyone who has signed in, with their role
-//   PATCH { email, role: 'sales' | 'op' } → change a user's role
+//   PATCH { email, role?: 'sales' | 'op', team?: 'b2b' | 'b2c' | 'both' } → change a user's access
 const { checkOrigin, sendError } = require('../lib/session');
 const users = require('../lib/users');
 
@@ -13,7 +13,7 @@ module.exports = async function handler(req, res) {
     if (req.method === 'PATCH') {
       checkOrigin(req);
       const b = req.body || {};
-      await users.setRole(me, b.email, b.role);
+      await users.setRole(me, b.email, { role: b.role, team: b.team });
       return res.status(200).json({ ok: true });
     }
     res.status(405).json({ ok: false, error: 'Method not allowed' });

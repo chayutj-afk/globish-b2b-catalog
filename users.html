@@ -4,43 +4,40 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>จัดการสิทธิ์ผู้ใช้</title>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem('gsd_theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')}catch(e){}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500&family=Rubik:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/app.css">
 <style>
-  :root{--primary:#E8590C;--ink:#1f2937;--muted:#6b7280;--line:#e5e7eb;--bg:#f8fafc}
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);font-family:'Sarabun',system-ui,sans-serif;color:var(--ink)}
-  main{max-width:880px;margin:0 auto;padding:28px 16px}
-  a{color:var(--primary)}
-  h1{font-size:21px;margin:0 0 6px}
-  .sub{color:var(--muted);font-size:14px;line-height:1.6;margin:0 0 14px}
-  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:6px 0;overflow-x:auto}
-  table{border-collapse:collapse;width:100%;font-size:14px}
-  th,td{padding:10px 14px;text-align:left;border-top:1px solid var(--line);white-space:nowrap}
-  th{border-top:0;color:var(--muted);font-weight:600;font-size:13px}
-  td.who{white-space:normal}
-  .small{font-size:12px;color:var(--muted)}
-  select{font:inherit;padding:6px 8px;border:1.5px solid var(--line);border-radius:8px;background:#fff}
-  .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;background:#fff7ed;color:#9a3412;border:1px solid #fed7aa}
-  .ok{color:#15803d;font-size:12px}.err{color:#b91c1c;font-size:12px}
-  .legend{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}
-  .legend div{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:13px;line-height:1.6}
-  @media(max-width:640px){.legend{grid-template-columns:1fr}}
-  input[type=search]{font:inherit;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;width:100%;max-width:320px;margin-bottom:10px}
+td.who{white-space:normal}
+.card.tbl{padding:4px 0;overflow-x:auto}
+.card.tbl table{border-collapse:collapse;width:100%;font-size:13.5px}
+.card.tbl th,.card.tbl td{padding:11px 16px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+.card.tbl th{color:var(--head);font-weight:500;font-size:12.5px;border-bottom-color:var(--line2)}
+.card.tbl select{padding:6px 9px;border:1px solid var(--line2);border-radius:4px;background:var(--input);color:var(--ink);font-size:13px}
+.pill{display:inline-block;padding:1px 10px;border-radius:9999px;font-size:11.5px;background:var(--primary);color:#fff}
+.ok{color:var(--ok-ink);font-size:12px}.err{color:var(--bad-ink);font-size:12px}
+.legend{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0}
+.legend div{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;font-size:13px;line-height:1.6}
+.legend b{color:var(--head);font-weight:500}
+@media(max-width:640px){.legend{grid-template-columns:1fr}}
+.sub{color:var(--muted);font-size:13px;line-height:1.7;margin:0 0 6px}
+#q{margin-bottom:12px}
 </style>
 </head>
-<body>
+<body data-page="users">
+<div class="app"><nav class="rail" id="rail"></nav><div class="main">
+<header class="top"><h1 id="page-title">จัดการสิทธิ์ผู้ใช้</h1><div class="top-r" id="top-r"></div></header>
+<script src="/shell.js"></script>
 <main>
-  <p class="sub"><a href="/">← เมนู</a></p>
-  <h1>จัดการสิทธิ์ผู้ใช้</h1>
   <p class="sub">ทุกคนที่เคยเข้าสู่ระบบด้วยบัญชี @globish.co.th จะอยู่ในรายการนี้ และเริ่มต้นเป็น Sales ทีม Both ทีม B2C จะไม่เห็น B2B Product Catalog · Sales Performance คือชื่อในกลุ่มจัดประเภทของ PEAK ที่ระบบติดให้ใบเสนอราคาของคนนั้น (รายชื่ออยู่ในชีท Lists คอลัมน์ K) ผู้ดูแลสิทธิ์ (finance@ และ chayut.j@) เปลี่ยน role ได้ มีผลกับผู้ใช้คนนั้นภายในไม่เกิน 1 นาที ไม่ต้องเข้าสู่ระบบใหม่</p>
   <div class="legend">
     <div><b>Sales</b><br>ขอ QT / INV และเห็นเฉพาะคำขอของตัวเอง</div>
     <div><b>Accountant / Admin</b><br>เห็นคำขอของทุกคน กดอนุมัติ / ตีกลับ / ใส่เลข INV นำเข้ารายชื่อลูกค้า PEAK และแก้ Catalog</div>
   </div>
   <input type="search" id="q" placeholder="ค้นหาชื่อหรืออีเมล" oninput="render()">
-  <div class="card"><table><thead><tr><th>ผู้ใช้</th><th>เข้าใช้ล่าสุด</th><th>Role</th><th>ทีม</th><th>Sales Performance (PEAK)</th><th></th></tr></thead><tbody id="rows"><tr><td colspan="6" class="small">กำลังโหลด…</td></tr></tbody></table></div>
-</main>
+  <div class="card tbl"><table><thead><tr><th>ผู้ใช้</th><th>เข้าใช้ล่าสุด</th><th>Role</th><th>ทีม</th><th>Sales Performance (PEAK)</th><th></th></tr></thead><tbody id="rows"><tr><td colspan="6" class="small">กำลังโหลด…</td></tr></tbody></table></div>
+</main></div></div>
 <script>
 const $ = (id) => document.getElementById(id);
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

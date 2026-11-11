@@ -5,7 +5,7 @@
 // verify() mirrors lib/session.js (Node crypto) using Web Crypto; keep them in step.
 
 export const config = {
-  matcher: ['/((?!api/|signin\\.html|favicon\\.ico).*)'],
+  matcher: ['/((?!api/|signin\\.html|app\\.css|favicon\\.ico).*)'],
 };
 
 const enc = new TextEncoder();

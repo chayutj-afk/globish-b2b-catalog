@@ -77,7 +77,7 @@
       <div class="fg"><label>ลูกค้าต้องออก PO ไหม</label><select id="q-po"><option value="no">ไม่ต้องใช้ PO</option><option value="yes">ต้องมี PO</option></select></div>
       <div class="fg"><label>หมายเหตุถึงฝ่ายบัญชี</label><input id="q-note" type="text" maxlength="1000"></div>
     </div>
-    <div class="row c3"><div class="fg"><label>อีเมลลูกค้า (สำหรับส่งเอกสาร) *</label><input id="q-email" type="email" maxlength="120" placeholder="name@company.com"></div></div>
+    <input type="hidden" id="q-replaces"><div class="row c3"><div class="fg"><label>อีเมลลูกค้า (สำหรับส่งเอกสาร) *</label><input id="q-email" type="email" maxlength="120" placeholder="name@company.com"></div></div>
   </div>
 
   <div class="card">
@@ -623,7 +623,7 @@ async function submitQT() {
   const body = {
     segment: seg, dealType: v('q-deal'), opportunityId: seg === 'B2S' ? '' : getOpp('q'),
     taxId: v('q-tax'), branch: v('q-branch'), clientCode: v('q-client'), company: v('q-company'),
-    docLang: v('q-lang'), wantedQtDate: v('q-date'), creditTermDays: v('q-term'), whtRate: v('q-wht'), poRequired: v('q-po') === 'yes', note: v('q-note'), customerEmail: v('q-email'),
+    docLang: v('q-lang'), wantedQtDate: v('q-date'), creditTermDays: v('q-term'), whtRate: v('q-wht'), poRequired: v('q-po') === 'yes', note: v('q-note'), customerEmail: v('q-email'), replaces: v('q-replaces'),
     items: CART,
   };
   if (!CART.length) return msg('q-msg', 'err', 'ยังไม่มีรายการสินค้า');
@@ -653,7 +653,7 @@ async function submitQT() {
     if (!d) { msg('q-msg', 'info', 'ยังไม่ได้ส่ง ดูคำขอเดิมได้ที่ "คำขอของฉัน"'); return; }
     $('q-msg').innerHTML = `<div class="done-card"><b>✓ ส่งคำขอ ${esc(d.requestId)} แล้ว</b><div style="margin:6px 0 10px">ยอดก่อน VAT ${fmt(d.total)} · ${esc(d.message)}${d.belowFloor ? '<br>มีรายการต่ำกว่าราคาขั้นต่ำ Catalog (บันทึกไว้ให้ผู้อนุมัติเห็น)' : ''}</div><button class="btn btn-o btn-sm" onclick="go('mine')">ดูสถานะในคำขอของฉัน</button></div>`;
     CART = []; saveCart(); renderItems();
-    ['q-opp-y', 'q-opp-n', 'q-tax', 'q-branch', 'q-client', 'q-company', 'q-date', 'q-term', 'q-wht', 'q-note', 'q-email'].forEach((id) => { $(id).value = ''; }); paintOpp('q');
+    ['q-opp-y', 'q-opp-n', 'q-tax', 'q-branch', 'q-client', 'q-company', 'q-date', 'q-term', 'q-wht', 'q-note', 'q-email', 'q-replaces'].forEach((id) => { $(id).value = ''; }); paintOpp('q');
     onTaxInput('q');
     clearDraft();
     taxHint('q'); loadAll();
@@ -878,15 +878,18 @@ async function loadAll() {
 
 function renderMine() {
   const op = ME && ME.role === 'op';
-  $('mine-qt').innerHTML = REQS.length ? REQS.map((q) => {
+  const replaced = new Set(REQS.map((q) => q.replaces).filter(Boolean));
+  const shownQ = REQS.filter((q) => !replaced.has(q.requestId));
+  $('mine-qt').innerHTML = shownQ.length ? shownQ.map((q) => {
     const heroes = (q.lines || []).filter((l) => l.role !== 'supplement').map((l) => `${esc(l.packageId === 'CUSTOM' ? 'Customized' : l.packageId === 'SURCHARGE' ? 'ค่าเพิ่ม' : l.packageId)} × ${esc(l.qty)}`).join(', ');
     const total = toNum(q.totalPreVat), done = toNum(q.invoicedPreVat);
     const mineIvs = IVS.filter((v) => v.requestId === q.requestId);
     return `<div class="list-row">
       <div class="list-head"><div>${q.peakQtNo ? `<span class="list-id">QT ${qtLink(q)}</span>` : '<span class="small">ยังไม่มีเลข QT</span>'} · ${esc(q.company)}</div>${st(QT_ST, q.status)}</div>
-      <div class="list-sub">${esc(q.requestId)} · ${esc(q.createdAt)} · ${esc(q.segment)}${q.opportunityId ? ' · ' + esc(q.opportunityId) : ''}${op ? ' · ' + esc(q.salesName) : ''}<br>
+      <div class="list-sub">${esc(q.requestId)}${q.replaces ? ` <span class="small">(แทนคำขอ ${esc(q.replaces)} ที่ถูกตีกลับ)</span>` : ''} · ${esc(q.createdAt)} · ${esc(q.segment)}${q.opportunityId ? ' · ' + esc(q.opportunityId) : ''}${op ? ' · ' + esc(q.salesName) : ''}<br>
         ${heroes}<br>ยอดก่อน VAT <b>${fmt(total)}</b> · ขอ INV แล้ว ${fmt(done)} · คงเหลือ <b>${fmt(total - done)}</b>${q.peakNote ? `<br><span class="small">หมายเหตุ: ${esc(q.peakNote)}</span>` : ''}</div>
       ${mineIvs.length ? `<div class="inv-mini">${mineIvs.map((v) => `<div class="inv-mini-row"><span class="mono">${esc(v.ivRequestId)}</span><span>${esc(v.company)} · ${fmt(toNum(v.amountPreVat))}</span><span>${st(IV_ST, v.status)} ${st(ORIG_ST, v.originalStatus)}</span></div>`).join('')}</div>` : ''}
+      ${q.status === 'rejected' && !op ? `<div style="margin-top:8px"><button class="btn btn-p btn-sm" onclick="rebuildQT('${esc(q.requestId)}')">↻ สร้างคำขอใหม่จากข้อมูลเดิม</button></div>` : ''}
       ${q.peakQtNo && QT_LIVE.includes(q.status) ? `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-o btn-sm" onclick="startInvFor('${esc(q.requestId)}')">🧾 ขอ INV จาก QT นี้</button><button class="btn btn-g btn-sm" onclick="askEdit('QT','${esc(q.peakQtNo)}','${esc(q.requestId)}')">✏️ ขอแก้ไข QT</button></div>` : ''}
     </div>`;
   }).join('') : '<div class="empty">ยังไม่มีคำขอใบเสนอราคา</div>';
@@ -909,6 +912,37 @@ function renderMine() {
   renderMineMore();
 }
 
+
+// ─── rejected QT → new request from the same data (new Request ID; the card replaces the old one) ───
+async function rebuildQT(id) {
+  const q = REQS.find((x) => x.requestId === id); if (!q) return;
+  if ((CART.length || $('q-company').value.trim()) && !(await ask({ kind: 'warn', title: 'แทนที่ข้อมูลในฟอร์ม QT?', ok: 'แทนที่', html: '<p>ฟอร์ม QT มีข้อมูลค้างอยู่ จะถูกแทนด้วยข้อมูลจากคำขอที่ถูกตีกลับ</p>' }))) return;
+  const set = (k, v) => { if ($(k)) $(k).value = v ?? ''; };
+  set('q-segment', q.segment); set('q-deal', q.dealType); setOpp('q', q.opportunityId);
+  set('q-tax', q.taxId); set('q-branch', q.branch); set('q-client', q.clientCode); set('q-company', q.company);
+  set('q-lang', q.docLang || 'TH'); set('q-term', q.creditTermDays); set('q-wht', q.whtRate); set('q-po', q.poRequired === 'Yes' ? 'yes' : 'no');
+  set('q-note', String(q.note || '').replace(/^\[ตรวจเลขภาษี[^\]]*\]\s*/, '')); set('q-email', q.customerEmail);
+  set('q-date', new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10));
+  CART = [];
+  const lines = q.lines || [];
+  lines.forEach((l) => {
+    const n = (v) => (v === '' || v === undefined ? '' : toNum(v));
+    if (l.role === 'hero' && l.packageId === 'CUSTOM') CART.push({ kind: 'keyhs', keyHS: l.keyHS, name: '', qty: n(l.qty), unitPrice: n(l.unitPrice), discount: n(l.discount) || '', extra: l.salesNote || '' });
+    else if (l.role === 'hero') {
+      const pkg = PKGS.find((p) => p.id === l.packageId); const per = pkg && pkg.unit === 'per class';
+      const sur = lines.filter((x) => x.role === 'surcharge' && x.packageId === l.packageId);
+      const coach = sur.find((x) => /Native/i.test(x.description || ''));
+      CART.push({ kind: 'catalog', packageId: l.packageId, students: per ? (pkg.minN || '') : n(l.qty), classes: per ? n(l.qty) : '', unitPrice: n(l.unitPrice), discount: n(l.discount) || '',
+        intl: coach ? (/Non-Native/i.test(coach.description) ? 'nn' : 'na') : '0', loc: sur.some((x) => /Travel/i.test(x.description || '')) ? 'out' : 'in', extra: l.salesNote || '' });
+    } else if (l.role === 'wh_package' || l.role === 'service') CART.push({ kind: 'service', code: l.packageId, name: '', qty: n(l.qty), unitPrice: n(l.unitPrice), discount: n(l.discount) || '', extra: l.salesNote || '', freebie: l.freebie || '', svc: '' });
+    else if (l.role === 'surcharge' && l.packageId === 'SURCHARGE') CART.push({ kind: 'surcharge', type: /Travel|เดินทาง/i.test(l.description || '') ? 'travel' : 'coach', note: String(l.description || '').split(' · ')[1] || '', qty: n(l.qty), unitPrice: n(l.unitPrice), discount: n(l.discount) || '' });
+  });
+  $('q-replaces').value = id; saveCart(); saveDraft();
+  go('qt'); onSegment(); onTaxInput('q'); renderItems();
+  CART.forEach((it, i) => { if (kindOf(it) === 'service' && it.code) lookupSvc(i); });
+  msg('q-msg', 'info', `ดึงข้อมูลจาก ${id} แล้ว แก้ตามที่ฝ่ายบัญชีแจ้ง แล้วกดส่ง ระบบจะออกเลขคำขอใหม่แทนใบเดิม`);
+  window.scrollTo(0, 0);
+}
 
 // ─── receipts + edit requests ───────────────────────────────
 const RT_ST = { new: ['รอฝ่ายบัญชีออก', 'new'], issued: ['ออกแล้ว', 'green'], rejected: ['ตีกลับ', 'red'] };
@@ -1083,9 +1117,13 @@ function renderPending() {
       <div style="overflow-x:auto;margin-top:6px"><table class="items"><thead><tr><th>รายการ (ข้อความที่จะลงใน QT)</th><th class="num">จำนวน</th><th class="num">ราคา/หน่วย</th><th class="num">ส่วนลด</th></tr></thead><tbody>${lineRows(q)}</tbody></table></div></details>
     </div>
     <div class="pc-act">
-      ${fix ? `<button class="btn btn-p btn-sm" onclick="qtAction('${esc(q.requestId)}','reopen')">↻ แก้แล้ว ให้ระบบสร้าง QT ใหม่</button>` : `<button class="btn btn-p btn-sm" onclick="qtAction('${esc(q.requestId)}','approve')">✓ อนุมัติ</button>`}
+      ${fix && q.status === 'needs_review'
+        ? `<span class="small warn">Sales ต้องแก้คำขอเอง: ตีกลับพร้อมเหตุผล แล้ว Sales จะสร้างคำขอใหม่จากข้อมูลเดิม</span>`
+        : fix ? `<button class="btn btn-p btn-sm" onclick="qtAction('${esc(q.requestId)}','reopen')">↻ แก้แล้ว ให้ระบบสร้าง QT ใหม่</button>` : `<button class="btn btn-p btn-sm" onclick="qtAction('${esc(q.requestId)}','approve')">✓ อนุมัติ</button>`}
       <span id="qm-${esc(q.requestId)}"></span>
-      ${rej(q.requestId, 'qtAction', 'qn')}
+      ${fix && q.status === 'needs_review'
+        ? `<div class="in" style="display:flex;gap:8px;width:100%;margin-top:6px"><input id="qn-${esc(q.requestId)}" class="grow" type="text" maxlength="300" value="${esc(String(q.peakNote || '').replace(/^ยังไม่สร้าง QT:\s*/, '').slice(0, 300))}" placeholder="เหตุผลที่ตีกลับ (Sales จะเห็น)"><button class="btn btn-danger btn-sm" onclick="qtAction('${esc(q.requestId)}','reject')">✕ ตีกลับให้ Sales แก้</button></div>`
+        : rej(q.requestId, 'qtAction', 'qn')}
     </div></div>`;
   const secH = (t, n) => `<div class="sec-h">${t} <span class="n">${n} รายการ</span></div>`;
   $('pend-qt').innerHTML = (waitQ.length ? waitQ.map((q) => qCard(q, false)).join('') : '<div class="empty">ไม่มีคำขอ QT รออนุมัติ</div>')
@@ -1200,13 +1238,16 @@ async function markSent(id) {
 
 // ─── QT draft: kept in this browser so a trip to the catalog doesn't lose it ─
 const DRAFT_KEY = 'gc_qt_draft_v1';
-const DRAFT_FIELDS = ['q-segment', 'q-deal', 'q-opp-y', 'q-opp-n', 'q-tax', 'q-branch', 'q-client', 'q-company', 'q-lang', 'q-date', 'q-term', 'q-wht', 'q-po', 'q-note', 'q-email'];
+const DRAFT_FIELDS = ['q-segment', 'q-deal', 'q-opp-y', 'q-opp-n', 'q-tax', 'q-branch', 'q-client', 'q-company', 'q-lang', 'q-date', 'q-term', 'q-wht', 'q-po', 'q-note', 'q-email', 'q-replaces'];
 function saveDraft() { try { const d = {}; DRAFT_FIELDS.forEach((id) => { d[id] = $(id).value; }); localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch {} }
 function restoreDraft() { try { const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null'); if (d) DRAFT_FIELDS.forEach((id) => { if (d[id] !== undefined && d[id] !== null) $(id).value = d[id]; }); } catch {} }
 function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch {} }
 
 // ─── init ─────────────────────────────────────────────────
 (async function init() {
+  // Back from the Catalog after adding a package: loading popup, then land on section 2 (items).
+  let fromCatalog = false; try { fromCatalog = sessionStorage.getItem('gc_from_catalog') === '1'; sessionStorage.removeItem('gc_from_catalog'); } catch {}
+  if (fromCatalog) { $('ld-text').textContent = 'กำลังโหลดรายการสินค้า…'; $('ld-sub').textContent = 'เพิ่มแพ็กเกจจาก Catalog แล้ว'; $('ov-load').hidden = false; }
   loadCart();
   INVS = [blankInv()];
   buildOpp('q'); buildOpp('i');
@@ -1229,7 +1270,7 @@ function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch {} }
     const a = e.target.closest('a[href]'), out = e.target.closest('#out-btn');
     if (!a && !out) return;
     if (a) {
-      if (a.dataset.keep) { KEEP = true; return; }
+      if (a.dataset.keep) { saveDraft(); KEEP = true; return; }
       const u = new URL(a.href, location.href);
       if (a.target === '_blank' || u.origin !== location.origin || u.pathname === location.pathname) return;
     }
@@ -1250,6 +1291,7 @@ function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch {} }
   window.addEventListener('hashchange', () => { const t = location.hash.slice(1); if (['qt', 'inv', 'rt', 'mine', 'pend'].includes(t)) go(t); });
   if ($('q-tax').value.length === 13) onTaxInput('q');
   loadAll();
+  if (fromCatalog) setTimeout(() => { $('ov-load').hidden = true; const c = $('q-items').closest('.card'); if (c) window.scrollTo({ top: c.getBoundingClientRect().top + window.scrollY - 70 }); }, 150);
 })();
 </script>
 </body>

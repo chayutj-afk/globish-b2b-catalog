@@ -51,6 +51,7 @@ function validate(b) {
     opportunityId: normaliseOppId(b.opportunityId),
     whtRate: String(b.whtRate ?? '').trim(),
     customerEmail: text(b.customerEmail, 120),
+    replaces: text(b.replaces, 40),
   };
   if (!SEGMENTS.includes(r.segment)) throw bad('เลือกกลุ่มลูกค้า (B2B / B2C / MaoMao / B2E / B2S / Others)');
   if (!DEAL_TYPES.includes(r.dealType)) throw bad('เลือกประเภทดีล (New Logo / Retention / Others)');
@@ -99,6 +100,12 @@ async function create(req, res, user) {
 
   // Rate limit, counted from the sheet so it holds across serverless instances.
   const existing = await hub.readTable('Requests');
+  // New request rebuilt from a rejected one: it takes that card's place in "my requests".
+  if (r.replaces) {
+    const old = existing.find((x) => x.requestId === r.replaces);
+    if (!old || old.requestedBy !== user.email || old.status !== 'rejected') throw bad('คำขอเดิมที่จะแทนต้องเป็นของคุณและอยู่ในสถานะตีกลับ');
+    if (existing.some((x) => x.replaces === r.replaces)) throw bad(`คำขอ ${r.replaces} ถูกสร้างใหม่ไปแล้ว`, 409);
+  }
   const hourAgo = Date.now() - 3600e3;
   const recent = existing.filter((x) => x.requestedBy === user.email && (parseSheetDate(x.createdAt) || 0) > hourAgo).length;
   if (recent >= LIMIT_PER_HOUR) throw bad(`ส่งคำขอได้ไม่เกิน ${LIMIT_PER_HOUR} ครั้งต่อชั่วโมง`, 429);
@@ -253,7 +260,8 @@ async function update(req, res, user) {
   const FROM = {
     approve: ['new'],
     reject: ['new', 'approved', 'needs_contact', 'needs_service_code', 'needs_review', 'qt_error'],
-    reopen: ['needs_contact', 'needs_service_code', 'needs_review', 'qt_error'],
+    // needs_review = sales must change the request: accounting rejects it, sales rebuilds it.
+    reopen: ['needs_contact', 'needs_service_code', 'qt_error'],
     qt_approved: ['qt_draft'],
   };
   if (!FROM[b.action].includes(row.status)) {

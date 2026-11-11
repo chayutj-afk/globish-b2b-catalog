@@ -2263,17 +2263,21 @@ async function addToRequest() {
     unitPrice: LAST_CALC.unitPrice, intl: LAST_CALC.intl, loc: LAST_CALC.loc,
   });
   saveCart();
-  if (RETURN_TO_REQUEST) {
-    toast(`✅ เพิ่ม ${pkg.id} แล้ว กำลังกลับไปหน้าขอ QT...`);
-    setTimeout(() => { location.href = '/request#qt'; }, 600);
-    return;
-  }
+  if (RETURN_TO_REQUEST) { backToRequest(pkg.id); return; }
   const go = await dialog({
     title: '✅ เพิ่มเข้าคำขอแล้ว',
     html: `<p style="font-size:13.5px">ตอนนี้ในคำขอมี <b>${CART.length} รายการ</b> ไปกรอกข้อมูลลูกค้าและส่งคำขอที่หน้าขอ QT ได้เลย หรือเลือกแพ็กเกจเพิ่มต่อ</p>`,
     buttons: [{ label: 'เลือกแพ็กเกจต่อ', value: false }, { label: '📝 ไปหน้าขอ QT', value: true, cls: 'btn-primary' }],
   });
-  if (go) location.href = '/request#qt';
+  if (go) backToRequest(pkg.id);
+}
+// Loading popup while the request page opens; the request page scrolls to its item list (section 2).
+function backToRequest(id) {
+  try { sessionStorage.setItem('gc_from_catalog', '1'); } catch (e) {}
+  const ov = document.createElement('div'); ov.className = 'ov';
+  ov.innerHTML = `<div class="modal" style="text-align:center;max-width:320px"><div class="spin" style="margin:0 auto 10px"></div><b>เพิ่ม ${escH(id)} แล้ว</b><div style="font-size:12.5px;color:var(--muted);margin-top:4px">กำลังกลับไปหน้าขอ QT…</div></div>`;
+  document.body.appendChild(ov);
+  setTimeout(() => { location.href = '/request#qt'; }, 250);
 }
 
 // Opened from the request page ("เลือกจาก B2B Catalog"): go straight back after adding.

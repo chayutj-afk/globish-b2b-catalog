@@ -44,7 +44,7 @@
     rail.innerHTML = '<a class="logo" href="/" title="Globish Sales Desk">G</a>' + items.map((it) => {
       if (it.sep) return `<div class="sep" ${it.gate ? `data-gate="${it.gate}" hidden` : ''}></div>`;
       const on = (it.k === page) || (onReq && it.k === 'qt' && !location.hash);
-      return `<a class="ri${on ? ' on' : ''}" href="${it.href}" ${it.id ? `id="${it.id}"` : ''} ${it.gate ? `data-gate="${it.gate}" hidden` : ''}>${svg(it.k)}<span>${it.label}</span>${it.badge ? `<span class="badge" id="${it.badge}" hidden></span>` : ''}</a>`;
+      return `<a class="ri${on ? ' on' : ''}" href="${onReq && it.k === 'catalog' ? '/catalog?return=request' : it.href}" ${onReq && it.k === 'catalog' ? 'data-keep="1"' : ''} ${it.id ? `id="${it.id}"` : ''} ${it.gate ? `data-gate="${it.gate}" hidden` : ''}>${svg(it.k)}<span>${it.label}</span>${it.badge ? `<span class="badge" id="${it.badge}" hidden></span>` : ''}</a>`;
     }).join('');
     if (onReq) rail.querySelectorAll('a.ri[id^="nav-"]').forEach((a) => a.addEventListener('click', (e) => {
       if (typeof window.go === 'function') { e.preventDefault(); window.go(a.id.slice(4)); }

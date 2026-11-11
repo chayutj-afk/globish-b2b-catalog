@@ -44,11 +44,14 @@ table.sum tr.tot td{font-weight:500;color:var(--head)}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 @media(max-width:900px){.two{grid-template-columns:1fr}}
 .more{margin-top:10px;text-align:center}
+.acts{display:flex;gap:8px;flex-wrap:wrap;padding:12px 0}
+#ov-load{z-index:1100}
 .filters select.sel{width:auto;min-width:140px}.filters .search{flex:1;min-width:200px}
 </style>
 </head>
 <body data-page="ar">
 <div class="ov" id="ov-modal" hidden><div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="m-title"><h3 id="m-title"></h3><div class="mb" id="m-body"></div><div class="mf"><button class="btn btn-g" id="m-cancel">ยกเลิก</button><button class="btn btn-p" id="m-ok">ยืนยัน</button></div></div></div>
+<div class="ov" id="ov-form" hidden><div class="modal" style="max-width:620px" role="dialog" aria-modal="true" aria-labelledby="f-title"><h3 id="f-title"></h3><div class="mb" id="f-body"></div><div class="mf"><button class="btn btn-g" id="f-cancel" type="button">ยกเลิก</button><button class="btn btn-p" id="f-ok" type="button">บันทึก</button></div></div></div>
 <div class="ov" id="ov-load" hidden><div class="ldbox" role="status" aria-live="polite"><div class="spin"></div><b id="ld-text">กำลังดำเนินการ…</b><small id="ld-sub">กรุณารอสักครู่</small></div></div>
 <div class="app"><nav class="rail" id="rail"></nav><div class="main">
 <header class="top"><h1 id="page-title">ติดตามหนี้ (AR)</h1><div class="top-r" id="top-r"></div></header>
@@ -200,62 +203,88 @@ function render() {
 
 const opt = (list, v, blank) => (blank ? `<option value="">${blank}</option>` : '') + list.map((x) => `<option ${x === v ? 'selected' : ''}>${esc(x)}</option>`).join('');
 function detail(r) {
-  const L = D.lists, id = esc(r.ivNo);
+  const id = esc(r.ivNo);
   const kv = (k, v) => v ? `<div><span>${k}</span>${v}</div>` : '';
   const fu = (r.followUps || []).slice().reverse().map((f) => `<div><b>${esc(f.loggedAt)}</b> · ${esc(f.channel)} · ${esc(f.result)}${f.nextActionDate ? ' · นัด ' + esc(f.nextActionDate) : ''}<br><span class="small">${esc(f.by)}${f.note ? ' — ' + esc(f.note) : ''}</span></div>`).join('') || '<div class="small">ยังไม่มีบันทึก</div>';
   const paid = r.state === 'Paid', closed = r.state === 'Closed';
   return `<tr class="det"><td colspan="8">
-    <div class="kv">${kv('วันที่ออก', esc(r.issueDate))}${kv('เครดิต', esc(r.creditTermDays) + ' วัน')}${kv('ก่อน VAT', fmt(toNum(r.preVat)))}${kv('หัก ณ ที่จ่าย', whtPct(r.whtRate))}${kv('QT', esc(r.qtNo))}${kv('เลขภาษี', esc(r.taxId) + (r.branch ? ' / ' + esc(r.branch) : ''))}${kv('PO', esc(r.poNo))}${kv('งวด', esc(r.installment))}${kv('RT', esc(r.rtNo))}${kv('วันที่รับเงิน', esc(r.paidDate))}${kv('วิธีจ่าย', esc(r.paymentMethod))}${kv('เหตุผลจ่ายช้า', esc(r.delayReason))}${kv('หมายเหตุ', esc(r.note))}${kv('ที่มา', esc(r.source))}</div>
-    <div class="grid2">
-      <div class="box"><h4>บันทึกการติดตาม</h4>
-        <div class="row"><div class="fg"><label>ช่องทาง *</label><select id="fu-ch-${id}">${opt(L.channels, '', '— เลือก —')}</select></div>
-        <div class="fg"><label>ผล *</label><select id="fu-rs-${id}">${opt(L.follow, '', '— เลือก —')}</select></div></div>
-        <div class="row"><div class="fg"><label>ลูกค้านัดจ่าย</label><input type="date" id="fu-cm-${id}" value="${iso(r.commitDate)}"></div>
-        <div class="fg"><label>ติดตามครั้งถัดไป</label><input type="date" id="fu-nx-${id}"></div></div>
-        <div class="fg"><label>หมายเหตุ</label><input type="text" id="fu-nt-${id}" maxlength="500"></div>
-        <button class="btn btn-p btn-sm" onclick="saveFollow('${id}')">บันทึกการติดตาม</button><div id="fu-msg-${id}"></div>
-        <h4 style="margin-top:14px">ประวัติ</h4><div class="log">${fu}</div>
-      </div>
-      <div class="box"><h4>${paid ? 'แก้ไขการรับเงิน' : 'บันทึกรับเงิน'}</h4>
-        <div class="row"><div class="fg"><label>วันที่รับเงิน *</label><input type="date" id="pd-dt-${id}" value="${iso(r.paidDate)}"></div>
-        <div class="fg"><label>ยอดที่ได้รับ *</label><input type="text" inputmode="decimal" id="pd-am-${id}" value="${r.paidAmount ? esc(r.paidAmount) : (paid ? '' : r.expected)}"></div></div>
-        <div class="row"><div class="fg"><label>วิธีชำระ *</label><select id="pd-mt-${id}">${opt(L.payMethods, r.paymentMethod, '— เลือก —')}</select></div>
-        <div class="fg"><label>เลขที่ใบเสร็จ (RT)</label><input type="text" id="pd-rt-${id}" value="${esc(r.rtNo || '')}" placeholder="RT-2026…"></div></div>
-        <div class="fg"><label>เหตุผลที่จ่ายช้า (ถ้ามี)</label><select id="pd-dl-${id}">${opt(L.delay, r.delayReason, '—')}</select></div>
-        <button class="btn btn-p btn-sm" onclick="savePaid('${id}')" ${closed ? 'disabled' : ''}>✓ บันทึกรับเงิน</button><div id="pd-msg-${id}"></div>
-        ${paid && !r.rtNo ? `<div class="msg info" style="margin-top:8px">รับเงินแล้ว ออกใบเสร็จจาก INV นี้ได้ที่ <a href="/request#pend">รออนุมัติ › ใบเสร็จ</a></div>` : ''}
-        <h4 style="margin-top:14px">สถานะเอกสาร</h4>
-        <div class="row"><div class="fg"><select id="ds-${id}">${opt(L.docStatus, r.docStatus || 'Active')}</select><div class="sub">Cancelled = ยกเลิก INV · Replaced = ออกใบใหม่แทน</div></div>
-        <div class="fg"><input type="text" id="ds-nt-${id}" maxlength="500" placeholder="หมายเหตุ" value="${esc(r.note || '')}"></div></div>
-        <button class="btn btn-g btn-sm" onclick="saveDoc('${id}')">บันทึกสถานะ / หมายเหตุ</button>
-      </div>
-    </div></td></tr>`;
+    <div class="acts">
+      ${closed ? '' : `<button class="btn btn-p btn-sm" onclick="openFollow('${id}')">📞 บันทึกการติดตาม</button>`}
+      ${closed ? '' : `<button class="btn ${paid ? 'btn-g' : 'btn-p'} btn-sm" onclick="openPaid('${id}')">💰 ${paid ? 'แก้ไขการรับเงิน' : 'บันทึกรับเงิน'}</button>`}
+      <button class="btn btn-g btn-sm" onclick="openDoc('${id}')">📄 สถานะเอกสาร / หมายเหตุ</button>
+      ${paid && !r.rtNo ? `<a class="btn btn-o btn-sm" href="/request#pend">🧾 ออกใบเสร็จ (รออนุมัติ › ใบเสร็จ)</a>` : ''}
+    </div>
+    <div class="kv">${kv('วันที่ออก', esc(r.issueDate))}${kv('เครดิต', esc(r.creditTermDays) + ' วัน')}${kv('ก่อน VAT', fmt(toNum(r.preVat)))}${kv('หัก ณ ที่จ่าย', whtPct(r.whtRate))}${kv('QT', esc(r.qtNo))}${kv('เลขภาษี', esc(r.taxId) + (r.branch ? ' / ' + esc(r.branch) : ''))}${kv('PO', esc(r.poNo))}${kv('งวด', esc(r.installment))}${kv('ลูกค้านัดจ่าย', esc(r.commitDate))}${kv('RT', esc(r.rtNo))}${kv('วันที่รับเงิน', esc(r.paidDate))}${kv('ยอดที่รับ', r.paidAmount ? fmt(toNum(r.paidAmount)) : '')}${kv('วิธีจ่าย', esc(r.paymentMethod))}${kv('เหตุผลจ่ายช้า', esc(r.delayReason))}${kv('หมายเหตุ', esc(r.note))}${kv('ที่มา', esc(r.source))}</div>
+    <div class="box"><h4>ประวัติการติดตาม</h4><div class="log">${fu}</div></div>
+  </td></tr>`;
 }
 
+// Form popup: stays open on errors, closes after a successful save.
+function formModal({ title, html, ok = 'บันทึก', save }) {
+  $('f-title').textContent = title; $('f-body').innerHTML = html + '<div id="f-msg"></div>'; $('f-ok').textContent = ok;
+  $('ov-form').hidden = false; setTimeout(() => { const el = $('f-body').querySelector('select,input'); if (el) el.focus(); }, 30);
+  const close = () => { $('ov-form').hidden = true; $('f-ok').onclick = $('f-cancel').onclick = null; document.removeEventListener('keydown', key); };
+  const key = (e) => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', key);
+  $('f-cancel').onclick = close;
+  $('f-ok').onclick = async () => {
+    const err = (t) => { $('f-msg').innerHTML = `<div class="msg err">${esc(t)}</div>`; };
+    try { const r = await save(err); if (r !== false) close(); } catch (e) { err(e.message); }
+  };
+}
 const find = (iv) => D.invoices.find((r) => r.ivNo === iv);
-const show = (id, kind, t) => { const el = $(id); if (el) el.innerHTML = `<div class="msg ${kind}">${esc(t)}</div>`; };
-async function saveFollow(iv) {
-  const r = find(iv); const g = (k) => $(`fu-${k}-${iv}`).value;
-  const body = { action: 'ar_followup', ivNo: iv, channel: g('ch'), result: g('rs'), commitDate: g('cm'), nextActionDate: g('nx'), note: g('nt') };
-  if (!body.channel || !body.result) return show(`fu-msg-${iv}`, 'err', 'เลือกช่องทางและผลการติดตาม');
-  try { await withLoading('กำลังบันทึก…', () => api('/api/invoice-requests', { method: 'PATCH', body: JSON.stringify(body) })); await load(); show(`fu-msg-${iv}`, 'ok', 'บันทึกแล้ว'); }
-  catch (e) { show(`fu-msg-${iv}`, 'err', e.message); }
+const val = (id) => ($(id).value || '').trim();
+const patch = (body) => withLoading('กำลังบันทึก…', () => api('/api/invoice-requests', { method: 'PATCH', body: JSON.stringify(body) }));
+const head = (r) => `<p style="margin:0 0 12px"><b>${esc(r.company)}</b> · ${esc(r.ivNo)}<br><span class="small">ครบกำหนด ${esc(r.dueDate)} · ต้องได้รับ ${fmt(r.expected)} บาท${r.daysOverdue ? ` · เกิน ${r.daysOverdue} วัน` : ''}</span></p>`;
+const done = async (t) => { await load(); $('msg').innerHTML = `<div class="msg ok">${esc(t)}</div>`; };
+
+function openFollow(iv) {
+  const r = find(iv), L = D.lists;
+  formModal({ title: '📞 บันทึกการติดตาม', html: head(r) + `
+    <div class="row"><div class="fg"><label>ช่องทาง *</label><select id="fu-ch">${opt(L.channels, '', '— เลือก —')}</select></div>
+    <div class="fg"><label>ผล *</label><select id="fu-rs">${opt(L.follow, '', '— เลือก —')}</select></div></div>
+    <div class="row"><div class="fg"><label>ลูกค้านัดจ่าย</label><input type="date" id="fu-cm" value="${iso(r.commitDate)}"></div>
+    <div class="fg"><label>ติดตามครั้งถัดไป</label><input type="date" id="fu-nx"></div></div>
+    <div class="fg"><label>หมายเหตุ</label><input type="text" id="fu-nt" maxlength="500" placeholder="เช่น คุยกับฝ่ายบัญชีลูกค้า รอรอบจ่ายวันที่ 25"></div>`,
+    save: async (err) => {
+      const body = { action: 'ar_followup', ivNo: iv, channel: val('fu-ch'), result: val('fu-rs'), commitDate: val('fu-cm'), nextActionDate: val('fu-nx'), note: val('fu-nt') };
+      if (!body.channel || !body.result) { err('เลือกช่องทางและผลการติดตาม'); return false; }
+      await patch(body); await done(`บันทึกการติดตาม ${iv} แล้ว`);
+    } });
 }
-async function savePaid(iv) {
-  const r = find(iv); const g = (k) => $(`pd-${k}-${iv}`).value.trim();
-  const body = { action: 'ar_update', ivNo: iv, paidDate: g('dt'), paidAmount: g('am'), paymentMethod: g('mt'), rtNo: g('rt'), delayReason: g('dl') };
-  if (!body.paidDate || !body.paidAmount || !body.paymentMethod) return show(`pd-msg-${iv}`, 'err', 'ใส่วันที่รับเงิน ยอด และวิธีชำระ');
-  const diff = toNum(body.paidAmount) - r.expected;
-  if (!(await ask({ title: 'บันทึกว่าได้รับเงินแล้ว?', ok: '✓ บันทึก', html: `<p><b>${esc(r.company)}</b> · ${esc(iv)}</p><p>รับ ${fmt(toNum(body.paidAmount))} บาท วันที่ ${esc(body.paidDate)} (${esc(body.paymentMethod)})${body.rtNo ? '<br>RT ' + esc(body.rtNo) : ''}</p>${Math.abs(diff) > 1 ? `<p class="warn">ยอดต่างจากที่ควรได้รับ ${fmt(r.expected)} อยู่ ${fmt(diff)} บาท</p>` : ''}` }))) return;
-  try { await withLoading('กำลังบันทึก…', () => api('/api/invoice-requests', { method: 'PATCH', body: JSON.stringify(body) })); OPEN = null; await load(); $('msg').innerHTML = `<div class="msg ok">บันทึกรับเงิน ${esc(iv)} แล้ว</div>`; }
-  catch (e) { show(`pd-msg-${iv}`, 'err', e.message); }
+function openPaid(iv) {
+  const r = find(iv), L = D.lists, paid = r.state === 'Paid';
+  formModal({ title: paid ? '💰 แก้ไขการรับเงิน' : '💰 บันทึกรับเงิน', ok: '✓ บันทึกรับเงิน', html: head(r) + `
+    <div class="row"><div class="fg"><label>วันที่รับเงิน *</label><input type="date" id="pd-dt" value="${iso(r.paidDate)}"></div>
+    <div class="fg"><label>ยอดที่ได้รับ *</label><input type="text" inputmode="decimal" id="pd-am" value="${r.paidAmount ? esc(r.paidAmount) : r.expected}"><div class="sub">ที่ควรได้รับ ${fmt(r.expected)} (รวม VAT หัก WHT)</div></div></div>
+    <div class="row"><div class="fg"><label>วิธีชำระ *</label><select id="pd-mt">${opt(L.payMethods, r.paymentMethod, '— เลือก —')}</select></div>
+    <div class="fg"><label>เหตุผลที่จ่ายช้า (ถ้ามี)</label><select id="pd-dl">${opt(L.delay, r.delayReason, '—')}</select></div></div>
+    <p class="small">ใบเสร็จ (RT) ฝ่ายบัญชีออกจาก INV นี้ได้หลังบันทึกรับเงิน ที่หน้า รออนุมัติ › ใบเสร็จ</p>`,
+    save: async (err) => {
+      const body = { action: 'ar_update', ivNo: iv, paidDate: val('pd-dt'), paidAmount: val('pd-am'), paymentMethod: val('pd-mt'), delayReason: val('pd-dl') };
+      if (!body.paidDate || !body.paidAmount || !body.paymentMethod) { err('ใส่วันที่รับเงิน ยอด และวิธีชำระ'); return false; }
+      const diff = toNum(body.paidAmount) - r.expected;
+      if (Math.abs(diff) > 1 && !confirmDiff) { confirmDiff = true; err(`ยอดต่างจากที่ควรได้รับ ${fmt(r.expected)} อยู่ ${fmt(diff)} บาท กดบันทึกอีกครั้งเพื่อยืนยัน`); return false; }
+      confirmDiff = false;
+      await patch(body); OPEN = null; await done(`บันทึกรับเงิน ${iv} แล้ว`);
+    } });
+  confirmDiff = false;
 }
-async function saveDoc(iv) {
-  const r = find(iv); const ds = $(`ds-${iv}`).value, note = $(`ds-nt-${iv}`).value.trim();
-  if (ds !== (r.docStatus || 'Active') && !(await ask({ title: ds === 'Active' ? 'เปิด INV นี้กลับมา?' : `เปลี่ยนสถานะเป็น ${ds}?`, kind: ds === 'Active' ? '' : 'danger', ok: 'ยืนยัน', html: `<p><b>${esc(r.company)}</b> · ${esc(iv)}</p><p class="small">${ds === 'Active' ? 'INV จะกลับมาอยู่ในยอดค้างรับ' : 'INV จะไม่นับในยอดค้างรับและยอดออก INV อีก'}</p>` }))) return;
-  try { await withLoading('กำลังบันทึก…', () => api('/api/invoice-requests', { method: 'PATCH', body: JSON.stringify({ action: 'ar_update', ivNo: iv, docStatus: ds, note }) })); await load(); }
-  catch (e) { $('msg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
+let confirmDiff = false;
+function openDoc(iv) {
+  const r = find(iv), L = D.lists;
+  formModal({ title: '📄 สถานะเอกสาร / หมายเหตุ', html: head(r) + `
+    <div class="fg"><label>สถานะ INV</label><select id="ds-st">${opt(L.docStatus, r.docStatus || 'Active')}</select><div class="sub">Active = ใช้งาน · Cancelled = ยกเลิก INV · Replaced = ออกใบใหม่แทน (ทั้งสองแบบไม่นับในยอดค้างรับ)</div></div>
+    <div class="fg"><label>หมายเหตุ</label><input type="text" id="ds-nt" maxlength="500" value="${esc(r.note || '')}"></div>`,
+    save: async (err) => {
+      const ds = val('ds-st'), note = val('ds-nt');
+      if (ds !== (r.docStatus || 'Active') && !confirmDoc) { confirmDoc = true; err(ds === 'Active' ? 'INV จะกลับมาอยู่ในยอดค้างรับ กดบันทึกอีกครั้งเพื่อยืนยัน' : `เปลี่ยนเป็น ${ds}: INV จะไม่นับในยอดค้างรับและยอดออก INV อีก กดบันทึกอีกครั้งเพื่อยืนยัน`); return false; }
+      confirmDoc = false;
+      await patch({ action: 'ar_update', ivNo: iv, docStatus: ds, note }); await done(`บันทึกสถานะ ${iv} แล้ว`);
+    } });
+  confirmDoc = false;
 }
+let confirmDoc = false;
 
 function renderSum() {
   const s = D.summary;

@@ -36,6 +36,7 @@ td.who{white-space:normal}
     <div><b>Operation</b><br>เหมือน Sales และเข้าส่วน Operation ใน B2B Catalog ได้ (สร้าง Key H.S. แก้ราคา / จัดการ Package)</div>
     <div><b>Accountant / Admin</b><br>เห็นคำขอของทุกคน กดอนุมัติ / ตีกลับ / ใส่เลข INV นำเข้ารายชื่อลูกค้า PEAK และแก้ Catalog</div>
   </div>
+  <div class="card" style="padding:12px 16px;margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>แจ้งเตือน Google Chat:</b> <span id="chat-st">…</span><button class="btn btn-g btn-sm" type="button" onclick="testChat()">ส่งข้อความทดสอบ</button><span id="chat-msg" class="small"></span></div>
   <input type="search" id="q" placeholder="ค้นหาชื่อหรืออีเมล" oninput="render()">
   <div class="card tbl"><table><thead><tr><th>ผู้ใช้</th><th>เข้าใช้ล่าสุด</th><th>Role</th><th>ทีม</th><th>Sales Performance (PEAK)</th><th></th></tr></thead><tbody id="rows"><tr><td colspan="6" class="small">กำลังโหลด…</td></tr></tbody></table></div>
 </main></div></div>
@@ -77,9 +78,15 @@ async function setAccess(email, field, value, el) {
   finally { el.disabled = false; }
 }
 (async () => {
-  try { const d = await api('/api/users'); PERF = d.salesPerf || []; USERS = d.users.sort((a, b) => (b.admin - a.admin) || String(a.name).localeCompare(String(b.name))); render(); }
+  try { const d = await api('/api/users'); $('chat-st').textContent = { ok: '✓ ตั้งค่าแล้ว', missing: '✗ ยังไม่ได้ตั้ง GCHAT_WEBHOOK_URL ใน Vercel (ของ environment นี้)', invalid: '✗ GCHAT_WEBHOOK_URL ไม่ใช่ลิงก์ webhook ของ Google Chat' }[d.chat] || d.chat; PERF = d.salesPerf || []; USERS = d.users.sort((a, b) => (b.admin - a.admin) || String(a.name).localeCompare(String(b.name))); render(); }
   catch (e) { $('rows').innerHTML = `<tr><td colspan="6" class="err">${esc(e.message)}</td></tr>`; }
 })();
+async function testChat() {
+  $('chat-msg').textContent = 'กำลังส่ง…';
+  try { const d = await api('/api/users', { method: 'PATCH', body: JSON.stringify({ action: 'test_chat' }) }); const c = d.chat || {};
+    $('chat-msg').textContent = c.ok ? '✓ ส่งแล้ว ดูใน Google Chat' : c.state !== 'ok' ? '✗ ยังไม่ได้ตั้งค่า webhook' : `✗ Google Chat ตอบกลับ ${c.status || c.error}`; }
+  catch (e) { $('chat-msg').textContent = e.message; }
+}
 </script>
 </body>
 </html>

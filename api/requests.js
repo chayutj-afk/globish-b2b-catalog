@@ -71,7 +71,7 @@ function validate(b) {
   if (!['TH', 'EN'].includes(r.docLang)) throw bad('เลือกภาษาเอกสาร (TH / EN)');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(r.wantedQtDate)) throw bad('ใส่วันที่ต้องการให้ลงใน QT');
   if (r.creditTermDays === '') throw bad('ใส่เครดิตเทอม (วัน)');
-  if (r.customerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r.customerEmail)) throw bad('อีเมลลูกค้าไม่ถูกต้อง');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r.customerEmail)) throw bad('ใส่อีเมลลูกค้าสำหรับส่งเอกสาร');
   if (!WHT_RATES.includes(r.whtRate)) throw bad('เลือกหัก ณ ที่จ่าย (ไม่หัก / 1% / 2% / 3% / 5%)');
   if ((!Number.isFinite(r.creditTermDays) || r.creditTermDays < 0 || r.creditTermDays > 180)) throw bad('เครดิตเทอมต้องอยู่ระหว่าง 0 ถึง 180 วัน');
   const items = Array.isArray(b.items) ? b.items : [];

@@ -223,6 +223,7 @@ function detail(r) {
         <div class="fg"><label>เลขที่ใบเสร็จ (RT)</label><input type="text" id="pd-rt-${id}" value="${esc(r.rtNo || '')}" placeholder="RT-2026…"></div></div>
         <div class="fg"><label>เหตุผลที่จ่ายช้า (ถ้ามี)</label><select id="pd-dl-${id}">${opt(L.delay, r.delayReason, '—')}</select></div>
         <button class="btn btn-p btn-sm" onclick="savePaid('${id}')" ${closed ? 'disabled' : ''}>✓ บันทึกรับเงิน</button><div id="pd-msg-${id}"></div>
+        ${paid && !r.rtNo ? `<div class="msg info" style="margin-top:8px">รับเงินแล้ว ออกใบเสร็จจาก INV นี้ได้ที่ <a href="/request#pend">รออนุมัติ › ใบเสร็จ</a></div>` : ''}
         <h4 style="margin-top:14px">สถานะเอกสาร</h4>
         <div class="row"><div class="fg"><select id="ds-${id}">${opt(L.docStatus, r.docStatus || 'Active')}</select><div class="sub">Cancelled = ยกเลิก INV · Replaced = ออกใบใหม่แทน</div></div>
         <div class="fg"><input type="text" id="ds-nt-${id}" maxlength="500" placeholder="หมายเหตุ" value="${esc(r.note || '')}"></div></div>

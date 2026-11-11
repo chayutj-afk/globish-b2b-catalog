@@ -11,7 +11,7 @@ test('Opportunity ID is normalised from typed text or a pasted CRM link', () => 
   assert.ok(!OPP_RE.test(normaliseOppId('OPP-123')));
 });
 
-const qt = { segment: 'B2B', dealType: 'Retention', company: 'Co', taxId: '0105555555554', docLang: 'TH', wantedQtDate: '2026-11-15', creditTermDays: 30, whtRate: '3', items: [{ packageId: 'SPD-03-36', students: 10 }] };
+const qt = { segment: 'B2B', dealType: 'Retention', company: 'Co', taxId: '0105555555554', docLang: 'TH', wantedQtDate: '2026-11-15', creditTermDays: 30, whtRate: '3', customerEmail: 'a@b.co', items: [{ packageId: 'SPD-03-36', students: 10 }] };
 const svc = [{ kind: 'service', code: '3822', name: 'Essential', qty: 5, unitPrice: 15900 }];
 
 test('every segment but B2S needs an Opportunity ID; B2S never carries one; QT date and credit term are required', () => {

@@ -440,7 +440,8 @@ async function createReceipt(req, res, user) {
   r.branch = br;
   if (!r.address) throw bad('ใส่ที่อยู่ตามที่จะออกในเอกสาร');
   if (['B2C', 'B2E', 'MaoMao'].includes(r.segment) && !r.whStudent) throw bad('ใส่ชื่อ / ID ผู้เรียนใน Whitehouse');
-  if (!r.packages) throw bad('ใส่ Package ID / รหัสคอร์ส');
+  if (['B2C', 'B2E', 'MaoMao'].includes(r.segment) && !r.packages) throw bad('ใส่ Package ID / รหัสคอร์ส');
+  if (!r.packages && !r.description) throw bad('ใส่ชื่อคอร์ส / รายละเอียดที่ให้ขึ้นในเอกสาร');
   if (!(r.price > 0 && r.price < 1e9)) throw bad('ใส่ราคาขาย (ก่อนหักส่วนลด)');
   if (!(r.discount >= 0 && r.discount < r.price)) throw bad('ส่วนลดไม่ถูกต้อง');
   if (!['0', '1', '2', '3', '5'].includes(r.whtRate)) throw bad('เลือกหัก ณ ที่จ่าย');
@@ -477,10 +478,43 @@ async function listReceipts(req, res, user) {
   res.status(200).json({ ok: true, requests: out });
 }
 
+// Receipt issued from a paid INV (B2B): the collector recorded the payment on /ar, accounting issues the RT
+// from that INV in PEAK and enters it here. No Whitehouse fields; customer details come from the INV.
+async function rtFromInv(req, res, user) {
+  const b = req.body || {};
+  const ivNo = text(b.ivNo, 40).toUpperCase();
+  const [invs, ivreqs, rts] = await Promise.all([hub.readTable('Invoices'), hub.readTable('InvoiceRequests'), hub.readTable('ReceiptRequests')]);
+  const a = invs.find((x) => String(x.ivNo).toUpperCase() === ivNo);
+  if (!a) throw bad('ไม่พบ INV นี้ในหน้าติดตามหนี้', 404);
+  if (!a.paidDate) throw bad('ยังไม่ได้บันทึกรับเงินของ INV นี้ (บันทึกที่หน้าติดตามหนี้ก่อน)', 409);
+  if (a.rtNo || rts.some((x) => x.refDoc === ivNo && x.status !== 'rejected')) throw bad(`INV นี้ออกใบเสร็จแล้ว${a.rtNo ? ' (' + a.rtNo + ')' : ''}`, 409);
+  const no = text(b.peakRtNo, 40).toUpperCase();
+  if (!/^[A-Z0-9-]{6,40}$/.test(no)) throw bad('ใส่เลขใบเสร็จจาก PEAK เช่น RT-20261100001');
+  const link = text(b.peakDocLink, 500);
+  if (!/^https:\/\/(doc|secure)\.peakaccount\.com\//.test(link)) throw bad('ใส่ลิงก์เอกสารจาก PEAK');
+  const ch = text(b.deliveryChannel, 20);
+  if (!RT_CHANNEL[ch]) throw bad('เลือกช่องทางส่งใบเสร็จ');
+  const email = text(b.email, 120), addr = text(b.deliveryAddress, 600);
+  if (needsEmail(ch) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw bad('ใส่อีเมลลูกค้า');
+  if (needsPost(ch) && !addr) throw bad('ใส่ที่อยู่ส่งใบเสร็จตัวจริง');
+  const iv = ivreqs.find((x) => x.ivRequestId === a.ivRequestId) || {};
+  const at = hub.sheetDateTime(); const id = shortId('RTREQ');
+  const sent = !needsPost(ch);
+  await hub.appendRows('ReceiptRequests', [{ rtRequestId: id, createdAt: at, requestedBy: iv.requestedBy || a.salesEmail || user.email, salesName: a.salesName || iv.salesName || '',
+    segment: a.segment || 'B2B', docKind: RT_KIND.company, refDoc: ivNo, whStudent: '', billName: a.company, taxId: a.taxId, branch: a.branch || '00000', address: '', deliveryAddress: addr, email,
+    whtRate: String(Math.round(ar.num(a.whtRate) < 1 ? ar.num(a.whtRate) * 100 : ar.num(a.whtRate))), packages: a.keyHS || '', description: a.packageName || '', price: ar.num(a.preVat), discount: 0,
+    paidDate: a.paidDate, paymentProof: '', deliveryChannel: RT_CHANNEL[ch], docLang: 'TH', note: `ออกจาก INV ${ivNo}`, status: 'issued', peakRtNo: no, peakDocLink: link,
+    sentStatus: sent ? 'sent' : 'waiting', sentAt: sent ? at : '', trackingNo: '', accountNote: `ออกใบเสร็จจาก INV — ${user.name || user.email}`, updatedAt: at }]);
+  await hub.updateRow('Invoices', a._row, { rtNo: no });
+  await Promise.all([hub.log('catalog', 'rt_from_inv', ivNo, `${user.email} · ${no}`), notify.chat(`🧾 ออกใบเสร็จ ${no} จาก ${ivNo} · ${a.company}${sent ? '' : ' · รอส่งตัวจริง'}`)]);
+  res.status(200).json({ ok: true, rtRequestId: id });
+}
+
 async function updateReceipt(req, res, user) {
   checkOrigin(req);
   if (user.role !== 'op') throw bad('เฉพาะฝ่ายบัญชี / Admin', 403);
   const b = req.body || {};
+  if (b.action === 'rt_from_inv') return rtFromInv(req, res, user);
   const rows = await hub.readTable('ReceiptRequests');
   const row = rows.find((x) => x.rtRequestId === text(b.rtRequestId, 40));
   if (!row) throw bad('ไม่พบคำขอนี้', 404);
@@ -538,7 +572,53 @@ async function updateEdit(req, res, user) {
   if (row.status !== 'new') throw bad(`คำขอนี้ ${row.status === 'done' ? 'แก้แล้ว' : 'ถูกตีกลับ'} รีเฟรชหน้า`, 409);
   const note = text(b.note, 500); const at = hub.sheetDateTime(); const who = user.name || user.email;
   if (b.action === 'edit_reject' && !note) throw bad('ใส่เหตุผลที่ตีกลับ');
-  await hub.writeChecked('EditRequests', 'editId', row, { status: b.action === 'edit_done' ? 'done' : 'rejected', accountNote: note, newDocNo: text(b.newDocNo, 40).toUpperCase(), doneBy: who, updatedAt: at });
+  const newNo = text(b.newDocNo, 40).toUpperCase();
+  const newLink = text(b.newLink, 500);
+  const newAmt = b.newAmount === '' || b.newAmount === undefined ? null : Number(String(b.newAmount).replace(/,/g, ''));
+  if (newNo && !/^[A-Z0-9-]{6,40}$/.test(newNo)) throw bad('เลขเอกสารใหม่ไม่ถูกต้อง');
+  if (newLink && !/^https:\/\/(doc|secure)\.peakaccount\.com\//.test(newLink)) throw bad('ลิงก์ต้องเป็นลิงก์เอกสารจาก PEAK');
+  if (newNo && newNo !== row.docNo && !newLink) throw bad('ออกเลขใหม่แล้ว ใส่ลิงก์เอกสารใหม่จาก PEAK ด้วย');
+  if (newAmt !== null && !(newAmt > 0 && newAmt < 1e9)) throw bad('ยอดก่อน VAT ใหม่ไม่ถูกต้อง');
+  // "Done" also updates the request the document came from, so every page shows the corrected document.
+  if (b.action === 'edit_done') {
+    const mark = `แก้ไขแล้ว (${row.editId}${newNo && newNo !== row.docNo ? ` · ${row.docNo} → ${newNo}` : ''}) — ${who}`;
+    if (row.docType === 'QT') {
+      const q = (await hub.readTable('Requests')).find((x) => x.requestId === row.refId);
+      if (q) {
+        const f = { peakNote: mark, updatedAt: at };
+        if (newNo && newNo !== q.peakQtNo) { f.peakQtNo = newNo; f.peakQtId = ''; }
+        if (newLink) f.peakDocLink = newLink;
+        if (newAmt !== null) f.totalPreVat = newAmt;
+        await hub.updateRow('Requests', q._row, f);
+      }
+    } else if (row.docType === 'INV') {
+      const iv = (await hub.readTable('InvoiceRequests')).find((x) => x.ivRequestId === row.refId);
+      if (iv) {
+        const f = { accountNote: mark, updatedAt: at };
+        if (newNo) f.peakIvNo = newNo;
+        if (newLink) f.peakDocLink = newLink;
+        if (newAmt !== null) f.amountPreVat = newAmt;
+        await hub.updateRow('InvoiceRequests', iv._row, f);
+        const a = (await hub.readTable('Invoices')).find((x) => x.ivRequestId === iv.ivRequestId || String(x.ivNo).toUpperCase() === String(iv.peakIvNo).toUpperCase());
+        if (a) {
+          const g = { note: [a.note, mark].filter(Boolean).join(' · ') };
+          if (newNo) g.ivNo = newNo;
+          if (newLink) g.peakDocLink = newLink;
+          if (newAmt !== null) g.preVat = newAmt;
+          await hub.updateRow('Invoices', a._row, g);
+        }
+      }
+    } else if (row.docType === 'RT') {
+      const r = (await hub.readTable('ReceiptRequests')).find((x) => x.rtRequestId === row.refId);
+      if (r) {
+        const f = { accountNote: mark, updatedAt: at };
+        if (newNo) f.peakRtNo = newNo;
+        if (newLink) f.peakDocLink = newLink;
+        await hub.updateRow('ReceiptRequests', r._row, f);
+      }
+    }
+  }
+  await hub.writeChecked('EditRequests', 'editId', row, { status: b.action === 'edit_done' ? 'done' : 'rejected', accountNote: note, newDocNo: newNo, doneBy: who, updatedAt: at });
   await hub.log('catalog', b.action, row.editId, `${user.email} · ${row.docNo}`);
   res.status(200).json({ ok: true });
 }
@@ -589,7 +669,7 @@ async function list(req, res, user) {
       const a = byReq.get(r.ivRequestId) || (r.peakIvNo && byNo.get(String(r.peakIvNo).toUpperCase()));
       if (!a) return r;
       const e = ar.enrich(a, today);
-      return { ...r, ar: { state: e.state, dueDate: e.dueDate, paidDate: a.paidDate, daysOverdue: e.daysOverdue, commitDate: a.commitDate, followStatus: a.followStatus } };
+      return { ...r, ar: { state: e.state, dueDate: e.dueDate, paidDate: a.paidDate, paidAmount: a.paidAmount, paymentMethod: a.paymentMethod, rtNo: a.rtNo, daysOverdue: e.daysOverdue, commitDate: a.commitDate, followStatus: a.followStatus } };
     });
   res.status(200).json({ ok: true, uploads: drive.enabled(), requests: out });
 }

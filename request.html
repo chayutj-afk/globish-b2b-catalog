@@ -22,6 +22,12 @@
 .inv{border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:12px;background:var(--panel-2)}
 .inv-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
 .inv-head b{font-size:14px;color:var(--head);font-weight:500}
+.opp{display:flex;align-items:center;gap:3px;flex-wrap:nowrap;min-width:0}
+.opp-pre{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--muted);margin-right:3px;white-space:nowrap}
+.opp-g{display:flex;gap:3px;flex:4 1 0;min-width:0}.opp-g+.opp-dash+.opp-g{flex:5 1 0}
+.opp .od{flex:1 1 0;min-width:0;max-width:32px;height:36px;padding:0;text-align:center;border:1px solid var(--line2);border-radius:4px;background:var(--input);color:var(--head);font-family:ui-monospace,Menlo,monospace;font-size:15px}
+.opp .od:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft)}
+.opp-dash{color:var(--muted);padding:0 2px}
 .note-box{margin-top:5px;padding:5px 8px;background:var(--primary-soft);border:1px solid var(--primary-line);border-radius:4px}
 </style>
 </head>
@@ -44,7 +50,7 @@
       <div class="fg"><label>ประเภทดีล</label>
         <select id="q-deal"><option value="New Logo">New Logo (ลูกค้าใหม่)</option><option value="Retention">Retention (ต่อสัญญา)</option><option value="Others">อื่นๆ</option></select></div>
       <div class="fg" id="q-opp-wrap"><label id="q-opp-label">Opportunity ID ใน CRM *</label>
-        <div class="mask"><span>CRM-OPP-</span><input id="q-opp-y" type="text" inputmode="numeric" maxlength="4" placeholder="2026" style="width:44px" oninput="oppInput(this,'q-opp-n')" onpaste="oppPaste(event,'q')"><span class="mid">-</span><input id="q-opp-n" type="text" inputmode="numeric" maxlength="5" placeholder="00123" style="flex:1" oninput="digits(this)" onpaste="oppPaste(event,'q')"></div></div>
+        <div class="opp" id="q-opp" data-p="q"></div><input type="hidden" id="q-opp-y"><input type="hidden" id="q-opp-n"></div>
     </div>
     <div class="row c3">
       <div class="fg"><label>เลขประจำตัวผู้เสียภาษี (13 หลัก) *</label>
@@ -94,7 +100,7 @@
     <div id="i-balance"></div>
     <div class="row c4">
       <div class="fg"><label>กลุ่มลูกค้า *</label><select id="i-seg" onchange="onInvSeg()"><option value="">— เลือก —</option><option>B2B</option><option>B2C</option><option>MaoMao</option><option>B2E</option><option>B2S</option><option>Others</option></select></div>
-      <div class="fg" id="i-opp-wrap"><label>Opportunity ID ใน CRM *</label><div class="mask"><span>CRM-OPP-</span><input id="i-opp-y" type="text" inputmode="numeric" maxlength="4" placeholder="2026" style="width:44px" oninput="oppInput(this,'i-opp-n')" onpaste="oppPaste(event,'i')"><span class="mid">-</span><input id="i-opp-n" type="text" inputmode="numeric" maxlength="5" placeholder="00123" style="flex:1" oninput="digits(this)" onpaste="oppPaste(event,'i')"></div></div>
+      <div class="fg" id="i-opp-wrap"><label>Opportunity ID ใน CRM *</label><div class="opp" id="i-opp" data-p="i"></div><input type="hidden" id="i-opp-y"><input type="hidden" id="i-opp-n"></div>
       <div class="fg"><label>เลขผู้เสียภาษีของลูกค้าตาม QT *</label><input id="i-tax" type="text" maxlength="13" inputmode="numeric" placeholder="13 หลัก" oninput="digits(this);taxHint('i')"><div class="sub" id="i-tax-hint"></div></div>
       <div class="fg"><label>รหัสสาขา</label><input id="i-branch" type="text" maxlength="5" inputmode="numeric" placeholder="00000" oninput="digits(this)"></div>
     </div>
@@ -186,7 +192,30 @@ function oppPaste(e, p) {
   if (m) { e.preventDefault(); setOpp(p, `CRM-OPP-${m[1]}-${m[2]}`); }
 }
 function getOpp(p) { const y = $(p + '-opp-y').value, n = $(p + '-opp-n').value; return y || n ? `CRM-OPP-${y}-${n}` : ''; }
-function setOpp(p, id) { const m = /CRM-OPP-(\d{4})-(\d{5})/.exec(id || ''); $(p + '-opp-y').value = m ? m[1] : ''; $(p + '-opp-n').value = m ? m[2] : ''; }
+function setOpp(p, id) { const m = /CRM-OPP-(\d{4})-(\d{5})/.exec(id || ''); $(p + '-opp-y').value = m ? m[1] : ''; $(p + '-opp-n').value = m ? m[2] : ''; paintOpp(p); }
+// Opportunity ID as digit boxes: CRM-OPP- [□□□□]-[□□□□□]; the hidden p-opp-y / p-opp-n hold the values.
+function buildOpp(p) {
+  const box = (k) => `<input class="od" data-k="${k}" type="text" inputmode="numeric" maxlength="1" aria-label="หลักที่ ${k + 1}" autocomplete="off">`;
+  $(p + '-opp').innerHTML = `<span class="opp-pre">CRM-OPP-</span><span class="opp-g">${[0, 1, 2, 3].map(box).join('')}</span><span class="opp-dash">–</span><span class="opp-g">${[4, 5, 6, 7, 8].map(box).join('')}</span>`;
+  const boxes = [...$(p + '-opp').querySelectorAll('.od')];
+  const sync = () => { const d = boxes.map((b) => b.value).join(''); $(p + '-opp-y').value = d.slice(0, 4).trim(); $(p + '-opp-n').value = d.slice(4).trim(); };
+  const fill = (digits, from) => { for (let k = from, j = 0; k < 9 && j < digits.length; k++, j++) boxes[k].value = digits[j]; sync(); boxes[Math.min(from + digits.length, 8)].focus(); };
+  boxes.forEach((b, k) => {
+    b.addEventListener('input', () => { const v = b.value.replace(/\D/g, ''); if (v.length > 1) { fill(v, k); return; } b.value = v; sync(); if (v && k < 8) boxes[k + 1].focus(); });
+    b.addEventListener('keydown', (e) => {
+      if (e.key === 'Backspace' && !b.value && k > 0) { boxes[k - 1].value = ''; boxes[k - 1].focus(); sync(); b.dispatchEvent(new Event('input', { bubbles: true })); e.preventDefault(); }
+      if (e.key === 'ArrowLeft' && k > 0) boxes[k - 1].focus();
+      if (e.key === 'ArrowRight' && k < 8) boxes[k + 1].focus();
+    });
+    b.addEventListener('paste', (e) => {
+      const t = (e.clipboardData || window.clipboardData).getData('text') || '';
+      const m = /(\d{4})\D?(\d{5})/.exec(t); const d = m ? m[1] + m[2] : t.replace(/\D/g, '');
+      if (d) { e.preventDefault(); fill(d.slice(0, 9), m ? 0 : k); }
+    });
+    b.addEventListener('focus', () => b.select());
+  });
+}
+function paintOpp(p) { const el = $(p + '-opp'); if (!el) return; const d = ($(p + '-opp-y').value + '    ').slice(0, 4) + ($(p + '-opp-n').value + '     ').slice(0, 5); el.querySelectorAll('.od').forEach((b, k) => { b.value = d[k].trim(); }); }
 function validTax(s) { if (!/^\d{13}$/.test(s)) return false; let t = 0; for (let i = 0; i < 12; i++) t += Number(s[i]) * (13 - i); return (11 - (t % 11)) % 10 === Number(s[12]); }
 function disc(raw, gross) { const d = String(raw ?? '').trim().replace(/,/g, ''); if (!d) return 0; if (/^\d+(\.\d+)?%$/.test(d)) return gross * Number(d.slice(0, -1)) / 100; return /^\d+(\.\d+)?$/.test(d) ? Number(d) : NaN; }
 function msg(id, kind, text) { $(id).innerHTML = text ? `<div class="msg ${kind}">${esc(text)}</div>` : ''; }
@@ -276,7 +305,7 @@ function changeSegment() {
   CART = CART.filter((it) => KINDS[seg].includes(kindOf(it)));
   const dropped = before - CART.length;
   if (dropped) saveCart();
-  if (seg === 'B2S') { $('q-opp-y').value = ''; $('q-opp-n').value = ''; }
+  if (seg === 'B2S') { $('q-opp-y').value = ''; $('q-opp-n').value = ''; paintOpp('q'); }
   onSegment();
   msg('q-msg', dropped ? 'info' : '', dropped ? `เปลี่ยนเป็น ${seg} แล้ว ลบ ${dropped} รายการที่ใช้กับ ${seg} ไม่ได้ออกให้ ใส่รายการใหม่ได้เลย` : '');
   saveDraft();
@@ -323,8 +352,26 @@ function setVal(el) {
   } else if (f === 'code') {
     it.code = v.trim().toUpperCase(); it.svc = ''; it.name = '';
     clearTimeout(it._t); showSvc(i); it._t = setTimeout(() => lookupSvc(i), 350);
-  } else it[f] = v.trim();
+  } else {
+    it[f] = v.trim();
+    if (f === 'name') it.nameEdited = !!it.name;
+    if (f === 'keyHS') { clearTimeout(it._k); it._k = setTimeout(() => khsName(i), 400); }
+  }
   saveCart(); recalc();
+}
+// Key H.S. → package name for the documents (from the hero, the part before "/"), filled in for sales.
+async function khsName(i) {
+  const it = CART[i]; if (!it) return;
+  const key = it.keyHS, box = $('kh-' + i);
+  if (!key || !key.includes('/')) { if (box) box.textContent = ''; return; }
+  try {
+    const r = await fetch('/api/services?keyHS=' + encodeURIComponent(key) + '&lang=' + encodeURIComponent($('q-lang').value), { cache: 'no-store' });
+    const d = await r.json();
+    if (CART[i] !== it || it.keyHS !== key || !d.ok) return;
+    if (d.name && !it.nameEdited) { it.name = d.name; const el = document.querySelector(`[data-i="${i}"][data-f="name"]`); if (el) el.value = d.name; saveCart(); }
+    it.heading = d.heading || '';
+    if (box) box.innerHTML = it.heading ? `บนเอกสาร: <b>${esc(it.nameEdited ? it.heading.replace(d.name, it.name) : it.heading)}</b>` : '<span class="warn">อ่าน Key H.S. ไม่ได้ ตรวจรูปแบบอีกครั้ง</span>';
+  } catch {}
 }
 async function delItem(i) {
   const it = CART[i] || {};
@@ -406,7 +453,8 @@ function renderItems() {
         const p = parseKHS(it.keyHS);
         desc = `<span class="kind keyhs">Customized · Key H.S.</span>
           <input type="text" class="mono" placeholder="Private Class-24-4-Native/24-4-HERO-6-0-…" ${inp(i, 'keyHS', it.keyHS)}>
-          <input type="text" placeholder="ชื่อแพ็กเกจ (ใช้บนเอกสาร)" maxlength="120" style="margin-top:4px" ${inp(i, 'name', it.name)}>
+          <input type="text" placeholder="ชื่อแพ็กเกจบนเอกสาร (ระบบเติมจาก Key H.S. ให้ แก้ได้)" maxlength="120" style="margin-top:4px" ${inp(i, 'name', it.name)}>
+          <div class="small" id="kh-${i}">${it.heading ? `บนเอกสาร: <b>${esc(it.heading)}</b>` : ''}</div>
           ${p && suppText(it.keyHS) ? `<div class="small">${esc(p.hero)} · ส่วนเสริม: ${esc(suppText(it.keyHS))}</div>` : ''}`;
       } else if (k === 'surcharge') {
         desc = `<span class="kind keyhs">ค่าเพิ่ม</span>
@@ -435,6 +483,7 @@ function renderItems() {
     <div class="total"><span>ยอดรวมก่อน VAT</span><strong id="q-total">0</strong></div>`;
   CART.forEach((it, i) => { if (kindOf(it) === 'service') { showSvc(i); if (it.code && !it.svc) lookupSvc(i); } });
   recalc();
+  CART.forEach((it, i) => { if (kindOf(it) === 'keyhs' && it.keyHS && !it.heading) khsName(i); });
 }
 
 function taxHint(p) {
@@ -533,7 +582,7 @@ async function submitQT() {
     if (!d) { msg('q-msg', 'info', 'ยังไม่ได้ส่ง ดูคำขอเดิมได้ที่ "คำขอของฉัน"'); return; }
     $('q-msg').innerHTML = `<div class="done-card"><b>✓ ส่งคำขอ ${esc(d.requestId)} แล้ว</b><div style="margin:6px 0 10px">ยอดก่อน VAT ${fmt(d.total)} · ${esc(d.message)}${d.belowFloor ? '<br>มีรายการต่ำกว่าราคาขั้นต่ำ Catalog (บันทึกไว้ให้ผู้อนุมัติเห็น)' : ''}</div><button class="btn btn-o btn-sm" onclick="go('mine')">ดูสถานะในคำขอของฉัน</button></div>`;
     CART = []; saveCart(); renderItems();
-    ['q-opp-y', 'q-opp-n', 'q-tax', 'q-branch', 'q-client', 'q-company', 'q-date', 'q-term', 'q-wht', 'q-note'].forEach((id) => { $(id).value = ''; });
+    ['q-opp-y', 'q-opp-n', 'q-tax', 'q-branch', 'q-client', 'q-company', 'q-date', 'q-term', 'q-wht', 'q-note'].forEach((id) => { $(id).value = ''; }); paintOpp('q');
     onTaxInput('q');
     clearDraft();
     taxHint('q'); loadAll();
@@ -700,7 +749,7 @@ async function submitINV() {
     if (!d) { msg('i-msg', 'info', 'ยังไม่ได้ส่ง ดูคำขอเดิมได้ที่ "คำขอของฉัน"'); return; }
     INV_DIRTY = false;
     $('i-msg').innerHTML = `<div class="done-card"><b>✓ ส่งคำขอ ${esc(d.batchId)} (${d.ivRequestIds.length} ใบ) แล้ว</b><div style="margin:6px 0 10px">${d.remaining !== null && d.remaining !== undefined ? `QT คงเหลือ ${fmt(d.remaining)} · ` : ''}${esc(d.message)}</div><button class="btn btn-o btn-sm" onclick="go('mine');setMine('inv',document.querySelectorAll('#mine-seg button')[1])">ดูสถานะในคำขอของฉัน</button></div>`;
-    ['i-req', 'i-qt', 'i-seg', 'i-wht', 'i-opp-y', 'i-opp-n', 'i-company', 'i-tax', 'i-branch', 'i-evother', 'i-fin-name', 'i-fin-email', 'i-fin-phone', 'i-note', 'i-over'].forEach((id) => { $(id).value = ''; });
+    ['i-req', 'i-qt', 'i-seg', 'i-wht', 'i-opp-y', 'i-opp-n', 'i-company', 'i-tax', 'i-branch', 'i-evother', 'i-fin-name', 'i-fin-email', 'i-fin-phone', 'i-note', 'i-over'].forEach((id) => { $(id).value = ''; }); paintOpp('i');
     $('i-file').value = ''; $('i-qt').readOnly = false; $('i-seg').disabled = false; onInvSeg(); $('i-qt-hint').textContent = ''; INVS = [blankInv()]; renderInvs(); taxHint('i');
     loadAll();
   } catch (e) { msg('i-msg', 'err', e.message); }
@@ -927,7 +976,8 @@ function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch {} }
 (async function init() {
   loadCart();
   INVS = [blankInv()];
-  restoreDraft();
+  buildOpp('q'); buildOpp('i');
+  restoreDraft(); paintOpp('q');
   let hasDraft = false; try { hasDraft = !!localStorage.getItem(DRAFT_KEY); } catch {}
   if (!hasDraft && CART.length && CART.every((it) => kindOf(it) === 'service')) $('q-segment').value = 'B2E';
   ['input', 'change'].forEach((ev) => $('tab-qt').addEventListener(ev, saveDraft));

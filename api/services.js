@@ -5,7 +5,7 @@
 const { sendError } = require('../lib/session');
 const { requireUser } = require('../lib/users');
 const hub = require('../lib/hub');
-const { describeWh } = require('../lib/pricing');
+const { describeWh, describeKeyHS, heroName } = require('../lib/pricing');
 
 let cache = null; // { at, map } per instance, 5 min
 async function services() {
@@ -32,6 +32,14 @@ module.exports = async function handler(req, res) {
   try {
     if (req.method !== 'GET') return res.status(405).json({ ok: false, error: 'GET only' });
     await requireUser(req);
+    res.setHeader('Cache-Control', 'no-store');
+    // ?keyHS=… → the name and first line the QT will use for a customized package.
+    const sp = new URL(req.url, 'http://x').searchParams;
+    if (sp.get('keyHS')) {
+      const k = String(sp.get('keyHS')).slice(0, 400), lang = sp.get('lang') === 'EN' ? 'EN' : 'TH';
+      const name = heroName(k, lang);
+      return res.status(200).json({ ok: true, name, heading: name ? describeKeyHS(k, { lang }).split('\n')[0] : '' });
+    }
     const code = new URL(req.url, 'http://x').searchParams.get('code') || '';
     if (!/^[A-Za-z0-9_-]{1,40}$/.test(code)) return res.status(400).json({ ok: false, error: 'รหัสไม่ถูกต้อง' });
     res.setHeader('Cache-Control', 'no-store');

@@ -143,9 +143,9 @@
       <div class="fg"><label>หนังสือรับรอง / ภ.พ.20 (ถ้ามี)</label><input id="i-docs" type="file" accept=".pdf,.jpg,.jpeg,.png" multiple><div class="sub">ไม่เกิน 2 ไฟล์ · รวมกับไฟล์หลักฐานไม่เกิน 3 MB</div></div>
     </div>
     <div class="row c3">
-      <div class="fg"><label>ชื่อ</label><input id="i-fin-name" type="text" maxlength="120"></div>
-      <div class="fg"><label>อีเมล</label><input id="i-fin-email" type="text" maxlength="120"></div>
-      <div class="fg"><label>เบอร์โทร</label><input id="i-fin-phone" type="text" maxlength="40"></div>
+      <div class="fg"><label>ชื่อ *</label><input id="i-fin-name" type="text" maxlength="120"></div>
+      <div class="fg"><label>อีเมล *</label><input id="i-fin-email" type="email" maxlength="120"></div>
+      <div class="fg"><label>เบอร์โทร *</label><input id="i-fin-phone" type="tel" maxlength="40"></div>
     </div>
     <div class="row c1"><div class="fg"><label>หมายเหตุถึงฝ่ายบัญชี</label><input id="i-note" type="text" maxlength="1000"></div></div>
   </div>
@@ -231,10 +231,11 @@
       <button class="on" onclick="setMine('qt',this)">ใบเสนอราคา</button>
       <button onclick="setMine('inv',this)">ใบแจ้งหนี้</button>
       <button onclick="setMine('rt',this)">ใบเสร็จ</button>
-      <button onclick="setMine('edit',this)">ขอแก้ไข</button>
+      <button onclick="setMine('edit',this)">ขอแก้ไข <span id="mine-edit-n" class="badge" hidden></span></button>
     </div>
     <button class="btn btn-g btn-sm" onclick="loadAll()">↻ รีเฟรช</button>
   </div>
+  <div id="mine-news"></div>
   <div id="mine-qt"><div class="empty">กำลังโหลด...</div></div>
   <div id="mine-inv" hidden><div class="empty">กำลังโหลด...</div></div>
   <div id="mine-rt" hidden></div>
@@ -663,7 +664,7 @@ async function submitQT() {
 
 // ─── INV: several invoices per QT ─────────────────────────
 let INVS = [], INV_DIRTY = false;
-const blankInv = () => ({ billTo: 'same', company: '', taxId: '', branch: '', relation: '', label: '', amountPreVat: '', students: '', wantedIssueDate: '', creditTermDays: '', poNo: '', originalDoc: 'unknown', originalRecipient: '', originalAddress: '', note: '' });
+const blankInv = () => ({ billTo: 'same', company: '', taxId: '', branch: '', relation: '', label: '', amountPreVat: '', students: '', wantedIssueDate: '', creditTermDays: '', poNo: '', originalDoc: '', originalRecipient: '', originalAddress: '', note: '' });
 function addInv() { if (INVS.length >= 12) return; INVS.push(blankInv()); if (INVS.length === 1) prefillAmount(); renderInvs(); }
 async function delInv(i) {
   const x = INVS[i] || {};
@@ -723,8 +724,9 @@ function renderInvs() {
         <div class="fg"><label>เลขที่ PO (ถ้ามี)</label><input type="text" maxlength="60" value="${esc(x.poNo)}" onchange="setInv(${i},'poNo',this.value)"></div>
       </div>
       <div class="row">
-        <div class="fg"><label>ต้องส่งเอกสารตัวจริงไหม</label>
+        <div class="fg"><label>ต้องส่งเอกสารตัวจริงไหม *</label>
           <select onchange="setInv(${i},'originalDoc',this.value)">
+            <option value="" ${!x.originalDoc ? 'selected' : ''}>— เลือก —</option>
             <option value="unknown" ${x.originalDoc === 'unknown' ? 'selected' : ''}>ยังไม่ทราบ (อัปเดตทีหลังได้)</option>
             <option value="no" ${x.originalDoc === 'no' ? 'selected' : ''}>ไม่ต้องส่ง</option>
             <option value="yes" ${x.originalDoc === 'yes' ? 'selected' : ''}>ต้องส่งตัวจริง</option></select></div>
@@ -732,7 +734,7 @@ function renderInvs() {
       </div>
       ${x.originalDoc === 'yes' ? `
       <div class="row">
-        <div class="fg"><label>ผู้รับเอกสาร</label><input type="text" maxlength="120" value="${esc(x.originalRecipient)}" onchange="setInv(${i},'originalRecipient',this.value)"></div>
+        <div class="fg"><label>ผู้รับเอกสาร *</label><input type="text" maxlength="120" value="${esc(x.originalRecipient)}" onchange="setInv(${i},'originalRecipient',this.value)"></div>
         <div class="fg"><label>ที่อยู่จัดส่งตัวจริง *</label><input type="text" maxlength="500" value="${esc(x.originalAddress)}" onchange="setInv(${i},'originalAddress',this.value)"></div>
       </div>` : ''}
     </div>`).join('');
@@ -810,7 +812,8 @@ async function submitINV() {
     if (!(toNum(x.amountPreVat) > 0)) return msg('i-msg', 'err', `INV ใบที่ ${i + 1}: ใส่ยอดก่อน VAT`);
     if (x.billTo === 'other' && (!x.company || !x.relation)) return msg('i-msg', 'err', `INV ใบที่ ${i + 1}: ใส่ชื่อบริษัทและความสัมพันธ์กับลูกค้าตาม QT`);
     if (x.billTo === 'other' && (x.taxId || '').length !== 13) return msg('i-msg', 'err', `INV ใบที่ ${i + 1}: เลขผู้เสียภาษีต้องมี 13 หลัก`);
-    if (x.originalDoc === 'yes' && !x.originalAddress) return msg('i-msg', 'err', `INV ใบที่ ${i + 1}: ใส่ที่อยู่ส่งเอกสารตัวจริง`);
+    if (!x.originalDoc) return msg('i-msg', 'err', `INV ใบที่ ${i + 1}: เลือกว่าต้องส่งเอกสารตัวจริงไหม`);
+    if (x.originalDoc === 'yes' && (!x.originalRecipient || !x.originalAddress)) return msg('i-msg', 'err', `INV ใบที่ ${i + 1}: ใส่ผู้รับและที่อยู่ส่งเอกสารตัวจริง`);
   }
   // Accidental re-send: same QT + same amount already requested (checked here first, so the user sees
   // "already sent" rather than an over-QT error). The server checks again.
@@ -823,6 +826,7 @@ async function submitINV() {
     body.confirmDuplicate = true;
   }
   if (!body.poNeeded) return msg('i-msg', 'err', 'เลือกว่าลูกค้าต้องใช้ PO ในการวางบิลไหม');
+  if (!body.financeContact || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.financeEmail) || !/\d{9,}/.test(body.financePhone.replace(/\D/g, ''))) return msg('i-msg', 'err', 'ใส่ชื่อ อีเมล และเบอร์โทรผู้ติดต่อฝ่ายการเงินของลูกค้าให้ครบ');
   if ($('i-docs').files.length > 2) return msg('i-msg', 'err', 'แนบหนังสือรับรอง / ภ.พ.20 ได้ไม่เกิน 2 ไฟล์');
   if (!$('i-off-wrap').hidden && !body.offReason) return msg('i-msg', 'err', 'เลือก QT จากระบบ หรือใส่เหตุผลที่ใช้ QT นอกระบบ');
   if (!$('i-over-wrap').hidden && !body.overReason) return msg('i-msg', 'err', 'ยอดรวมเกิน QT ใส่เหตุผลก่อนส่ง');
@@ -864,7 +868,20 @@ const IV_ST = { new: ['รอฝ่ายบัญชีออก INV', 'new'], 
 const ORIG_ST = { not_needed: ['ไม่ต้องส่งตัวจริง', ''], pending_decision: ['ยังไม่ทราบเรื่องตัวจริง', 'new'], requested: ['รอส่งตัวจริง', 'blue'], sent: ['ส่งตัวจริงแล้ว', 'green'] };
 const st = (map, k) => { const [t, c] = map[k] || [k || '-', '']; return `<span class="st ${c}">${esc(t)}</span>`; };
 
-function setMine(w, btn) { document.querySelectorAll('#mine-seg button').forEach((b) => b.classList.toggle('on', b === btn)); ['qt', 'inv', 'rt', 'edit'].forEach((k) => { $('mine-' + k).hidden = w !== k; }); }
+function setMine(w, btn) { document.querySelectorAll('#mine-seg button').forEach((b) => b.classList.toggle('on', b === btn)); ['qt', 'inv', 'rt', 'edit'].forEach((k) => { $('mine-' + k).hidden = w !== k; }); if (w === 'edit') markEditsSeen(); }
+// Edit requests accounting finished (done / rejected) that the requester hasn't looked at yet.
+const SEEN_KEY = 'gc_seen_edits_v1';
+const seenEdits = () => { try { return JSON.parse(localStorage.getItem(SEEN_KEY) || '{}'); } catch { return {}; } };
+const newEdits = () => { const s = seenEdits(); return EDITS.filter((e) => ME && e.requestedBy === ME.email && e.status !== 'new' && s[e.editId] !== e.status); };
+function markEditsSeen() { try { const s = seenEdits(); EDITS.forEach((e) => { if (e.status !== 'new') s[e.editId] = e.status; }); localStorage.setItem(SEEN_KEY, JSON.stringify(s)); } catch {} paintEditNews(); }
+function paintEditNews() {
+  const xs = newEdits();
+  const b = $('mine-edit-n'); if (b) { b.textContent = xs.length; b.hidden = !xs.length; }
+  let rb = document.getElementById('mine-count');
+  if (!rb && $('nav-mine')) { rb = document.createElement('span'); rb.className = 'badge'; rb.id = 'mine-count'; $('nav-mine').appendChild(rb); }
+  if (rb) { rb.textContent = xs.length; rb.hidden = !xs.length; }
+  $('mine-news').innerHTML = xs.length ? `<div class="msg ok" style="margin-bottom:12px">🔔 ${xs.map((e) => `${e.status === 'done' ? '✓ ฝ่ายบัญชีแก้' : '✕ ฝ่ายบัญชีตีกลับคำขอแก้'} ${esc(e.docType)} ${esc(e.docNo)}${e.newDocNo ? ' → ' + esc(e.newDocNo) : ''}${e.accountNote ? ' (' + esc(e.accountNote) + ')' : ''}`).join('<br>')}<div style="margin-top:6px"><button class="btn btn-g btn-sm" onclick="markEditsSeen()">รับทราบ</button> <button class="btn btn-o btn-sm" onclick="setMine('edit',document.querySelectorAll('#mine-seg button')[3])">ดูคำขอแก้ไข</button></div></div>` : '';
+}
 
 async function loadAll() {
   try {
@@ -910,6 +927,7 @@ function renderMine() {
     </div>`;
   }).join('') : '<div class="empty">ยังไม่มีคำขอออก INV</div>';
   renderMineMore();
+  paintEditNews();
 }
 
 
@@ -1010,7 +1028,7 @@ function renderPendingMore() {
     <div class="facts">${F('ประเภท', esc(r.docKind))}${F('กลุ่ม', esc(r.segment))}${F('เลขภาษี / สาขา', esc(r.taxId) + ' / ' + esc(r.branch))}${F('ผู้เรียน WH', esc(r.whStudent))}${F('Package', esc(r.packages))}${F('ราคา / ส่วนลด', fmt(toNum(r.price)) + (toNum(r.discount) ? ' / ' + fmt(toNum(r.discount)) : ''))}${F('หัก ณ ที่จ่าย', whtShort(r.whtRate))}${F('ชำระเมื่อ', esc(r.paidDate))}${F('อ้างอิง', esc(r.refDoc))}${F('ส่งเอกสาร', esc(r.deliveryChannel) + (r.email ? ' · ' + esc(r.email) : ''))}${F('ภาษา', esc(r.docLang))}${F('หลักฐาน', /^https:\/\//.test(r.paymentProof || '') ? `<a href="${esc(r.paymentProof)}" target="_blank" rel="noopener">เปิดดู ↗</a>` : '')}</div>
     <div class="pc-note">ที่อยู่: ${esc(r.address)}${r.deliveryAddress ? '<br>ส่งที่: ' + esc(r.deliveryAddress) : ''}${r.description ? '<br>รายละเอียด: ' + esc(r.description) : ''}${r.note ? '<br>💬 ' + esc(r.note) : ''}</div></div>`;
   const paidHtml = paidI.length ? `<div class="sec-h">รับเงินแล้ว รอออกใบเสร็จจาก INV <span class="n">${paidI.length} รายการ</span></div><p class="hint">ฝ่ายติดตามหนี้บันทึกรับเงินแล้ว ออกใบเสร็จจาก INV ใน PEAK แล้วใส่เลขและลิงก์</p>` + paidI.map((v) => { const k = esc(v.peakIvNo); return `<div class="pcard"><div class="pc-body"><div class="pc-top"><div class="pc-title">${esc(v.company)}<small>${docLink(v.peakIvNo, v.peakDocLink)} · ${esc(v.salesName)}</small></div><div class="pc-amt"><b>${fmt(toNum(v.ar.paidAmount))}</b><span>รับเงิน ${esc(v.ar.paidDate)}${v.ar.paymentMethod ? ' · ' + esc(v.ar.paymentMethod) : ''}</span></div></div></div>
-    <div class="pc-act" style="flex-wrap:wrap"><input id="pin-${k}" type="text" maxlength="40" placeholder="เลขใบเสร็จ เช่น RT-20261100001" style="width:200px"><input id="pil-${k}" class="grow" type="text" maxlength="500" placeholder="ลิงก์ใบเสร็จใน PEAK *">
+    <div class="pc-act" style="flex-wrap:wrap"><label class="small" for="pin-${k}">เลขใบเสร็จ *</label><input id="pin-${k}" type="text" maxlength="40" placeholder="RT-20261100001" style="width:180px"><label class="small" for="pil-${k}">ลิงก์ใน PEAK *</label><input id="pil-${k}" class="grow" type="text" maxlength="500" placeholder="https://doc.peakaccount.com/…">
       <select id="pic-${k}" onchange="document.getElementById('pia-${k}').hidden=!/post/.test(this.value);document.getElementById('pie-${k}').hidden=!/email/.test(this.value)"><option value="sales">ส่งไฟล์ให้ Sales</option><option value="email">ส่งอีเมลลูกค้า</option><option value="post">ส่งตัวจริงตามที่อยู่</option><option value="email_post">ส่งอีเมลและตัวจริง</option></select>
       <input id="pie-${k}" type="email" maxlength="120" placeholder="อีเมลลูกค้า" value="${esc(v.financeEmail || '')}" hidden style="width:200px"><input id="pia-${k}" type="text" maxlength="600" placeholder="ที่อยู่ส่งตัวจริง" value="${esc(v.originalAddress || v.deliveryAddress || '')}" hidden style="width:260px">
       <button class="btn btn-p btn-sm" onclick="rtFromInv('${k}')">🧾 ออกใบเสร็จแล้ว</button><span id="pim-${k}"></span></div></div>`; }).join('') : '';
@@ -1026,6 +1044,7 @@ async function rtFromInv(ivNo) {
   const g = (p) => (($(p + '-' + ivNo) || {}).value || '').trim();
   const body = { action: 'rt_from_inv', ivNo, peakRtNo: g('pin'), peakDocLink: g('pil'), deliveryChannel: g('pic'), email: g('pie'), deliveryAddress: g('pia') };
   if (!body.peakRtNo || !body.peakDocLink) { $('pim-' + ivNo).innerHTML = '<span class="err-line">ใส่เลขใบเสร็จและลิงก์ PEAK</span>'; return; }
+  if (/^https?:/i.test(body.peakRtNo) || !/^https:\/\/(doc|secure)\.peakaccount\.com\//.test(body.peakDocLink)) { $('pim-' + ivNo).innerHTML = '<span class="err-line">ช่องแรกใส่เลขใบเสร็จ (เช่น RT-20261100001) ช่องที่สองใส่ลิงก์เอกสารจาก PEAK</span>'; return; }
   if (!(await ask({ title: 'ยืนยันว่าออกใบเสร็จแล้ว?', html: `<p><b>${esc(v.company)}</b> · ${esc(ivNo)}</p><p>ใบเสร็จ <b>${esc(body.peakRtNo)}</b> · ${esc($('pic-' + ivNo).selectedOptions[0].text)}</p>` }))) return;
   try { await withLoading('กำลังบันทึก…', async () => { await api('/api/invoice-requests', { method: 'PATCH', body: JSON.stringify(body) }); await loadAll(); }); }
   catch (e) { const el = $('pim-' + ivNo); if (el) el.innerHTML = `<span class="err-line">${esc(e.message)}</span>`; }
@@ -1213,14 +1232,14 @@ async function ivAction(id, action) {
 function openOrig(id) {
   const v = IVS.find((x) => x.ivRequestId === id) || {};
   $('orig-' + id).innerHTML = `<div class="orig-form"><div class="row">
-    <div class="fg"><label>ผู้รับเอกสาร</label><input id="or-rec-${esc(id)}" type="text" maxlength="120" value="${esc(v.originalRecipient || v.financeContact || '')}"></div>
+    <div class="fg"><label>ผู้รับเอกสาร *</label><input id="or-rec-${esc(id)}" type="text" maxlength="120" value="${esc(v.originalRecipient || v.financeContact || '')}"></div>
     <div class="fg"><label>ที่อยู่จัดส่ง *</label><input id="or-adr-${esc(id)}" type="text" maxlength="500" value="${esc(v.originalAddress || '')}"></div></div>
     <button class="btn btn-p btn-sm" onclick="setOrig('${esc(id)}','yes')">แจ้งฝ่ายบัญชีให้ส่งตัวจริง</button> <button class="btn btn-g btn-sm" onclick="$('orig-${esc(id)}').innerHTML=''">ยกเลิก</button>
     <div id="or-msg-${esc(id)}"></div></div>`;
 }
 async function setOrig(id, want) {
   const body = { ivRequestId: id, action: 'original', originalDoc: want };
-  if (want === 'yes') { body.recipient = $('or-rec-' + id).value.trim(); body.address = $('or-adr-' + id).value.trim(); if (!body.address) return msg('or-msg-' + id, 'err', 'ใส่ที่อยู่จัดส่ง'); }
+  if (want === 'yes') { body.recipient = $('or-rec-' + id).value.trim(); body.address = $('or-adr-' + id).value.trim(); if (!body.address || !body.recipient) return msg('or-msg-' + id, 'err', 'ใส่ผู้รับและที่อยู่จัดส่ง'); }
   const ok = await ask(want === 'yes'
     ? { title: 'แจ้งฝ่ายบัญชีให้ส่งเอกสารตัวจริง?', ok: '📮 แจ้งส่งตัวจริง', html: `<p>ส่งถึง: <b>${esc(body.recipient || '-')}</b><br>${esc(body.address)}</p>` }
     : { title: 'ลูกค้าไม่ต้องการเอกสารตัวจริง?', ok: 'ยืนยัน', html: '<p>ฝ่ายบัญชีจะไม่ส่งเอกสารตัวจริงสำหรับ INV นี้</p>' });

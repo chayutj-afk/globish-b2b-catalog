@@ -1,5 +1,5 @@
 const test = require('node:test');
-const L = { students: 5, wantedIssueDate: '2026-11-20', creditTermDays: 30 };
+const L = { students: 5, wantedIssueDate: '2026-11-20', creditTermDays: 30, originalDoc: 'unknown' };
 const assert = require('node:assert');
 const { normaliseOppId, OPP_RE } = require('../lib/crm');
 const { validate } = require('../api/requests.js')._test;
@@ -45,7 +45,7 @@ test('PEAK client code is any PEAK code; a failed tax check digit is flagged, no
 });
 
 test('INV requests accept an optional, well-formed Opportunity ID', () => {
-  const base = { poNeeded: 'no', whtRate: '3', qtNo: 'QO-1', company: 'Co', taxId: '0105555555554', evidenceType: 'PO จากลูกค้า', file: { name: 'qt.pdf', type: 'application/pdf', data: 'JVBERi0=' }, invoices: [{ ...L, amountPreVat: 100 }] };
+  const base = { poNeeded: 'no', financeContact: 'A', financeEmail: 'a@b.co', financePhone: '0812345678', whtRate: '3', qtNo: 'QO-1', company: 'Co', taxId: '0105555555554', evidenceType: 'PO จากลูกค้า', file: { name: 'qt.pdf', type: 'application/pdf', data: 'JVBERi0=' }, invoices: [{ ...L, amountPreVat: 100 }] };
   assert.equal(inv.validate(base).r.opportunityId, '');
   assert.throws(() => inv.validate({ ...base, opportunityId: 'x' }), /รูปแบบ/);
 });

@@ -1,10 +1,10 @@
 const test = require('node:test');
-const L = { students: 5, wantedIssueDate: '2026-11-20', creditTermDays: 30 };
+const L = { students: 5, wantedIssueDate: '2026-11-20', creditTermDays: 30, originalDoc: 'unknown' };
 const assert = require('node:assert');
 const { validate, alreadyInvoiced } = require('../api/invoice-requests.js')._test;
 
 const base = {
-  poNeeded: 'no', whtRate: '3', qtNo: 'QO-20261100001', company: 'Co', taxId: '0105555555554',
+  poNeeded: 'no', financeContact: 'A', financeEmail: 'a@b.co', financePhone: '0812345678', whtRate: '3', qtNo: 'QO-20261100001', company: 'Co', taxId: '0105555555554',
   evidenceType: 'QT ที่ลูกค้าเซ็นแล้ว', file: { name: 'qt.pdf', type: 'application/pdf', data: 'JVBERi0=' },
   invoices: [{ ...L, amountPreVat: 50000 }],
 };
@@ -37,6 +37,7 @@ test('one QT can bill several entities; another entity needs its own name, valid
 test('asking for the original document needs an address', () => {
   assert.throws(() => validate({ ...base, invoices: [{ ...L, amountPreVat: 1, originalDoc: 'yes' }] }), /ตัวจริง/);
   assert.equal(validate({ ...base, invoices: [{ ...L, amountPreVat: 1 }] }).invoices[0].originalDoc, 'unknown');
+  assert.throws(() => validate({ ...base, invoices: [{ ...L, amountPreVat: 1, originalDoc: '' }] }), /ตัวจริง/);
 });
 
 test('already-invoiced amount ignores rejected requests', () => {

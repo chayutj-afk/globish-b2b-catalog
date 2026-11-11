@@ -74,7 +74,9 @@ function validate(b) {
   if (!b.file) throw bad('แนบไฟล์หลักฐาน (PDF / JPG / PNG)');
   if (!r.poNeeded) throw bad('เลือกว่าลูกค้าต้องใช้ PO ในการวางบิลไหม');
   if (b.docs !== undefined && (!Array.isArray(b.docs) || b.docs.length > 2)) throw bad('แนบเอกสารบริษัทได้ไม่เกิน 2 ไฟล์');
-  if (r.financeEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r.financeEmail)) throw bad('อีเมลฝ่ายการเงินไม่ถูกต้อง');
+  if (!r.financeContact) throw bad('ใส่ชื่อผู้ติดต่อฝ่ายการเงินของลูกค้า');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r.financeEmail)) throw bad('ใส่อีเมลฝ่ายการเงินของลูกค้า');
+  if (!/\d{9,}/.test(r.financePhone.replace(/\D/g, ''))) throw bad('ใส่เบอร์โทรฝ่ายการเงินของลูกค้า');
 
   const list = Array.isArray(b.invoices) ? b.invoices : [];
   if (list.length < 1) throw bad('เพิ่มใบแจ้งหนี้อย่างน้อย 1 ใบ');
@@ -95,7 +97,7 @@ function validate(b) {
       wantedIssueDate: text(x && x.wantedIssueDate, 10),
       creditTermDays: num(x && x.creditTermDays),
       poNo: text(x && x.poNo, 60),
-      originalDoc: Object.prototype.hasOwnProperty.call(ORIGINAL, x && x.originalDoc) ? x.originalDoc : 'unknown',
+      originalDoc: Object.prototype.hasOwnProperty.call(ORIGINAL, x && x.originalDoc) ? x.originalDoc : '',
       originalRecipient: text(x && x.originalRecipient, 120),
       originalAddress: text(x && x.originalAddress, 500),
       note: text(x && x.note, 500),
@@ -110,7 +112,8 @@ function validate(b) {
     if (!(Number.isInteger(v.students) && v.students >= 1 && v.students <= 5000)) throw bad(`${label}: จำนวนผู้เรียนไม่ถูกต้อง`);
     if (v.wantedIssueDate && !/^\d{4}-\d{2}-\d{2}$/.test(v.wantedIssueDate)) throw bad(`${label}: วันที่ออก INV ไม่ถูกต้อง`);
     if (v.creditTermDays !== '' && !(Number.isInteger(v.creditTermDays) && v.creditTermDays >= 0 && v.creditTermDays <= 180)) throw bad(`${label}: เครดิตเทอมต้องอยู่ระหว่าง 0 ถึง 180 วัน`);
-    if (v.originalDoc === 'yes' && !v.originalAddress) throw bad(`${label}: ใส่ที่อยู่สำหรับส่งเอกสารตัวจริง`);
+    if (!v.originalDoc) throw bad(`${label}: เลือกว่าต้องส่งเอกสารตัวจริงไหม`);
+    if (v.originalDoc === 'yes' && (!v.originalAddress || !v.originalRecipient)) throw bad(`${label}: ใส่ผู้รับและที่อยู่สำหรับส่งเอกสารตัวจริง`);
     return v;
   });
   return { r, invoices };
@@ -240,12 +243,15 @@ async function update(req, res, user) {
     if (row.status === 'rejected') throw bad('คำขอ INV นี้ถูกตีกลับแล้ว', 409);
     const address = text(b.address, 500) || row.originalAddress;
     const recipient = text(b.recipient, 120) || row.originalRecipient;
-    if (want === 'yes' && !address) throw bad('ใส่ที่อยู่สำหรับส่งเอกสารตัวจริง');
+    if (want === 'yes' && (!address || !recipient)) throw bad('ใส่ผู้รับและที่อยู่สำหรับส่งเอกสารตัวจริง');
     await hub.updateRow('InvoiceRequests', row._row, {
       originalDoc: want, originalStatus: ORIGINAL[want], originalRecipient: recipient, originalAddress: address,
       deliveryAddress: address, originalRequestedAt: want === 'yes' ? at : '', updatedAt: at,
     });
     await hub.log('catalog', want === 'yes' ? 'original_requested' : 'original_not_needed', id, user.email);
+    if (want === 'no' && row.originalStatus === 'requested') {
+      await notify.chat(`📭 ลูกค้าไม่ต้องการเอกสารตัวจริงแล้ว ${id}\n${row.company} · QT ${row.qtNo}${row.peakIvNo ? ' · ' + row.peakIvNo : ''}\nแจ้งโดย ${user.name || user.email} (ไม่ต้องส่งตามที่อยู่ ${row.originalAddress || '-'})`);
+    }
     if (want === 'yes') {
       await notify.chat(`📮 ลูกค้าขอเอกสารตัวจริง ${id}\n${row.company} · QT ${row.qtNo}${row.peakIvNo ? ' · ' + row.peakIvNo : ''}\nส่งถึง: ${recipient ? recipient + ' · ' : ''}${address}\nแจ้งโดย ${user.name || user.email}`);
     }

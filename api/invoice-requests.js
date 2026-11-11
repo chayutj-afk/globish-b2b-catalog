@@ -16,6 +16,26 @@ const notify = require('../lib/notify');
 const { OPP_RE, normaliseOppId } = require('../lib/crm');
 const { validTaxId, normBranch } = require('../lib/taxid');
 const ar = require('../lib/ar');
+const peakdoc = require('../lib/peakdoc');
+
+// Every PEAK number / link already recorded in the app, for the reuse check.
+async function docsInUse() {
+  const [reqs, ivs, rts, invs] = await Promise.all([hub.readTable('Requests'), hub.readTable('InvoiceRequests'), hub.readTable('ReceiptRequests'), hub.readTable('Invoices')]);
+  const out = [];
+  reqs.forEach((x) => out.push({ no: x.peakQtNo, link: x.peakDocLink, ref: x.requestId, taxId: x.taxId, label: `QT ของคำขอ ${x.requestId}` }));
+  ivs.filter((x) => x.status !== 'rejected').forEach((x) => out.push({ no: x.peakIvNo, link: x.peakDocLink, ref: x.ivRequestId, taxId: x.taxId, label: `INV ของคำขอ ${x.ivRequestId}` }));
+  rts.filter((x) => x.status !== 'rejected').forEach((x) => out.push({ no: x.peakRtNo, link: x.peakDocLink, ref: x.rtRequestId, taxId: x.taxId, label: `ใบเสร็จของคำขอ ${x.rtRequestId}` }));
+  invs.filter((x) => x.ivRequestId).forEach((x) => out.push({ no: x.ivNo, link: x.peakDocLink, ref: x.ivRequestId, taxId: x.taxId, label: `INV ${x.ivNo} ในหน้าติดตามหนี้` }));
+  invs.filter((x) => x.rtNo).forEach((x) => out.push({ no: x.rtNo, ref: 'paid:' + x.ivNo, taxId: x.taxId, label: `ใบเสร็จของ ${x.ivNo} ในหน้าติดตามหนี้` }));
+  return out;
+}
+async function assertDoc(kind, { no, link, ref, extraRefs = [], taxId }) {
+  const err = peakdoc.checkDoc(kind, no, link);
+  if (err) throw bad(err);
+  const used = (await docsInUse()).filter((u) => !extraRefs.includes(u.ref));
+  const again = peakdoc.findReuse(used, { no, link, ref, taxId, sameCustomerOk: kind === 'RT' });
+  if (again) throw bad(`${again} ตรวจเลข/ลิงก์อีกครั้ง`, 409);
+}
 
 const EVIDENCE = ['QT ที่ลูกค้าเซ็นแล้ว', 'PO จากลูกค้า', 'อีเมลยืนยันจากลูกค้า', 'อื่นๆ'];
 const ORIGINAL = { no: 'not_needed', yes: 'requested', unknown: 'pending_decision' };
@@ -291,6 +311,7 @@ async function update(req, res, user) {
       // Accounting issues the INV from the QT in PEAK; approving here needs the link to that INV.
       const link = text(b.peakDocLink, 500);
       if (!/^https:\/\/(doc|secure)\.peakaccount\.com\//.test(link)) throw bad('ใส่ลิงก์เอกสาร INV จาก PEAK (https://doc.peakaccount.com/… หรือ https://secure.peakaccount.com/…)');
+      await assertDoc('INV', { no: ivNo, link, ref: row.ivRequestId, taxId: row.taxId });
       // Issue date as it is on the INV in PEAK (defaults to the date sales asked for).
       const issueDate = dmy(text(b.issueDate, 10)) || row.wantedIssueDate;
       if (!ar.parseDate(issueDate)) throw bad('ใส่วันที่ออก INV ตามเอกสารใน PEAK');
@@ -405,7 +426,7 @@ async function arUpdate(req, res, user) {
     if ('paidDate' in b) f.paidDate = dateIn(b.paidDate, 'วันที่รับเงิน');
     if ('paidAmount' in b) { const n = b.paidAmount === '' ? '' : Number(String(b.paidAmount).replace(/,/g, '')); if (n !== '' && !(n > 0)) throw bad('ยอดรับเงินไม่ถูกต้อง'); f.paidAmount = n; }
     if ('paymentMethod' in b) { const m = text(b.paymentMethod, 40); if (m && !ar.PAY_METHODS.includes(m)) throw bad('วิธีชำระเงินไม่ถูกต้อง'); f.paymentMethod = m; }
-    if ('rtNo' in b) f.rtNo = text(b.rtNo, 40).toUpperCase();
+    if ('rtNo' in b) { f.rtNo = text(b.rtNo, 40).toUpperCase(); if (f.rtNo && f.rtNo !== String(row.rtNo || '').toUpperCase()) await assertDoc('RT', { no: f.rtNo, ref: 'paid:' + row.ivNo, taxId: row.taxId }); }
     if ('delayReason' in b) f.delayReason = text(b.delayReason, 200);
     if ('docStatus' in b) { const d = text(b.docStatus, 20); if (!ar.DOC_STATUS.includes(d)) throw bad('สถานะเอกสารไม่ถูกต้อง'); f.docStatus = d; }
     if ('note' in b) f.note = text(b.note, 500);
@@ -501,6 +522,7 @@ async function rtFromInv(req, res, user) {
   if (!/^[A-Z0-9-]{6,40}$/.test(no)) throw bad('ใส่เลขใบเสร็จจาก PEAK เช่น RT-20261100001');
   const link = text(b.peakDocLink, 500);
   if (!/^https:\/\/(doc|secure)\.peakaccount\.com\//.test(link)) throw bad('ใส่ลิงก์เอกสารจาก PEAK');
+  await assertDoc('RT', { no, link, ref: 'paid:' + ivNo, taxId: a.taxId });
   const ch = text(b.deliveryChannel, 20);
   if (!RT_CHANNEL[ch]) throw bad('เลือกช่องทางส่งใบเสร็จ');
   const email = text(b.email, 120), addr = text(b.deliveryAddress, 600);
@@ -535,6 +557,7 @@ async function updateReceipt(req, res, user) {
     if (!/^[A-Z]{0,6}-?\d{6,}[A-Z0-9]*$/.test(no)) throw bad('ใส่เลขใบเสร็จจาก PEAK');
     const link = text(b.peakDocLink, 500);
     if (!/^https:\/\/(doc|secure)\.peakaccount\.com\//.test(link)) throw bad('ใส่ลิงก์เอกสารจาก PEAK');
+    await assertDoc('RT', { no, link, ref: row.rtRequestId, taxId: row.taxId });
     const sent = !String(row.deliveryChannel).includes('ตัวจริง');
     await hub.writeChecked('ReceiptRequests', 'rtRequestId', row, { status: 'issued', peakRtNo: no, peakDocLink: link, accountNote: note ? `${note} — ${who}` : row.accountNote, sentStatus: sent ? 'sent' : 'waiting', sentAt: sent ? at : '', updatedAt: at });
   } else if (b.action === 'rt_reject') {
@@ -593,6 +616,14 @@ async function updateEdit(req, res, user) {
   if (newNo && newNo !== row.docNo && !newLink) throw bad('ออกเลขใหม่แล้ว ใส่ลิงก์เอกสารใหม่จาก PEAK ด้วย');
   if (newAmt !== null && !(newAmt > 0 && newAmt < 1e9)) throw bad('ยอดก่อน VAT ใหม่ไม่ถูกต้อง');
   // "Done" also updates the request the document came from, so every page shows the corrected document.
+  if (b.action === 'edit_done' && (newNo || newLink)) {
+    const kind = ['QT', 'INV', 'RT'].includes(row.docType) ? row.docType : '';
+    if (kind) {
+      // The document being replaced may share the old number/link with the AR row of the same INV.
+      const inv = kind === 'INV' ? (await hub.readTable('Invoices')).find((x) => x.ivRequestId === row.refId) : null;
+      await assertDoc(kind, { no: newNo && newNo !== row.docNo ? newNo : '', link: newLink, ref: row.refId, extraRefs: inv ? [inv.ivRequestId] : [] });
+    }
+  }
   if (b.action === 'edit_done') {
     const mark = `แก้ไขแล้ว (${row.editId}${newNo && newNo !== row.docNo ? ` · ${row.docNo} → ${newNo}` : ''}) — ${who}`;
     if (row.docType === 'QT') {

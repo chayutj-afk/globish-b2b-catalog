@@ -31,6 +31,16 @@ a.tile .tt{font-size:15px;color:var(--head);font-weight:500}
 a.tile .dd{color:var(--muted);font-size:12.5px;line-height:1.6}
 .group{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:20px 0 10px}
 .group[hidden]{display:none}
+.health{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;margin-bottom:18px}
+.health[hidden]{display:none}
+.health .hh{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.health .hh b{color:var(--head);font-weight:500}
+.health .sum{font-size:13px;color:var(--muted)}
+.health ul{list-style:none;margin:10px 0 0;padding:0}
+.health li{display:grid;grid-template-columns:22px 1fr;gap:6px;padding:7px 0;border-top:1px solid var(--line);font-size:13px;line-height:1.55}
+.health li small{display:block;color:var(--muted);font-size:12px}
+.health li .fx{color:var(--primary)}
+.health .area{font-size:11px;color:var(--muted);border:1px solid var(--line2);border-radius:9999px;padding:0 7px;margin-right:6px}
 </style>
 </head>
 <body data-page="home">
@@ -46,6 +56,12 @@ a.tile .dd{color:var(--muted);font-size:12.5px;line-height:1.6}
     <a class="stat" href="/request#pend" data-gate="approve" hidden><div class="k">รออนุมัติ (QT + INV)</div><div class="v hot" id="s-pend">–</div></a>
     <a class="stat" href="/request#pend" data-gate="approve" hidden><div class="k">ต้องส่งเอกสารตัวจริง</div><div class="v" id="s-orig">–</div></a>
   </div>
+
+  <section class="health" id="health" hidden aria-live="polite">
+    <div class="hh"><b>🩺 สุขภาพข้อมูล</b><span class="sum" id="h-sum">กำลังตรวจ…</span>
+      <span style="flex:1"></span><button class="btn btn-g btn-sm" type="button" id="h-all">ดูทั้งหมด</button><button class="btn btn-g btn-sm" type="button" id="h-re">↻ ตรวจใหม่</button></div>
+    <ul id="h-list"></ul>
+  </section>
 
   <div class="group" data-gate="request" hidden>ขอเอกสาร</div>
   <div class="grid">
@@ -82,6 +98,28 @@ a.tile .dd{color:var(--muted);font-size:12.5px;line-height:1.6}
     if (!u) return;
     if (u.name) document.getElementById('hello').innerHTML = 'สวัสดีครับ คุณ<b>' + u.name.split(' ')[0].replace(/[<>&]/g, '') + '</b> วันนี้จะทำอะไรดี';
     var get = function (url) { return fetch(url, { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }); };
+    var perms = u.perms || [];
+    if (perms.includes('approve') || perms.includes('users')) {
+      var showAll = false, H = null;
+      var esc = function (v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+      var paint = function () {
+        if (!H) return;
+        var xs = H.items.filter(function (i) { return showAll || i.level !== 'ok'; });
+        document.getElementById('h-sum').innerHTML = (H.bad ? '<span style="color:var(--bad-ink)">ผิดปกติ ' + H.bad + '</span> · ' : '') + (H.warn ? 'ควรดู ' + H.warn + ' · ' : '') + (!H.bad && !H.warn ? '✓ ข้อมูลครบและเป็นปัจจุบัน · ' : '') + 'ตรวจเมื่อ ' + esc(H.at);
+        document.getElementById('h-list').innerHTML = xs.map(function (i) {
+          return '<li><span>' + (i.level === 'bad' ? '⛔' : i.level === 'warn' ? '⚠️' : '✓') + '</span><div><span class="area">' + esc(i.area) + '</span>' + esc(i.title) + (i.detail ? '<small>' + esc(i.detail) + '</small>' : '') + (i.fix && i.level !== 'ok' ? '<small class="fx">วิธีแก้: ' + esc(i.fix) + '</small>' : '') + '</div></li>';
+        }).join('');
+        document.getElementById('h-all').textContent = showAll ? 'เฉพาะที่ต้องดู' : 'ดูทั้งหมด';
+      };
+      var load = function () {
+        document.getElementById('h-sum').textContent = 'กำลังตรวจ…';
+        get('/api/users?view=health').then(function (d) { if (!d) { document.getElementById('h-sum').textContent = 'ตรวจไม่ได้ในตอนนี้'; return; } H = d; paint(); });
+      };
+      document.getElementById('health').hidden = false;
+      document.getElementById('h-all').onclick = function () { showAll = !showAll; paint(); };
+      document.getElementById('h-re').onclick = load;
+      load();
+    }
     Promise.all([get('/api/requests'), get('/api/invoice-requests')]).then(function (res) {
       var reqs = (res[0] && res[0].requests) || [], ivs = (res[1] && res[1].requests) || [];
       var mine = reqs.filter(function (q) { return q.requestedBy === u.email; });

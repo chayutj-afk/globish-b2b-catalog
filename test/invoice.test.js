@@ -48,3 +48,30 @@ test('already-invoiced amount ignores rejected requests', () => {
   ];
   assert.equal(alreadyInvoiced(rows, { requestId: 'REQ-1' }), 30000);
 });
+
+test('column-layout guard: live headers match, moved column is caught', () => {
+  const hub = require('../lib/hub');
+  const live = ['Email', 'Name', 'Role (sales = Sales, lead = หัวหน้าเซล, op = บัญชี)', 'First login', 'Last login', 'Role changed by', 'Role changed at',
+    'Team (b2b / b2c / both, ว่าง = both · b2c ไม่เห็น Catalog)', 'PEAK Sales Performance (G014 code, from Lists!K)', 'Extra permissions (comma list)'];
+  assert.equal(hub.layoutProblem('Users', live), '');
+  const moved = [...live]; moved.splice(2, 0, 'Phone');
+  assert.match(hub.layoutProblem('Users', moved), /คอลัมน์ C/);
+  assert.match(hub.layoutProblem('Users', live.slice(0, 9)), /คอลัมน์ J/, 'missing last column');
+  assert.equal(hub.layoutProblem('Requests', require('../lib/headers').Requests.map((h) => h.replace('WHT %', 'WHT % (หัก ณ ที่จ่าย: 0 = ไม่หัก)'))), '');
+  for (const t of Object.keys(hub.TABLES)) assert.equal(require('../lib/headers')[t].length, hub.TABLES[t].length, t);
+});
+
+test('PEAK number/link checks catch wrong type and reuse', () => {
+  const p = require('../lib/peakdoc');
+  const invLink = 'https://doc.peakaccount.com/invoice?emi=MTE5MDU0&eti=MTE5ODE5NTEz';
+  assert.match(p.checkDoc('RT', 'RT-2026111111', invLink), /ใบแจ้งหนี้/);
+  assert.match(p.checkDoc('INV', 'QO-20261100023', ''), /ใบเสนอราคา/);
+  assert.match(p.checkDoc('INV', 'IV-1', 'https://doc.peakaccount.com/?emi=a&eti=b&etti=MQ=='), /ใบเสนอราคา/);
+  assert.equal(p.checkDoc('INV', 'IV-20261100016', 'https://doc.peakaccount.com/?emi=MTE5MDU0&eti=MTE5ODE5NTEz&etti=Mg=='), '');
+  assert.match(p.checkDoc('INV', 'IV-1', 'https://example.com/x'), /ลิงก์ต้องเป็น/);
+  const used = [{ no: 'IV-20261100016', link: invLink, ref: 'INVREQ-A', taxId: '0999999990012', label: 'INV ของคำขอ INVREQ-A' }];
+  assert.match(p.findReuse(used, { no: 'iv-20261100016', ref: 'INVREQ-B' }), /INVREQ-A/);
+  assert.match(p.findReuse(used, { link: 'https://doc.peakaccount.com/?emi=MTE5MDU0&eti=MTE5ODE5NTEz&etti=Mg==', ref: 'X' }), /ลิงก์นี้/);
+  assert.equal(p.findReuse(used, { no: 'IV-20261100016', ref: 'INVREQ-A' }), '', 'same record is fine');
+  assert.equal(p.findReuse(used, { no: 'IV-20261100016', ref: 'R', taxId: '0999999990012', sameCustomerOk: true }), '');
+});

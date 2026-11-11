@@ -1062,7 +1062,8 @@ function renderPending() {
       </div>
       <div class="pc-act">
         <input id="ivn-${esc(v.ivRequestId)}" type="text" maxlength="40" placeholder="เลข INV เช่น IV-20261100014" style="width:200px">
-        <input id="ivd-${esc(v.ivRequestId)}" type="date" title="วันที่ออก INV ตามเอกสารใน PEAK" value="${isoD(v.wantedIssueDate)}" style="width:150px">
+        <label class="small" for="ivd-${esc(v.ivRequestId)}" style="white-space:nowrap">วันที่ออก INV (ตาม PEAK)</label>
+        <input id="ivd-${esc(v.ivRequestId)}" type="date" title="วันที่ออก INV ตามเอกสารใน PEAK · วันครบกำหนด = วันนี้ + เครดิตเทอม" value="${isoD(v.wantedIssueDate)}" style="width:150px">
         <input id="ivl-${esc(v.ivRequestId)}" class="grow" type="text" maxlength="500" placeholder="ลิงก์เอกสาร INV ใน PEAK *">
         <button class="btn btn-p btn-sm" onclick="ivAction('${esc(v.ivRequestId)}','issued')">✓ อนุมัติ (ออก INV แล้ว)</button>
         <span id="ivm-${esc(v.ivRequestId)}"></span>

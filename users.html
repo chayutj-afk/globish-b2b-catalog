@@ -18,6 +18,11 @@ td.who{white-space:normal}
 .pill{display:inline-block;padding:1px 10px;border-radius:9999px;font-size:11.5px;background:var(--primary);color:#fff}
 .ok{color:var(--ok-ink);font-size:12px}.err{color:var(--bad-ink);font-size:12px}
 .chip{display:inline-block;padding:1px 9px;border-radius:9999px;font-size:11.5px;background:var(--primary-soft);color:var(--warn-ink);margin:2px 2px 2px 0;white-space:nowrap}
+.pill.soft{background:var(--primary-soft);color:var(--warn-ink)}
+.fl{display:block;margin:0 0 12px;font-size:13px;color:var(--head)}.fl .sel,.fl select{display:block;width:100%;margin-top:4px}
+.ck{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:13.5px;color:var(--ink)}
+.u-sum{background:var(--panel2,var(--panel));border:1px solid var(--line);border-radius:6px;padding:10px 12px;font-size:13px;line-height:1.7;margin-top:4px}
+.u-conf{padding:10px 12px;border:1px solid var(--primary);border-radius:6px;color:var(--ink);font-size:13px;line-height:1.7}
 .sub{color:var(--muted);font-size:13px;line-height:1.7;margin:0 0 6px}
 </style>
 </head>
@@ -26,7 +31,7 @@ td.who{white-space:normal}
 <header class="top"><h1 id="page-title">จัดการสิทธิ์ผู้ใช้</h1><div class="top-r" id="top-r"></div></header>
 <script src="/shell.js"></script>
 <main>
-  <p class="sub">ทุกคนที่เคยเข้าสู่ระบบด้วย @globish.co.th อยู่ในรายการนี้ และเริ่มต้นเป็น Sales ทีม Both · เลือก <b>Role</b> ตามหน้าที่ แล้วติ๊ก <b>สิทธิ์เพิ่ม</b> เฉพาะคนที่ต้องทำงานนอก role · ทีม B2C ไม่เห็น B2B Catalog และหัวหน้าเซลเห็นคำขอของทีมตัวเอง · มีผลภายใน 1 นาที ไม่ต้องเข้าสู่ระบบใหม่ · finance@ และ chayut.j@ เป็น Admin เสมอ</p>
+  <p class="sub">ทุกคนที่เคยเข้าสู่ระบบด้วย @globish.co.th อยู่ในรายการนี้ และเริ่มต้นเป็น Sales ทีม Both · กด <b>⚙ ตั้งค่า</b> ที่แต่ละคน เพื่อเลือก Role ตามหน้าที่ และติ๊กสิทธิ์เพิ่มเฉพาะคนที่ต้องทำงานนอก role · ระบบจะให้ตรวจสิ่งที่เปลี่ยนก่อนยืนยันทุกครั้ง · ทีม B2C ไม่เห็น B2B Catalog และหัวหน้าเซลเห็นคำขอของทีมตัวเอง · มีผลภายใน 1 นาที ไม่ต้องเข้าสู่ระบบใหม่ · finance@ และ chayut.j@ เป็น Admin เสมอ</p>
   <div class="card tbl" id="matrix"></div>
   <div class="card" style="padding:12px 16px;margin:12px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>แจ้งเตือน Google Chat:</b> <span id="chat-st">…</span><button class="btn btn-g btn-sm" type="button" onclick="testChat()">ส่งข้อความทดสอบ</button><span id="chat-msg" class="small"></span></div>
   <div class="filters" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><input type="search" id="q" placeholder="ค้นหาชื่อหรืออีเมล" oninput="render()" style="flex:1;min-width:200px"><select id="fr" class="sel" onchange="render()" style="width:auto"><option value="">ทุก role</option></select></div>
@@ -46,58 +51,80 @@ async function api(url, opts = {}) {
   return d;
 }
 const roleOf = (id) => ROLES.find((r) => r.id === id) || { id, label: id, perms: [] };
-function ask(title, html, okText = 'บันทึก') {
-  return new Promise((resolve) => {
-    $('m-title').textContent = title; $('m-body').innerHTML = html; $('m-ok').textContent = okText; $('ov-modal').hidden = false;
-    const done = (v) => { $('ov-modal').hidden = true; $('m-ok').onclick = $('m-cancel').onclick = null; resolve(v); };
-    $('m-ok').onclick = () => done(true); $('m-cancel').onclick = () => done(false);
-  });
-}
 function renderMatrix() {
   const keys = Object.keys(PERMS);
   $('matrix').innerHTML = `<table><thead><tr><th>สิทธิ์ / เมนู</th>${ROLES.map((r) => `<th style="text-align:center">${esc(r.label)}</th>`).join('')}</tr></thead><tbody>${keys.map((k) => `<tr><td>${esc(PERMS[k])}</td>${ROLES.map((r) => `<td style="text-align:center">${r.perms.includes(k) ? '<span class="ok" style="font-size:15px">✓</span>' : '<span class="small">–</span>'}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
   $('fr').innerHTML = '<option value="">ทุก role</option>' + ROLES.map((r) => `<option value="${r.id}">${esc(r.label)}</option>`).join('');
 }
+const permList = (ps) => ps.map((p) => esc(PERMS[p] || p)).join(' · ') || '—';
 function render() {
   const q = $('q').value.trim().toLowerCase(), fr = $('fr').value;
   const list = USERS.filter((u) => (!q || u.email.toLowerCase().includes(q) || String(u.name).toLowerCase().includes(q)) && (!fr || u.role === fr));
   $('rows').innerHTML = list.length ? list.map((u) => {
-    const e = esc(u.email);
-    const roleCell = u.fixedAdmin ? '<span class="pill">Admin (ผู้ดูแลหลัก)</span>'
-      : `<select onchange="setAccess('${e}', 'role', this.value, this)">${ROLES.map((r) => `<option value="${r.id}"${u.role === r.id ? ' selected' : ''}>${esc(r.label)}</option>`).join('')}</select>`;
-    const teamCell = u.fixedAdmin || u.role === 'admin' ? '<span class="small">ทั้งหมด</span>'
-      : `<select onchange="setAccess('${e}', 'team', this.value, this)">${Object.entries(TEAM).map(([v, t]) => `<option value="${v}"${u.team === v ? ' selected' : ''}>${t}</option>`).join('')}</select>`;
+    const e = esc(u.email), all = u.fixedAdmin || u.role === 'admin';
     const extra = (u.extra || []).filter((p) => !roleOf(u.role).perms.includes(p));
-    const extraCell = u.fixedAdmin || u.role === 'admin' ? '<span class="small">ทุกสิทธิ์</span>'
-      : `${extra.map((p) => `<span class="chip">${esc(PERMS[p] || p)}</span>`).join(' ')} <button class="btn btn-g btn-sm" type="button" onclick="editExtra('${e}')">${extra.length ? 'แก้' : '+ เพิ่ม'}</button>`;
+    const perf = u.salesPerf ? ((PERF.find((p) => p.code === u.salesPerf) || {}).name || u.salesPerf) : '';
     return `<tr>
     <td class="who"><b>${esc(u.name)}</b><br><span class="small">${e}</span></td>
     <td class="small">${esc(u.lastLogin)}</td>
-    <td>${roleCell}</td><td>${teamCell}</td><td class="who">${extraCell}</td>
-    <td><select onchange="setAccess('${e}', 'salesPerf', this.value, this)"><option value="">— ไม่ติด —</option>${PERF.map((p) => `<option value="${esc(p.code)}"${u.salesPerf === p.code ? ' selected' : ''}>${esc(p.name)} · ${esc(p.code)}</option>`).join('')}${u.salesPerf && !PERF.some((p) => p.code === u.salesPerf) ? `<option selected value="${esc(u.salesPerf)}">${esc(u.salesPerf)} (ไม่อยู่ในรายการ)</option>` : ''}</select></td>
-    <td id="m-${e}">${u.updatedBy ? `<span class="small">แก้โดย ${esc(u.updatedBy)}</span>` : ''}</td></tr>`;
+    <td>${u.fixedAdmin ? '<span class="pill">Admin (ผู้ดูแลหลัก)</span>' : `<span class="pill ${u.role === 'admin' ? '' : 'soft'}">${esc(roleOf(u.role).label)}</span>`}</td>
+    <td>${all ? '<span class="small">ทั้งหมด</span>' : esc(TEAM[u.team] || u.team)}</td>
+    <td class="who">${all ? '<span class="small">ทุกสิทธิ์</span>' : extra.length ? extra.map((p) => `<span class="chip">${esc(PERMS[p] || p)}</span>`).join(' ') : '<span class="small">—</span>'}</td>
+    <td class="small">${esc(perf) || '—'}</td>
+    <td style="text-align:right" id="m-${e}">${u.fixedAdmin ? '<span class="small">ล็อก</span>' : `<button class="btn btn-o btn-sm" type="button" onclick="openUser('${e}')">⚙ ตั้งค่า</button>`}</td></tr>`;
   }).join('') : '<tr><td colspan="7" class="small">ไม่พบผู้ใช้</td></tr>';
 }
-async function save(email, body) {
-  const m = document.getElementById('m-' + email);
-  try { await api('/api/users', { method: 'PATCH', body: JSON.stringify({ email, ...body }) }); await load(); const m2 = document.getElementById('m-' + email); if (m2) m2.innerHTML = '<span class="ok">✓ บันทึกแล้ว</span>'; return true; }
-  catch (e) { if (m) m.innerHTML = `<span class="err">${esc(e.message)}</span>`; return false; }
-}
-async function setAccess(email, field, value, el) {
-  const u = USERS.find((x) => x.email === email);
-  const show = field === 'role' ? roleOf(value).label : field === 'team' ? TEAM[value] : (PERF.find((p) => p.code === value) || {}).name || 'ไม่ติด';
-  const what = { role: 'Role', team: 'ทีม', salesPerf: 'Sales Performance' }[field];
-  const gain = field === 'role' ? `<p class="small">สิทธิ์ของ ${esc(show)}: ${roleOf(value).perms.map((p) => esc(PERMS[p])).join(' · ') || '—'}</p>` : '';
-  if (!(await ask(`เปลี่ยน${what}?`, `<p>${esc(u ? u.name : email)} → <b>${esc(show)}</b></p>${gain}`, 'ยืนยัน'))) { el.value = u ? u[field] || '' : ''; return; }
-  el.disabled = true; await save(email, { [field]: value }); el.disabled = false;
-}
-async function editExtra(email) {
-  const u = USERS.find((x) => x.email === email); const base = roleOf(u.role).perms;
-  const opts = Object.keys(PERMS).filter((p) => !base.includes(p) && p !== 'users');
-  const html = `<p class="small">Role ${esc(roleOf(u.role).label)} มีอยู่แล้ว: ${base.map((p) => esc(PERMS[p])).join(' · ') || '—'}</p>` + opts.map((p) => `<label style="display:flex;gap:8px;align-items:center;padding:6px 0"><input type="checkbox" value="${p}"${(u.extra || []).includes(p) ? ' checked' : ''}> ${esc(PERMS[p])}</label>`).join('') + '<p class="small">สิทธิ์จัดการผู้ใช้ให้ได้เฉพาะ role Admin</p>';
-  if (!(await ask(`สิทธิ์เพิ่มของ ${u.name}`, html))) return;
-  const extra = [...$('m-body').querySelectorAll('input[type=checkbox]:checked')].map((x) => x.value);
-  await save(email, { extra });
+// One popup per person: change everything, see the effect, then confirm once.
+async function openUser(email) {
+  const u = USERS.find((x) => x.email === email); if (!u) return;
+  const opt = (v, t, cur) => `<option value="${esc(v)}"${cur === v ? ' selected' : ''}>${esc(t)}</option>`;
+  $('m-title').textContent = `ตั้งค่าสิทธิ์ · ${u.name}`; $('m-ok').textContent = 'ตรวจและบันทึก';
+  $('m-cancel').textContent = 'ยกเลิก';
+  $('m-body').innerHTML = `<p class="small" style="margin-top:0">${esc(u.email)}</p><div id="u-conf-w"></div><div id="u-form">
+    <label class="fl">Role<select id="u-role" class="sel">${ROLES.map((r) => opt(r.id, r.label, u.role)).join('')}</select></label>
+    <label class="fl" id="u-team-w">ทีม<select id="u-team" class="sel">${Object.entries(TEAM).map(([v, t]) => opt(v, t, u.team)).join('')}</select></label>
+    <div class="fl" id="u-extra-w">สิทธิ์เพิ่ม (นอก role)<div id="u-extra"></div></div>
+    <label class="fl">Sales Performance (PEAK)<select id="u-perf" class="sel">${opt('', '— ไม่ติด —', u.salesPerf || '')}${PERF.map((p) => opt(p.code, `${p.name} · ${p.code}`, u.salesPerf)).join('')}${u.salesPerf && !PERF.some((p) => p.code === u.salesPerf) ? opt(u.salesPerf, u.salesPerf + ' (ไม่อยู่ในรายการ)', u.salesPerf) : ''}</select></label>
+    <div class="u-sum" id="u-sum"></div></div><div class="err" id="u-err"></div>`;
+  let extra = new Set(u.extra || []);
+  const paint = () => {
+    const role = $('u-role').value, base = roleOf(role).perms, admin = role === 'admin';
+    $('u-team-w').hidden = admin; $('u-extra-w').hidden = admin;
+    $('u-extra').innerHTML = Object.keys(PERMS).filter((p) => !base.includes(p) && p !== 'users').map((p) => `<label class="ck"><input type="checkbox" value="${p}"${extra.has(p) ? ' checked' : ''}> ${esc(PERMS[p])}</label>`).join('') || '<span class="small">role นี้มีครบแล้ว</span>';
+    $('u-extra').querySelectorAll('input').forEach((x) => { x.onchange = () => { x.checked ? extra.add(x.value) : extra.delete(x.value); paint(); }; });
+    const eff = admin ? Object.keys(PERMS) : [...new Set([...base, ...[...extra].filter((p) => !base.includes(p))])];
+    $('u-sum').innerHTML = `<b>สิทธิ์ทั้งหมดหลังบันทึก</b><br>${permList(eff)}${!admin && $('u-team').value === 'b2c' && eff.includes('catalog') && !eff.includes('catalog_edit') && !eff.includes('approve') ? '<br><span class="small">ทีม B2C จะไม่เห็น B2B Catalog</span>' : ''}`;
+  };
+  $('u-role').onchange = paint; $('u-team').onchange = paint; paint();
+  $('ov-modal').hidden = false;
+  const close = () => { $('ov-modal').hidden = true; $('m-ok').onclick = $('m-cancel').onclick = null; };
+  const back = () => { delete $('m-ok').dataset.step; $('m-ok').textContent = 'ตรวจและบันทึก'; $('m-cancel').textContent = 'ยกเลิก'; $('u-conf-w').innerHTML = ''; $('u-form').hidden = false; $('u-err').textContent = ''; };
+  $('m-cancel').onclick = () => ($('m-ok').dataset.step ? back() : close());
+  $('m-ok').onclick = async () => {
+    const role = $('u-role').value, admin = role === 'admin', base = roleOf(role).perms;
+    const next = { role, team: admin ? u.team : $('u-team').value, salesPerf: $('u-perf').value, extra: admin ? [] : [...extra].filter((p) => !base.includes(p)).sort() };
+    const curExtra = (u.extra || []).filter((p) => !roleOf(u.role).perms.includes(p)).sort();
+    const changes = [];
+    if (next.role !== u.role) changes.push(`Role: ${roleOf(u.role).label} → <b>${esc(roleOf(role).label)}</b>`);
+    if (next.team !== u.team) changes.push(`ทีม: ${esc(TEAM[u.team])} → <b>${esc(TEAM[next.team])}</b>`);
+    if (next.extra.join() !== curExtra.join()) changes.push(`สิทธิ์เพิ่ม: ${permList(curExtra)} → <b>${permList(next.extra)}</b>`);
+    if (next.salesPerf !== (u.salesPerf || '')) changes.push(`Sales Performance: ${esc(u.salesPerf || '—')} → <b>${esc(next.salesPerf || '—')}</b>`);
+    if (!changes.length) { $('u-err').textContent = 'ยังไม่ได้เปลี่ยนอะไร'; return; }
+    if ($('m-ok').dataset.step !== 'confirm') {
+      $('m-ok').dataset.step = 'confirm'; $('m-ok').textContent = 'ยืนยันบันทึก'; $('m-cancel').textContent = '← กลับไปแก้';
+      $('u-form').hidden = true; $('u-err').textContent = '';
+      $('u-conf-w').innerHTML = `<div class="u-conf"><b>ตรวจก่อนบันทึก</b><br>${changes.join('<br>')}</div><div class="u-sum" style="margin-top:10px">${$('u-sum').innerHTML}</div>`; return;
+    }
+    $('m-ok').disabled = true;
+    const body = {};
+    if (next.role !== u.role) body.role = next.role;
+    if (next.team !== u.team) body.team = next.team;
+    if (next.extra.join() !== curExtra.join()) body.extra = next.extra;
+    if (next.salesPerf !== (u.salesPerf || '')) body.salesPerf = next.salesPerf;
+    try { await api('/api/users', { method: 'PATCH', body: JSON.stringify({ email, ...body }) }); close(); await load(); const m = document.getElementById('m-' + email); if (m) m.insertAdjacentHTML('afterbegin', '<span class="ok">✓ บันทึกแล้ว </span>'); }
+    catch (e) { $('u-err').textContent = e.message; }
+    finally { $('m-ok').disabled = false; }
+  };
 }
 async function load() {
   const d = await api('/api/users');

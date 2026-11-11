@@ -5,7 +5,7 @@
 
 const crypto = require('crypto');
 const { checkOrigin, sendError } = require('../lib/session');
-const { requireUser } = require('../lib/users');
+const { requireUser, can, visibility } = require('../lib/users');
 const { priceItem, priceCustomKeyHS, priceService, priceSurcharge } = require('../lib/pricing');
 const { validTaxId, normBranch } = require('../lib/taxid');
 const hub = require('../lib/hub');
@@ -96,6 +96,7 @@ function toYmdDisplay(s) {
 
 async function create(req, res, user) {
   checkOrigin(req);
+  if (!can(user, 'request')) throw bad('ไม่มีสิทธิ์ขอเอกสาร', 403);
   const { r, items } = validate(req.body);
 
   // Rate limit, counted from the sheet so it holds across serverless instances.
@@ -219,8 +220,9 @@ async function list(req, res, user) {
   const [rows, lines, ivs] = await Promise.all([hub.readTable('Requests'), hub.readTable('RequestLines'), hub.readTable('InvoiceRequests')]);
   const invoiced = {};
   ivs.filter((v) => v.requestId && v.status !== 'rejected').forEach((v) => { invoiced[v.requestId] = (invoiced[v.requestId] || 0) + (Number(String(v.amountPreVat).replace(/,/g, '')) || 0); });
+  const sees = await visibility(user);
   const mine = rows
-    .filter((r) => user.role === 'op' || r.requestedBy === user.email)
+    .filter((r) => sees(r.requestedBy))
     .map((r) => ({ ...r, _createdMs: parseSheetDate(r.createdAt) }))
     .sort((a, b) => (b._createdMs || 0) - (a._createdMs || 0))
     // newest 50, plus every approved QT that still has a balance to invoice (e.g. QTs imported from PEAK)
@@ -245,7 +247,7 @@ async function list(req, res, user) {
 const OP_ACTIONS = { approve: 'approved', reject: 'rejected', reopen: 'approved', qt_approved: 'qt_approved' };
 async function update(req, res, user) {
   checkOrigin(req);
-  if (user.role !== 'op') throw bad('เฉพาะฝ่ายบัญชี / Admin', 403);
+  if (!can(user, 'approve')) throw bad('ไม่มีสิทธิ์อนุมัติเอกสาร', 403);
   const b = req.body || {};
   const status = OP_ACTIONS[b.action];
   if (!status) throw bad('คำสั่งไม่ถูกต้อง');

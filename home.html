@@ -23,7 +23,7 @@
 @media(max-width:900px){.grid{grid-template-columns:1fr 1fr}}
 @media(max-width:560px){.grid{grid-template-columns:1fr}}
 a.tile{display:flex;flex-direction:column;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;text-decoration:none;color:inherit;transition:border-color .15s}
-a.tile[hidden]{display:none}
+a.tile[hidden],.stat[hidden],.group[hidden]{display:none}
 a.tile:hover{border-color:var(--primary)}
 a.tile .ic{width:40px;height:40px;border-radius:50%;background:var(--primary-soft);color:var(--primary);display:flex;align-items:center;justify-content:center}
 a.tile .ic svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
@@ -41,35 +41,35 @@ a.tile .dd{color:var(--muted);font-size:12.5px;line-height:1.6}
   <p class="hello" id="hello">สวัสดีครับ</p>
 
   <div class="stats" id="stats">
-    <a class="stat" href="/request#mine"><div class="k">คำขอ QT ของฉันที่ยังไม่จบ</div><div class="v" id="s-mine">–</div></a>
-    <a class="stat" href="/request#mine"><div class="k">QT พร้อมส่งลูกค้า</div><div class="v" id="s-ready">–</div></a>
-    <a class="stat" href="/request#pend" data-gate="op" hidden><div class="k">รออนุมัติ (QT + INV)</div><div class="v hot" id="s-pend">–</div></a>
-    <a class="stat" href="/request#pend" data-gate="op" hidden><div class="k">ต้องส่งเอกสารตัวจริง</div><div class="v" id="s-orig">–</div></a>
+    <a class="stat" href="/request#mine" data-gate="request" hidden><div class="k">คำขอ QT ของฉันที่ยังไม่จบ</div><div class="v" id="s-mine">–</div></a>
+    <a class="stat" href="/request#mine" data-gate="request" hidden><div class="k">QT พร้อมส่งลูกค้า</div><div class="v" id="s-ready">–</div></a>
+    <a class="stat" href="/request#pend" data-gate="approve" hidden><div class="k">รออนุมัติ (QT + INV)</div><div class="v hot" id="s-pend">–</div></a>
+    <a class="stat" href="/request#pend" data-gate="approve" hidden><div class="k">ต้องส่งเอกสารตัวจริง</div><div class="v" id="s-orig">–</div></a>
   </div>
 
-  <div class="group">ขอเอกสาร</div>
+  <div class="group" data-gate="request" hidden>ขอเอกสาร</div>
   <div class="grid">
-    <a class="tile" href="/request#qt"><div class="ic"><svg viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></svg></div>
+    <a class="tile" href="/request#qt" data-gate="request" hidden><div class="ic"><svg viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></svg></div>
       <div class="tt">ขอใบเสนอราคา (QT) <span class="badge" id="cart" hidden></span></div><div class="dd">B2B, B2C, MaoMao, B2E, B2S และ Others ระบบสร้าง QT Draft ใน PEAK ให้หลังฝ่ายบัญชีอนุมัติ</div></a>
-    <a class="tile" href="/request#inv"><div class="ic"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg></div>
+    <a class="tile" href="/request#inv" data-gate="request" hidden><div class="ic"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg></div>
       <div class="tt">ขอใบแจ้งหนี้ (INV)</div><div class="dd">แนบหลักฐานที่ลูกค้ายอมรับ QT แล้ว แบ่งหลายงวดหรือออกในนามบริษัทอื่นได้</div></a>
-    <a class="tile" href="/request#rt"><div class="ic"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="m9 11 2 2 4-4"/></svg></div>
+    <a class="tile" href="/request#rt" data-gate="request" hidden><div class="ic"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="m9 11 2 2 4-4"/></svg></div>
       <div class="tt">ขอใบเสร็จ / ใบกำกับภาษี</div><div class="dd">หลังลูกค้าชำระแล้ว (ส่วนใหญ่ B2C / B2E) ในนามบริษัทหรือบุคคล ส่งอีเมล ส่งไฟล์ให้ Sales หรือส่งตัวจริง</div></a>
     <a class="tile" href="/catalog" data-gate="catalog" hidden><div class="ic"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M4 9h16M9 9v10"/></svg></div>
       <div class="tt">B2B Standard Catalog</div><div class="dd">คำนวณราคาแพ็กเกจ B2B และ Key H.S. แล้วส่งเข้าคำขอ QT</div></a>
   </div>
 
-  <div class="group" data-gate="op" hidden>สำหรับฝ่ายบัญชี / Admin</div>
+  <div class="group" data-gate="tools2" hidden>สำหรับฝ่ายบัญชี / ตามหนี้ / Admin</div>
   <div class="grid">
-    <a class="tile" href="/request#pend" data-gate="op" hidden><div class="ic"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></div>
+    <a class="tile" href="/request#pend" data-gate="approve" hidden><div class="ic"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></div>
       <div class="tt">รออนุมัติ</div><div class="dd">อนุมัติ / ตีกลับคำขอ QT ใส่เลข INV และบันทึกการส่งเอกสารตัวจริง</div></a>
-    <a class="tile" href="/ar" data-gate="op" hidden><div class="ic"><svg viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+    <a class="tile" href="/ar" data-gate="ar_view" hidden><div class="ic"><svg viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
       <div class="tt">ติดตามหนี้ (AR)</div><div class="dd">ยอดค้างรับ เกินกำหนด บันทึกการติดตาม รับเงิน เลข RT และสรุปเงินเข้ารายสัปดาห์ แทนชีท Debt</div></a>
-    <a class="tile" href="/users" data-gate="admin" hidden><div class="ic"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.4 3.3-5.5 6.5-5.5s5.9 2.1 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18.5 14.8c1.7.8 2.8 2.6 3 5.2"/></svg></div>
+    <a class="tile" href="/users" data-gate="users" hidden><div class="ic"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.4 3.3-5.5 6.5-5.5s5.9 2.1 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18.5 14.8c1.7.8 2.8 2.6 3 5.2"/></svg></div>
       <div class="tt">จัดการสิทธิ์ผู้ใช้</div><div class="dd">Role, ทีม (B2B / B2C / Both) และ Sales Performance ใน PEAK</div></a>
-    <a class="tile" href="/import-contacts" data-gate="op" hidden><div class="ic"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><circle cx="12" cy="10" r="3"/><path d="M7 18c.8-2.2 2.7-3.5 5-3.5s4.2 1.3 5 3.5"/></svg></div>
+    <a class="tile" href="/import-contacts" data-gate="import" hidden><div class="ic"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><circle cx="12" cy="10" r="3"/><path d="M7 18c.8-2.2 2.7-3.5 5-3.5s4.2 1.3 5 3.5"/></svg></div>
       <div class="tt">นำเข้ารายชื่อลูกค้า PEAK</div><div class="dd">อัปเดต PeakContacts จากไฟล์ export ให้ฟอร์มเติมรหัสลูกค้าจากเลขภาษี</div></a>
-    <a class="tile" href="/import-wh" data-gate="op" hidden><div class="ic"><svg viewBox="0 0 24 24"><path d="M12 3 3 7.5v9L12 21l9-4.5v-9z"/><path d="M3 7.5 12 12l9-4.5M12 12v9"/></svg></div>
+    <a class="tile" href="/import-wh" data-gate="import" hidden><div class="ic"><svg viewBox="0 0 24 24"><path d="M12 3 3 7.5v9L12 21l9-4.5v-9z"/><path d="M3 7.5 12 12l9-4.5M12 12v9"/></svg></div>
       <div class="tt">แพ็กเกจ Whitehouse</div><div class="dd">ข้อมูลแพ็กเกจ WH ที่ใช้เขียนคำอธิบายใน QT / INV</div></a>
   </div>
 </main></div></div>
@@ -88,7 +88,7 @@ a.tile .dd{color:var(--muted);font-size:12.5px;line-height:1.6}
       var done = ['rejected', 'cancelled', 'iv_issued'];
       document.getElementById('s-mine').textContent = mine.filter(function (q) { return done.indexOf(q.status) < 0; }).length;
       document.getElementById('s-ready').textContent = mine.filter(function (q) { return q.status === 'qt_approved'; }).length;
-      if (u.role === 'op') {
+      if ((u.perms || []).includes('approve')) {
         document.getElementById('s-pend').textContent = reqs.filter(function (q) { return q.status === 'new'; }).length + ivs.filter(function (v) { return v.status === 'new'; }).length;
         document.getElementById('s-orig').textContent = ivs.filter(function (v) { return v.originalStatus === 'requested' && v.status === 'iv_issued'; }).length;
       }

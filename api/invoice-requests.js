@@ -9,7 +9,7 @@
 
 const crypto = require('crypto');
 const { checkOrigin, sendError } = require('../lib/session');
-const { requireUser } = require('../lib/users');
+const { requireUser, can, visibility } = require('../lib/users');
 const hub = require('../lib/hub');
 const drive = require('../lib/drive');
 const notify = require('../lib/notify');
@@ -128,6 +128,7 @@ function alreadyInvoiced(rows, { requestId, qtNo }) {
 
 async function create(req, res, user) {
   checkOrigin(req);
+  if (!can(user, 'request')) throw bad('ไม่มีสิทธิ์ขอเอกสาร', 403);
   const b = req.body || {};
   const { r, invoices } = validate(b);
 
@@ -140,7 +141,7 @@ async function create(req, res, user) {
   let linked = null;
   if (r.requestId) {
     linked = requests.find((x) => x.requestId === r.requestId);
-    if (!linked || (user.role !== 'op' && linked.requestedBy !== user.email)) throw bad('ไม่พบคำขอใบเสนอราคาที่เลือก');
+    if (!linked || (!can(user, 'approve') && linked.requestedBy !== user.email)) throw bad('ไม่พบคำขอใบเสนอราคาที่เลือก');
     // Only a QT accounting has approved in PEAK can be billed.
     if (!['qt_approved', 'accepted', 'iv_requested', 'iv_issued'].includes(linked.status)) throw bad('QT นี้ยังไม่ได้อนุมัติใน PEAK ขอ INV ได้หลังฝ่ายบัญชีอนุมัติ QT แล้ว', 409);
     if (!r.opportunityId) r.opportunityId = linked.opportunityId || '';
@@ -233,9 +234,9 @@ async function update(req, res, user) {
   const id = text(b.ivRequestId, 60);
   const rows = await hub.readTable('InvoiceRequests');
   const row = rows.find((x) => x.ivRequestId === id);
-  if (!row || (user.role !== 'op' && row.requestedBy !== user.email)) throw bad('ไม่พบคำขอ INV นี้', 404);
+  if (!row || (!can(user, 'approve') && row.requestedBy !== user.email)) throw bad('ไม่พบคำขอ INV นี้', 404);
   const at = hub.sheetDateTime();
-  if (user.role === 'op') hub.checkSeen(row, text(b.seen, 80));
+  if (can(user, 'approve')) hub.checkSeen(row, text(b.seen, 80));
 
   if (b.action === 'original') {
     const want = b.originalDoc === 'no' ? 'no' : 'yes';
@@ -259,7 +260,7 @@ async function update(req, res, user) {
   }
 
   if (b.action === 'original_sent') {
-    if (user.role !== 'op') throw bad('เฉพาะฝ่ายบัญชี / Admin', 403);
+    if (!can(user, 'approve')) throw bad('ไม่มีสิทธิ์อนุมัติเอกสาร', 403);
     // The original can only go out once the INV exists (approved in PEAK, number + link entered).
     if (row.status !== 'iv_issued') throw bad('ยังส่งตัวจริงไม่ได้: ต้องอนุมัติ INV (ใส่เลข INV และลิงก์ PEAK) ก่อน', 409);
     if (row.originalStatus === 'sent') throw bad(`บันทึกว่าส่งตัวจริงไปแล้ว${row.trackingNo ? ' (เลขพัสดุ ' + row.trackingNo + ')' : ''} รีเฟรชหน้าเพื่อดูข้อมูลล่าสุด`, 409);
@@ -273,7 +274,7 @@ async function update(req, res, user) {
 
   // Accounting: INV issued from the QT in PEAK (fallback when the sync hasn't picked it up), or rejected.
   if (b.action === 'issued' || b.action === 'reject' || b.action === 'reopen') {
-    if (user.role !== 'op') throw bad('เฉพาะฝ่ายบัญชี / Admin', 403);
+    if (!can(user, 'approve')) throw bad('ไม่มีสิทธิ์อนุมัติเอกสาร', 403);
     const note = text(b.note, 500);
     const FROM = { issued: ['new', 'iv_draft'], reject: ['new', 'iv_draft'], reopen: ['rejected'] };
     if (!FROM[b.action].includes(row.status)) {
@@ -315,7 +316,7 @@ async function update(req, res, user) {
 }
 
 // ---------------------------------------------------------------- AR (debt follow-up)
-const isOp = (u) => u.role === 'op';
+const isOp = (u) => can(u, 'ar');
 function summarise(all, today) {
   // Old rows the Debt sheet still showed as unpaid are kept apart until someone checks them in PEAK.
   const check = all.filter((r) => r.legacyCheck);
@@ -360,7 +361,7 @@ function summarise(all, today) {
 }
 
 async function arList(req, res, user) {
-  if (!isOp(user)) throw bad('เฉพาะฝ่ายบัญชี / Admin', 403);
+  if (!can(user, 'ar_view')) throw bad('ไม่มีสิทธิ์ดูหน้าติดตามหนี้', 403);
   const [rows, fus] = await Promise.all([hub.readTable('Invoices'), hub.readTable('FollowUps')]);
   const today = ar.todayMs();
   const all = rows.filter((r) => r.ivNo).map((r) => ({ ...ar.enrich(r, today), preVatN: ar.num(r.preVat) }));
@@ -374,7 +375,7 @@ async function arList(req, res, user) {
 
 async function arUpdate(req, res, user) {
   checkOrigin(req);
-  if (!isOp(user)) throw bad('เฉพาะฝ่ายบัญชี / Admin', 403);
+  if (!isOp(user)) throw bad('ไม่มีสิทธิ์บันทึกติดตามหนี้', 403);
   const b = req.body || {};
   const ivNo = text(b.ivNo, 40);
   const rows = await hub.readTable('Invoices');
@@ -428,6 +429,7 @@ const shortId = (p) => { const t = new Date(Date.now() + 7 * 3600e3); const z = 
 
 async function createReceipt(req, res, user) {
   checkOrigin(req);
+  if (!can(user, 'request')) throw bad('ไม่มีสิทธิ์ขอเอกสาร', 403);
   const b = req.body || {};
   const r = {
     segment: text(b.segment, 20), docKind: text(b.docKind, 20), refDoc: text(b.refDoc, 120), whStudent: text(b.whStudent, 200),
@@ -480,7 +482,8 @@ async function createReceipt(req, res, user) {
 
 async function listReceipts(req, res, user) {
   const rows = await hub.readTable('ReceiptRequests');
-  const out = rows.filter((r) => user.role === 'op' || r.requestedBy === user.email).reverse().slice(0, 150).map(({ _row, ...r }) => r);
+  const sees = await visibility(user);
+  const out = rows.filter((r) => sees(r.requestedBy)).reverse().slice(0, 150).map(({ _row, ...r }) => r);
   res.status(200).json({ ok: true, requests: out });
 }
 
@@ -518,7 +521,7 @@ async function rtFromInv(req, res, user) {
 
 async function updateReceipt(req, res, user) {
   checkOrigin(req);
-  if (user.role !== 'op') throw bad('เฉพาะฝ่ายบัญชี / Admin', 403);
+  if (!can(user, 'approve')) throw bad('ไม่มีสิทธิ์อนุมัติเอกสาร', 403);
   const b = req.body || {};
   if (b.action === 'rt_from_inv') return rtFromInv(req, res, user);
   const rows = await hub.readTable('ReceiptRequests');
@@ -553,6 +556,7 @@ async function updateReceipt(req, res, user) {
 // ---------------------------------------------------------------- edit requests for issued QT / INV
 async function createEdit(req, res, user) {
   checkOrigin(req);
+  if (!can(user, 'request')) throw bad('ไม่มีสิทธิ์ขอเอกสาร', 403);
   const b = req.body || {};
   const r = { docType: text(b.docType, 5), docNo: text(b.docNo, 40).toUpperCase(), refId: text(b.refId, 60), company: text(b.company, 200), detail: text(b.detail, 1500) };
   if (!['QT', 'INV', 'RT'].includes(r.docType)) throw bad('เลือกประเภทเอกสาร');
@@ -567,11 +571,12 @@ async function createEdit(req, res, user) {
 }
 async function listEdits(req, res, user) {
   const rows = await hub.readTable('EditRequests');
-  res.status(200).json({ ok: true, requests: rows.filter((r) => user.role === 'op' || r.requestedBy === user.email).reverse().slice(0, 150).map(({ _row, ...r }) => r) });
+  const sees = await visibility(user);
+  res.status(200).json({ ok: true, requests: rows.filter((r) => sees(r.requestedBy)).reverse().slice(0, 150).map(({ _row, ...r }) => r) });
 }
 async function updateEdit(req, res, user) {
   checkOrigin(req);
-  if (user.role !== 'op') throw bad('เฉพาะฝ่ายบัญชี / Admin', 403);
+  if (!can(user, 'approve')) throw bad('ไม่มีสิทธิ์อนุมัติเอกสาร', 403);
   const b = req.body || {};
   const row = (await hub.readTable('EditRequests')).find((x) => x.editId === text(b.editId, 40));
   if (!row) throw bad('ไม่พบคำขอนี้', 404);
@@ -633,7 +638,7 @@ async function updateEdit(req, res, user) {
 // invoices → Invoices (+ followUps → FollowUps); quotations → Requests (QTs issued in PEAK before the app).
 async function importLegacy(req, res, user) {
   checkOrigin(req);
-  if (!user.admin) throw bad('เฉพาะผู้ดูแลสิทธิ์ (finance@ / chayut.j@)', 403);
+  if (!can(user, 'users')) throw bad('เฉพาะผู้ดูแลสิทธิ์', 403);
   const b = req.body || {};
   const out = {};
   if (Array.isArray(b.invoices)) {
@@ -667,8 +672,9 @@ async function list(req, res, user) {
   const byReq = new Map(), byNo = new Map();
   for (const x of invs) { if (x.ivRequestId) byReq.set(x.ivRequestId, x); if (x.ivNo) byNo.set(String(x.ivNo).toUpperCase(), x); }
   const today = ar.todayMs();
+  const sees = await visibility(user);
   const out = rows
-    .filter((r) => user.role === 'op' || r.requestedBy === user.email)
+    .filter((r) => sees(r.requestedBy))
     .reverse()
     .slice(0, 100)
     .map(({ _row, ...r }) => {

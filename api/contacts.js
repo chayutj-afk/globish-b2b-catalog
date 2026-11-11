@@ -45,7 +45,7 @@ function cleanRows(list) {
 
 async function importRows(req, res) {
   checkOrigin(req);
-  const user = await requireUser(req, { role: 'op' });
+  const user = await requireUser(req, { perm: 'import' });
   const b = req.body || {};
   if (!Array.isArray(b.rows) || b.rows.length > MAX_ROWS) return res.status(400).json({ error: `ต้องมี rows ไม่เกิน ${MAX_ROWS} แถว` });
   const now = hub.sheetDateTime();

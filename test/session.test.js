@@ -51,6 +51,12 @@ test('roles from the Users tab: default sales, admins fixed, only admins can cha
   await assert.rejects(users.setRole(admin, 'nobody@globish.co.th', { role: 'op' }), /ไม่พบ/);
   await users.touch('new.sales@globish.co.th', 'New Name'); // re-login keeps the role
   assert.equal(await users.roleOf('new.sales@globish.co.th'), 'op');
+  await users.setRole(admin, 'new.sales@globish.co.th', { role: 'collector', extra: ['request'] });
+  const c = await who('new.sales@globish.co.th');
+  assert.deepEqual([users.can(c, 'ar'), users.can(c, 'request'), users.can(c, 'approve'), users.can(c, 'users')], [true, true, false, false]);
+  await assert.rejects(users.setRole(admin, 'new.sales@globish.co.th', { extra: ['nope'] }), /สิทธิ์/);
+  await users.setRole(admin, 'new.sales@globish.co.th', { role: 'lead', extra: [] });
+  assert.equal(users.can(await who('new.sales@globish.co.th'), 'team_view'), true);
   assert.equal((await users.list()).length, 1);
   fs.unlinkSync(process.env.HUB_MOCK_FILE);
 });

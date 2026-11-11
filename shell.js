@@ -27,16 +27,16 @@
     { k: 'home', href: '/', label: 'หน้าแรก' },
     { k: 'catalog', href: '/catalog', label: 'Catalog', gate: 'catalog' },
     { sep: 1 },
-    { k: 'qt', href: '/request#qt', label: 'ขอ QT', id: 'nav-qt' },
-    { k: 'inv', href: '/request#inv', label: 'ขอ INV', id: 'nav-inv' },
-    { k: 'rt', href: '/request#rt', label: 'ขอใบเสร็จ', id: 'nav-rt' },
-    { k: 'mine', href: '/request#mine', label: 'คำขอของฉัน', id: 'nav-mine' },
-    { k: 'pend', href: '/request#pend', label: 'รออนุมัติ', id: 'nav-pend', gate: 'op', badge: 'pend-count' },
-    { k: 'ar', href: '/ar', label: 'ติดตามหนี้', gate: 'op' },
-    { sep: 1, gate: 'op' },
-    { k: 'users', href: '/users', label: 'ผู้ใช้', gate: 'admin' },
-    { k: 'contacts', href: '/import-contacts', label: 'ลูกค้า PEAK', gate: 'op' },
-    { k: 'wh', href: '/import-wh', label: 'แพ็กเกจ WH', gate: 'op' },
+    { k: 'qt', href: '/request#qt', label: 'ขอ QT', id: 'nav-qt', gate: 'request' },
+    { k: 'inv', href: '/request#inv', label: 'ขอ INV', id: 'nav-inv', gate: 'request' },
+    { k: 'rt', href: '/request#rt', label: 'ขอใบเสร็จ', id: 'nav-rt', gate: 'request' },
+    { k: 'mine', href: '/request#mine', label: 'คำขอของฉัน', id: 'nav-mine', gate: 'mine' },
+    { k: 'pend', href: '/request#pend', label: 'รออนุมัติ', id: 'nav-pend', gate: 'approve', badge: 'pend-count' },
+    { k: 'ar', href: '/ar', label: 'ติดตามหนี้', gate: 'ar_view' },
+    { sep: 1, gate: 'tools' },
+    { k: 'users', href: '/users', label: 'ผู้ใช้', gate: 'users' },
+    { k: 'contacts', href: '/import-contacts', label: 'ลูกค้า PEAK', gate: 'import' },
+    { k: 'wh', href: '/import-wh', label: 'แพ็กเกจ WH', gate: 'import' },
   ];
   const rail = document.getElementById('rail');
   if (rail) {
@@ -69,8 +69,10 @@
     const u = d && d.user;
     if (!u) return null;
     const me = document.getElementById('me'); if (me) me.textContent = u.email;
-    const ok = { op: u.role === 'op', admin: !!u.admin, catalog: u.catalog !== false };
-    document.querySelectorAll('[data-gate]').forEach((el) => { el.hidden = !ok[el.dataset.gate]; });
+    // data-gate = a permission name (see lib/users.js PERMS); a few combined gates below.
+    const P = new Set(u.perms || []);
+    const extra = { op: P.has('approve'), admin: P.has('users'), mine: P.has('request') || P.has('team_view'), tools: P.has('users') || P.has('import'), tools2: P.has('users') || P.has('import') || P.has('approve') || P.has('ar_view') };
+    document.querySelectorAll('[data-gate]').forEach((el) => { const g = el.dataset.gate; el.hidden = !(g in extra ? extra[g] : P.has(g)); });
     return u;
   }).catch(() => null);
 })();

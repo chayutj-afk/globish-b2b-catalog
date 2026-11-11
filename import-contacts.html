@@ -205,7 +205,7 @@ fetch('/api/auth/me', { cache: 'no-store' }).then((r) => {
   if (r.status === 401) location.href = '/signin.html?next=/import-contacts';
   return r.json();
 }).then((d) => {
-  if (d && d.user && d.user.role !== 'op') say('status', 'err', 'หน้านี้สำหรับฝ่ายบัญชี / Admin เท่านั้น');
+  if (d && d.user && !(d.user.perms || []).includes('import')) say('status', 'err', 'ไม่มีสิทธิ์นำเข้าข้อมูล (ขอสิทธิ์จากผู้ดูแล)');
 }).catch(() => {});
 </script>
 </body>

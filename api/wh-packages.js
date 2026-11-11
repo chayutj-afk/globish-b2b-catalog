@@ -27,14 +27,14 @@ function cleanRows(list) {
 module.exports = async function handler(req, res) {
   try {
     if (req.method === 'GET') {
-      await requireUser(req, { role: 'op' });
+      await requireUser(req, { perm: 'import' });
       const rows = await hub.readTable('WHPackages');
       res.setHeader('Cache-Control', 'no-store');
       return res.status(200).json({ ok: true, count: rows.length, updatedAt: rows.reduce((m, r) => (r.updatedAt > m ? r.updatedAt : m), '') });
     }
     if (req.method !== 'POST') return res.status(405).json({ error: 'GET or POST only' });
     checkOrigin(req);
-    const user = await requireUser(req, { role: 'op' });
+    const user = await requireUser(req, { perm: 'import' });
     const b = req.body || {};
     if (!Array.isArray(b.rows) || !b.rows.length || b.rows.length > MAX_ROWS) return res.status(400).json({ error: `ต้องมี rows 1–${MAX_ROWS} แถว` });
     const now = hub.sheetDateTime();

@@ -307,6 +307,7 @@ let ME = null, PKGS = [], REQS = [], IVS = [], RTS = [], EDITS = [];
 
 // doc.peakaccount.com/?emi=…&eti=… (view) → secure.peakaccount.com/income/<doc>Edit?emi=…&eii=… (edit / approve page)
 function peakEdit(link, doc) { try { const u = new URL(link); const emi = u.searchParams.get('emi'), eti = u.searchParams.get('eti'); return emi && eti ? `https://secure.peakaccount.com/income/${doc}Edit?emi=${encodeURIComponent(emi)}&eii=${encodeURIComponent(eti)}` : link; } catch { return link; } }
+const canDo = (p) => !!(ME && (ME.perms || []).includes(p));
 const isoD = (s) => { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(String(s || '')); return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : ''; };
 const whtShort = (r) => (r === undefined || r === '' ? '— ไม่ได้ระบุ' : String(r) === '0' ? 'ไม่หัก' : `${r}%`);
 const whtText = (r) => (r === undefined || r === '' ? '—' : String(r) === '0' ? 'ไม่หัก ณ ที่จ่าย' : `หัก ณ ที่จ่าย ${r}%`);
@@ -894,7 +895,7 @@ async function loadAll() {
 }
 
 function renderMine() {
-  const op = ME && ME.role === 'op';
+  const op = canDo('approve') || canDo('team_view');
   const replaced = new Set(REQS.map((q) => q.replaces).filter(Boolean));
   const shownQ = REQS.filter((q) => !replaced.has(q.requestId));
   $('mine-qt').innerHTML = shownQ.length ? shownQ.map((q) => {
@@ -1010,7 +1011,7 @@ async function askEdit(docType, docNo, refId) {
 }
 function alertMsg(t, ok) { ask({ title: ok ? 'เรียบร้อย' : 'ทำรายการไม่สำเร็จ', html: `<p>${esc(t)}</p>`, ok: 'ตกลง', cancel: null }); }
 function renderMineMore() {
-  const op = ME && ME.role === 'op';
+  const op = canDo('approve') || canDo('team_view');
   $('mine-rt').innerHTML = RTS.length ? RTS.map((r) => `<div class="list-row"><div class="list-head"><div><span class="list-id">${r.peakRtNo ? docLink(r.peakRtNo, r.peakDocLink) : esc(r.rtRequestId)}</span> · ${esc(r.billName)}</div><div>${st(RT_ST, r.status)}${r.sentStatus === 'waiting' && r.status === 'issued' ? ' <span class="st blue">รอส่งตัวจริง</span>' : r.sentStatus === 'sent' ? ' <span class="st green">ส่งแล้ว</span>' : ''}</div></div>
     <div class="list-sub">${esc(r.rtRequestId)} · ${esc(r.createdAt)} · ${esc(r.segment)}${op ? ' · ' + esc(r.salesName) : ''}<br>${esc(r.packages)} ${esc(r.whStudent)} · ${fmt(toNum(r.price) - toNum(r.discount))} บาท · ${esc(r.deliveryChannel)}${r.trackingNo ? ' · เลขพัสดุ ' + esc(r.trackingNo) : ''}${r.accountNote ? `<br><span class="small">ฝ่ายบัญชี: ${esc(r.accountNote)}</span>` : ''}</div>
     ${r.status === 'issued' && r.peakRtNo ? `<div style="margin-top:8px"><button class="btn btn-g btn-sm" onclick="askEdit('RT','${esc(r.peakRtNo)}','${esc(r.rtRequestId)}')">✏️ ขอแก้ไขใบเสร็จ</button></div>` : ''}</div>`).join('') : '<div class="empty">ยังไม่มีคำขอใบเสร็จ</div>';
@@ -1090,7 +1091,7 @@ async function editAction(id, action) {
 // ─── Accountant / Admin: requests waiting for approval ────
 function setPend(w, btn) { document.querySelectorAll('#pend-seg button').forEach((b) => b.classList.toggle('on', b === btn)); ['qt', 'inv', 'orig', 'rt', 'edit'].forEach((k) => { $('pend-' + k).hidden = w !== k; $('pend-hint-' + k).hidden = w !== k; }); }
 function renderPending() {
-  const op = ME && ME.role === 'op';
+  const op = canDo('approve');
   $('nav-pend').hidden = !op;
   if (!op) return;
   const waitQ = REQS.filter((q) => q.status === 'new');

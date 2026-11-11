@@ -45,7 +45,7 @@ test('PEAK client code is any PEAK code; a failed tax check digit is flagged, no
 });
 
 test('INV requests accept an optional, well-formed Opportunity ID', () => {
-  const base = { whtRate: '3', qtNo: 'QO-1', company: 'Co', taxId: '0105555555554', evidenceType: 'PO จากลูกค้า', file: { name: 'qt.pdf', type: 'application/pdf', data: 'JVBERi0=' }, invoices: [{ ...L, amountPreVat: 100 }] };
+  const base = { poNeeded: 'no', whtRate: '3', qtNo: 'QO-1', company: 'Co', taxId: '0105555555554', evidenceType: 'PO จากลูกค้า', file: { name: 'qt.pdf', type: 'application/pdf', data: 'JVBERi0=' }, invoices: [{ ...L, amountPreVat: 100 }] };
   assert.equal(inv.validate(base).r.opportunityId, '');
   assert.throws(() => inv.validate({ ...base, opportunityId: 'x' }), /รูปแบบ/);
 });

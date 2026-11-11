@@ -62,6 +62,8 @@ function validate(b) {
     note: text(b.note, 1000),
     overReason: text(b.overReason, 300),
     offReason: text(b.offReason, 300),
+    payCycle: text(b.payCycle, 120),
+    poNeeded: ['yes', 'no', 'unknown'].includes(b.poNeeded) ? b.poNeeded : '',
   };
   if (!r.qtNo) throw bad('ใส่เลขที่ใบเสนอราคา (QT) ที่ต้องการออก INV');
   if (!['0', '1', '2', '3', '5'].includes(r.whtRate)) throw bad('เลือกหัก ณ ที่จ่าย (ไม่หัก / 1% / 2% / 3% / 5%)');
@@ -70,6 +72,8 @@ function validate(b) {
   if (!EVIDENCE.includes(r.evidenceType)) throw bad('เลือกประเภทหลักฐานที่ลูกค้ายอมรับ');
   if (r.evidenceType === 'อื่นๆ' && !r.evidenceOther) throw bad('ระบุว่าหลักฐานเป็นเอกสารอะไร');
   if (!b.file) throw bad('แนบไฟล์หลักฐาน (PDF / JPG / PNG)');
+  if (!r.poNeeded) throw bad('เลือกว่าลูกค้าต้องใช้ PO ในการวางบิลไหม');
+  if (b.docs !== undefined && (!Array.isArray(b.docs) || b.docs.length > 2)) throw bad('แนบเอกสารบริษัทได้ไม่เกิน 2 ไฟล์');
   if (r.financeEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r.financeEmail)) throw bad('อีเมลฝ่ายการเงินไม่ถูกต้อง');
 
   const list = Array.isArray(b.invoices) ? b.invoices : [];
@@ -167,6 +171,9 @@ async function create(req, res, user) {
   }
 
   const evidenceLink = await drive.upload(b.file, `${batchId} ${r.qtNo} ${r.company}`.slice(0, 120));
+  // Company documents (หนังสือรับรอง / ภ.พ.20), optional.
+  const docLinks = [];
+  for (const [i, f] of (Array.isArray(b.docs) ? b.docs : []).entries()) docLinks.push(await drive.upload(f, `${batchId} เอกสารบริษัท ${i + 1} ${r.company}`.slice(0, 120)));
   const evidenceType = r.evidenceType === 'อื่นๆ' ? `อื่นๆ: ${r.evidenceOther}` : r.evidenceType;
   const partial = invoices.length > 1 || prior > 0 || (qtTotal > 0 && Math.abs(asked - qtTotal) > 0.01);
 
@@ -183,6 +190,7 @@ async function create(req, res, user) {
     originalDoc: v.originalDoc, originalStatus: ORIGINAL[v.originalDoc], originalRecipient: v.originalRecipient,
     originalAddress: v.originalAddress, originalRequestedAt: v.originalDoc === 'yes' ? at : '', originalSentAt: '', trackingNo: '',
     overReason: over ? r.overReason : (!r.requestId ? `QT นอกระบบ: ${r.offReason}` : ''), whtRate: r.whtRate,
+    payCycle: r.payCycle, poNeeded: r.poNeeded, companyDocsLink: docLinks.join('\n'),
   }));
   await hub.appendRows('InvoiceRequests', rows);
 
@@ -404,6 +412,137 @@ async function arUpdate(req, res, user) {
   throw bad('คำสั่งไม่ถูกต้อง');
 }
 
+// ---------------------------------------------------------------- receipts (ใบเสร็จ / ใบกำกับภาษี)
+const RT_SEGMENTS = ['B2C', 'B2E', 'MaoMao', 'B2B', 'B2S', 'Others'];
+const RT_KIND = { company: 'ใบเสร็จ/ใบกำกับภาษี ในนามบริษัท', person: 'ใบเสร็จ/ใบกำกับภาษี ในนามบุคคล' };
+const RT_CHANNEL = { email: 'ส่งอีเมลลูกค้า', sales: 'ส่งไฟล์ให้ Sales', post: 'ส่งตัวจริงตามที่อยู่', email_post: 'ส่งอีเมลและส่งตัวจริง' };
+const needsPost = (c) => c === 'post' || c === 'email_post';
+const needsEmail = (c) => c === 'email' || c === 'email_post';
+const shortId = (p) => { const t = new Date(Date.now() + 7 * 3600e3); const z = (x) => String(x).padStart(2, '0'); return `${p}-${String(t.getUTCFullYear()).slice(2)}${z(t.getUTCMonth() + 1)}${z(t.getUTCDate())}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`; };
+
+async function createReceipt(req, res, user) {
+  checkOrigin(req);
+  const b = req.body || {};
+  const r = {
+    segment: text(b.segment, 20), docKind: text(b.docKind, 20), refDoc: text(b.refDoc, 120), whStudent: text(b.whStudent, 200),
+    billName: text(b.billName, 200), taxId: text(b.taxId, 20).replace(/[\s-]/g, ''), branch: text(b.branch, 20),
+    address: text(b.address, 600), deliveryAddress: text(b.deliveryAddress, 600), email: text(b.email, 120),
+    whtRate: String(b.whtRate ?? '').trim(), packages: text(b.packages, 300), description: text(b.description, 1500),
+    price: num(b.price), discount: num(b.discount) || 0, paidDate: text(b.paidDate, 10), deliveryChannel: text(b.deliveryChannel, 20),
+    docLang: text(b.docLang, 2).toUpperCase() || 'TH', note: text(b.note, 1000),
+  };
+  if (!RT_SEGMENTS.includes(r.segment)) throw bad('เลือกกลุ่มลูกค้า');
+  if (!RT_KIND[r.docKind]) throw bad('เลือกประเภทเอกสาร (ในนามบริษัท / ในนามบุคคล)');
+  if (!r.billName) throw bad('ใส่ชื่อที่จะออกในเอกสาร');
+  if (!/^\d{13}$/.test(r.taxId)) throw bad(r.docKind === 'person' ? 'ใส่เลขบัตรประชาชน 13 หลักของผู้ที่ออกในนาม' : 'ใส่เลขประจำตัวผู้เสียภาษี 13 หลัก');
+  const br = r.docKind === 'person' ? '00000' : normBranch(r.branch);
+  if (br === null) throw bad('สาขาต้องเป็นรหัส 5 หลัก เช่น 00000');
+  r.branch = br;
+  if (!r.address) throw bad('ใส่ที่อยู่ตามที่จะออกในเอกสาร');
+  if (['B2C', 'B2E', 'MaoMao'].includes(r.segment) && !r.whStudent) throw bad('ใส่ชื่อ / ID ผู้เรียนใน Whitehouse');
+  if (!r.packages) throw bad('ใส่ Package ID / รหัสคอร์ส');
+  if (!(r.price > 0 && r.price < 1e9)) throw bad('ใส่ราคาขาย (ก่อนหักส่วนลด)');
+  if (!(r.discount >= 0 && r.discount < r.price)) throw bad('ส่วนลดไม่ถูกต้อง');
+  if (!['0', '1', '2', '3', '5'].includes(r.whtRate)) throw bad('เลือกหัก ณ ที่จ่าย');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(r.paidDate)) throw bad('ใส่วันที่ลูกค้าชำระเงิน');
+  if (!RT_CHANNEL[r.deliveryChannel]) throw bad('เลือกช่องทางส่งเอกสาร');
+  if (needsEmail(r.deliveryChannel) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r.email)) throw bad('ใส่อีเมลลูกค้าสำหรับส่งเอกสาร');
+  if (needsPost(r.deliveryChannel) && !(r.deliveryAddress || r.address)) throw bad('ใส่ที่อยู่จัดส่ง');
+  if (!['TH', 'EN'].includes(r.docLang)) throw bad('เลือกภาษาเอกสาร');
+  const rows = await hub.readTable('ReceiptRequests');
+  if (b.confirmDuplicate !== true) {
+    const since = Date.now() - 14 * 86400e3;
+    const same = rows.filter((x) => x.taxId === r.taxId && Math.abs(ar.num(x.price) - r.price) < 0.01 && x.status !== 'rejected'
+      && (ar.parseDate(x.createdAt) || 0) > since - 86400e3);
+    if (same.length) {
+      const e = bad(`มีคำขอใบเสร็จของ ${r.billName} ยอดเดียวกันอยู่แล้ว ${same.length} ใบ`, 409);
+      e.extra = { duplicate: true, matches: same.slice(-5).map((x) => ({ id: x.rtRequestId, createdAt: x.createdAt, by: x.salesName, status: x.status, ivNo: x.peakRtNo, amount: x.price })) };
+      throw e;
+    }
+  }
+  const id = shortId('RTREQ');
+  const proof = b.file ? await drive.upload(b.file, `${id} หลักฐานชำระ ${r.billName}`.slice(0, 120)) : '';
+  const at = hub.sheetDateTime();
+  await hub.appendRows('ReceiptRequests', [{ rtRequestId: id, createdAt: at, requestedBy: user.email, salesName: user.name, ...r,
+    docKind: RT_KIND[r.docKind], deliveryChannel: RT_CHANNEL[r.deliveryChannel], paidDate: dmy(r.paidDate), paymentProof: proof,
+    status: 'new', peakRtNo: '', peakDocLink: '', sentStatus: needsPost(r.deliveryChannel) ? 'waiting' : '', sentAt: '', trackingNo: '', accountNote: '', updatedAt: at }]);
+  await Promise.all([hub.log('catalog', 'receipt_requested', id, `${user.email} · ${r.billName} · ${r.price}`),
+    notify.chat(`🧾 ขอใบเสร็จ/ใบกำกับภาษี ${id} จาก ${user.name || user.email}\n${r.segment} · ${r.billName} · ${money(r.price - r.discount)} บาท\n${RT_CHANNEL[r.deliveryChannel]}`)]);
+  res.status(200).json({ ok: true, rtRequestId: id, message: 'ส่งคำขอใบเสร็จแล้ว ฝ่ายบัญชีจะออกใน PEAK และแจ้งเลขเอกสารในหน้า "คำขอของฉัน"' });
+}
+
+async function listReceipts(req, res, user) {
+  const rows = await hub.readTable('ReceiptRequests');
+  const out = rows.filter((r) => user.role === 'op' || r.requestedBy === user.email).reverse().slice(0, 150).map(({ _row, ...r }) => r);
+  res.status(200).json({ ok: true, requests: out });
+}
+
+async function updateReceipt(req, res, user) {
+  checkOrigin(req);
+  if (user.role !== 'op') throw bad('เฉพาะฝ่ายบัญชี / Admin', 403);
+  const b = req.body || {};
+  const rows = await hub.readTable('ReceiptRequests');
+  const row = rows.find((x) => x.rtRequestId === text(b.rtRequestId, 40));
+  if (!row) throw bad('ไม่พบคำขอนี้', 404);
+  hub.checkSeen(row, text(b.seen, 80));
+  const at = hub.sheetDateTime(); const who = user.name || user.email; const note = text(b.note, 500);
+  if (b.action === 'rt_issued') {
+    if (row.status !== 'new') throw bad(`คำขอนี้อยู่ในสถานะ ${row.status} แล้ว รีเฟรชหน้า`, 409);
+    const no = text(b.peakRtNo, 40).toUpperCase();
+    if (!/^[A-Z]{0,6}-?\d{6,}[A-Z0-9]*$/.test(no)) throw bad('ใส่เลขใบเสร็จจาก PEAK');
+    const link = text(b.peakDocLink, 500);
+    if (!/^https:\/\/(doc|secure)\.peakaccount\.com\//.test(link)) throw bad('ใส่ลิงก์เอกสารจาก PEAK');
+    const sent = !String(row.deliveryChannel).includes('ตัวจริง');
+    await hub.writeChecked('ReceiptRequests', 'rtRequestId', row, { status: 'issued', peakRtNo: no, peakDocLink: link, accountNote: note ? `${note} — ${who}` : row.accountNote, sentStatus: sent ? 'sent' : 'waiting', sentAt: sent ? at : '', updatedAt: at });
+  } else if (b.action === 'rt_reject') {
+    if (row.status !== 'new') throw bad(`คำขอนี้อยู่ในสถานะ ${row.status} แล้ว`, 409);
+    if (!note) throw bad('ใส่เหตุผลที่ตีกลับ');
+    await hub.writeChecked('ReceiptRequests', 'rtRequestId', row, { status: 'rejected', accountNote: `${note} — ${who}`, updatedAt: at });
+  } else if (b.action === 'rt_reopen') {
+    if (row.status !== 'rejected') throw bad('คำขอนี้ไม่ได้ถูกตีกลับ', 409);
+    await hub.writeChecked('ReceiptRequests', 'rtRequestId', row, { status: 'new', updatedAt: at });
+  } else if (b.action === 'rt_sent') {
+    if (row.status !== 'issued') throw bad('ต้องออกใบเสร็จก่อนจึงบันทึกการส่งได้', 409);
+    if (row.sentStatus === 'sent') throw bad('บันทึกว่าส่งแล้ว', 409);
+    await hub.updateRow('ReceiptRequests', row._row, { sentStatus: 'sent', sentAt: at, trackingNo: text(b.trackingNo, 60), updatedAt: at });
+  } else throw bad('คำสั่งไม่ถูกต้อง');
+  await hub.log('catalog', b.action, row.rtRequestId, `${user.email}${note ? ' · ' + note : ''}`);
+  res.status(200).json({ ok: true });
+}
+
+// ---------------------------------------------------------------- edit requests for issued QT / INV
+async function createEdit(req, res, user) {
+  checkOrigin(req);
+  const b = req.body || {};
+  const r = { docType: text(b.docType, 5), docNo: text(b.docNo, 40).toUpperCase(), refId: text(b.refId, 60), company: text(b.company, 200), detail: text(b.detail, 1500) };
+  if (!['QT', 'INV', 'RT'].includes(r.docType)) throw bad('เลือกประเภทเอกสาร');
+  if (!/^[A-Z0-9-]{6,40}$/.test(r.docNo)) throw bad('ใส่เลขเอกสารที่ต้องการแก้ เช่น QO-20261100012');
+  if (r.detail.length < 5) throw bad('อธิบายว่าต้องการแก้อะไร');
+  const rows = await hub.readTable('EditRequests');
+  if (rows.some((x) => x.docNo === r.docNo && x.status === 'new')) throw bad(`มีคำขอแก้ ${r.docNo} ที่ยังรอฝ่ายบัญชีอยู่แล้ว`, 409);
+  const id = shortId('EDIT'); const at = hub.sheetDateTime();
+  await hub.appendRows('EditRequests', [{ editId: id, createdAt: at, requestedBy: user.email, salesName: user.name, ...r, status: 'new', accountNote: '', newDocNo: '', doneBy: '', updatedAt: at }]);
+  await Promise.all([hub.log('catalog', 'edit_requested', id, `${user.email} · ${r.docNo}`), notify.chat(`✏️ ขอแก้ไข ${r.docType} ${r.docNo} (${r.company}) จาก ${user.name || user.email}\n${r.detail}`)]);
+  res.status(200).json({ ok: true, editId: id });
+}
+async function listEdits(req, res, user) {
+  const rows = await hub.readTable('EditRequests');
+  res.status(200).json({ ok: true, requests: rows.filter((r) => user.role === 'op' || r.requestedBy === user.email).reverse().slice(0, 150).map(({ _row, ...r }) => r) });
+}
+async function updateEdit(req, res, user) {
+  checkOrigin(req);
+  if (user.role !== 'op') throw bad('เฉพาะฝ่ายบัญชี / Admin', 403);
+  const b = req.body || {};
+  const row = (await hub.readTable('EditRequests')).find((x) => x.editId === text(b.editId, 40));
+  if (!row) throw bad('ไม่พบคำขอนี้', 404);
+  if (row.status !== 'new') throw bad(`คำขอนี้ ${row.status === 'done' ? 'แก้แล้ว' : 'ถูกตีกลับ'} รีเฟรชหน้า`, 409);
+  const note = text(b.note, 500); const at = hub.sheetDateTime(); const who = user.name || user.email;
+  if (b.action === 'edit_reject' && !note) throw bad('ใส่เหตุผลที่ตีกลับ');
+  await hub.writeChecked('EditRequests', 'editId', row, { status: b.action === 'edit_done' ? 'done' : 'rejected', accountNote: note, newDocNo: text(b.newDocNo, 40).toUpperCase(), doneBy: who, updatedAt: at });
+  await hub.log('catalog', b.action, row.editId, `${user.email} · ${row.docNo}`);
+  res.status(200).json({ ok: true });
+}
+
 // One-off moves from the legacy sheets (file prepared by Claude, uploaded by an admin on /ar).
 // invoices → Invoices (+ followUps → FollowUps); quotations → Requests (QTs issued in PEAK before the app).
 async function importLegacy(req, res, user) {
@@ -435,6 +574,8 @@ async function importLegacy(req, res, user) {
 
 async function list(req, res, user) {
   if (req.query && req.query.view === 'ar') return arList(req, res, user);
+  if (req.query && req.query.view === 'receipts') return listReceipts(req, res, user);
+  if (req.query && req.query.view === 'edits') return listEdits(req, res, user);
   const [rows, invs] = await Promise.all([hub.readTable('InvoiceRequests'), hub.readTable('Invoices').catch(() => [])]);
   // Payment status from AR, so sales see whether their customer has paid.
   const byReq = new Map(), byNo = new Map();
@@ -457,8 +598,9 @@ module.exports = async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   try {
     const user = await requireUser(req);
-    if (req.method === 'POST') return await ((req.body || {}).action === 'legacy_import' ? importLegacy : create)(req, res, user);
-    if (req.method === 'PATCH') return await (String((req.body || {}).action || '').startsWith('ar_') ? arUpdate : update)(req, res, user);
+    const act = String((req.body || {}).action || '');
+    if (req.method === 'POST') return await ({ legacy_import: importLegacy, receipt: createReceipt, edit: createEdit }[act] || create)(req, res, user);
+    if (req.method === 'PATCH') return await (act.startsWith('ar_') ? arUpdate : act.startsWith('rt_') ? updateReceipt : act.startsWith('edit_') ? updateEdit : update)(req, res, user);
     if (req.method === 'GET') return await list(req, res, user);
     res.status(405).json({ ok: false, error: 'Method not allowed' });
   } catch (e) {

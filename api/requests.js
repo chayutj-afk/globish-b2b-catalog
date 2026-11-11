@@ -50,6 +50,7 @@ function validate(b) {
     note: text(b.note, 1000),
     opportunityId: normaliseOppId(b.opportunityId),
     whtRate: String(b.whtRate ?? '').trim(),
+    customerEmail: text(b.customerEmail, 120),
   };
   if (!SEGMENTS.includes(r.segment)) throw bad('เลือกกลุ่มลูกค้า (B2B / B2C / MaoMao / B2E / B2S / Others)');
   if (!DEAL_TYPES.includes(r.dealType)) throw bad('เลือกประเภทดีล (New Logo / Retention / Others)');
@@ -70,6 +71,7 @@ function validate(b) {
   if (!['TH', 'EN'].includes(r.docLang)) throw bad('เลือกภาษาเอกสาร (TH / EN)');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(r.wantedQtDate)) throw bad('ใส่วันที่ต้องการให้ลงใน QT');
   if (r.creditTermDays === '') throw bad('ใส่เครดิตเทอม (วัน)');
+  if (r.customerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r.customerEmail)) throw bad('อีเมลลูกค้าไม่ถูกต้อง');
   if (!WHT_RATES.includes(r.whtRate)) throw bad('เลือกหัก ณ ที่จ่าย (ไม่หัก / 1% / 2% / 3% / 5%)');
   if ((!Number.isFinite(r.creditTermDays) || r.creditTermDays < 0 || r.creditTermDays > 180)) throw bad('เครดิตเทอมต้องอยู่ระหว่าง 0 ถึง 180 วัน');
   const items = Array.isArray(b.items) ? b.items : [];
@@ -131,7 +133,11 @@ async function create(req, res, user) {
   });
   // Sales' extra description for a package goes on its first (priced) line. The PEAK sync (Claude)
   // blends it into the generated description before creating the QT (RequestLines L → M).
-  priced.forEach((p, i) => { const note = text(items[i].extra, 500); if (note && p.lines[0]) p.lines[0].salesNote = note; });
+  priced.forEach((p, i) => {
+    const note = text(items[i].extra, 500); if (note && p.lines[0]) p.lines[0].salesNote = note;
+    // Freebies (ของแถม, e.g. FMC 3 ครั้ง) on the package line: the sync adds them to the QT description.
+    const free = text(items[i].freebie, 300); if (free && p.lines[0]) p.lines[0].freebie = free;
+  });
   const lines = priced.flatMap((p) => p.lines);
   const total = Math.round(priced.reduce((s, p) => s + p.total, 0) * 100) / 100;
   const catalogTotal = priced.reduce((s, p) => s + p.catalogTotal, 0);
@@ -189,7 +195,7 @@ async function create(req, res, user) {
   await hub.appendRows('RequestLines', lines.map((l, i) => ({
     requestId: request.requestId, line: i + 1, role: l.role, keyHS: l.keyHS, packageId: l.packageId,
     peakServiceCode: serviceCodeOf(l), description: l.description, qty: l.qty, unitPrice: l.unitPrice,
-    discount: l.discount, listPrice: l.listPrice, salesNote: l.salesNote || '', qtDescription: '',
+    discount: l.discount, listPrice: l.listPrice, salesNote: l.salesNote || '', qtDescription: '', freebie: l.freebie || '',
   })));
   await hub.log('catalog', 'request_created', request.requestId, `${user.email} · ${r.company} · ${total}${belowFloor ? ' · below catalog floor: ' + belowFloor : ''}`);
 
@@ -210,7 +216,10 @@ async function list(req, res, user) {
     .filter((r) => user.role === 'op' || r.requestedBy === user.email)
     .map((r) => ({ ...r, _createdMs: parseSheetDate(r.createdAt) }))
     .sort((a, b) => (b._createdMs || 0) - (a._createdMs || 0))
-    .slice(0, 50);
+    // newest 50, plus every approved QT that still has a balance to invoice (e.g. QTs imported from PEAK)
+    .filter((r, i) => i < 50 || (['qt_approved', 'accepted', 'iv_requested'].includes(r.status)
+      && (Number(String(r.totalPreVat).replace(/,/g, '')) || 0) - (invoiced[r.requestId] || 0) > 0.01))
+    .slice(0, 400);
   const ids = new Set(mine.map((r) => r.requestId));
   const byId = {};
   lines.filter((l) => ids.has(l.requestId)).forEach((l) => { (byId[l.requestId] = byId[l.requestId] || []).push(l); });

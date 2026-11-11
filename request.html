@@ -75,6 +75,7 @@
       <div class="fg"><label>ลูกค้าต้องออก PO ไหม</label><select id="q-po"><option value="no">ไม่ต้องใช้ PO</option><option value="yes">ต้องมี PO</option></select></div>
       <div class="fg"><label>หมายเหตุถึงฝ่ายบัญชี</label><input id="q-note" type="text" maxlength="1000"></div>
     </div>
+    <div class="row c3"><div class="fg"><label>อีเมลลูกค้า (สำหรับส่งเอกสาร)</label><input id="q-email" type="email" maxlength="120" placeholder="name@company.com"></div></div>
   </div>
 
   <div class="card">
@@ -133,7 +134,12 @@
   </div>
 
   <div class="card">
-    <h2>4. ผู้ติดต่อฝ่ายการเงินของลูกค้า</h2>
+    <h2>4. การวางบิลและผู้ติดต่อฝ่ายการเงินของลูกค้า</h2>
+    <div class="row c3">
+      <div class="fg"><label>ลูกค้าต้องใช้ PO ในการวางบิลไหม *</label><select id="i-poneed"><option value="">— เลือก —</option><option value="yes">ใช่ ต้องมี PO</option><option value="no">ไม่ต้องใช้</option><option value="unknown">ยังไม่ทราบ</option></select></div>
+      <div class="fg"><label>รอบจ่ายเงินของลูกค้า</label><input id="i-paycycle" type="text" maxlength="120" placeholder="เช่น จ่ายทุกวันที่ 25 / วางบิลทุกวันศุกร์"></div>
+      <div class="fg"><label>หนังสือรับรอง / ภ.พ.20 (ถ้ามี)</label><input id="i-docs" type="file" accept=".pdf,.jpg,.jpeg,.png" multiple><div class="sub">ไม่เกิน 2 ไฟล์ · รวมกับไฟล์หลักฐานไม่เกิน 3 MB</div></div>
+    </div>
     <div class="row c3">
       <div class="fg"><label>ชื่อ</label><input id="i-fin-name" type="text" maxlength="120"></div>
       <div class="fg"><label>อีเมล</label><input id="i-fin-email" type="text" maxlength="120"></div>
@@ -146,6 +152,52 @@
   <div id="i-msg"></div>
 </section>
 
+<!-- ═══════════════ RECEIPT ═══════════════ -->
+<section id="tab-rt" class="tab">
+  <div class="card">
+    <h2>1. ออกในนาม</h2>
+    <p class="hint">ใช้ขอใบเสร็จรับเงิน / ใบกำกับภาษี หลังลูกค้าชำระเงินแล้ว (ส่วนใหญ่ B2C / B2E ที่จ่ายผ่าน Whitehouse) ฝ่ายบัญชีออกใน PEAK แล้วแจ้งเลขเอกสารกลับในหน้า "คำขอของฉัน"</p>
+    <div class="row c3">
+      <div class="fg"><label>กลุ่มลูกค้า *</label><select id="r-seg"><option>B2C</option><option>B2E</option><option>MaoMao</option><option>B2B</option><option>B2S</option><option>Others</option></select></div>
+      <div class="fg"><label>ประเภทเอกสาร *</label><select id="r-kind" onchange="onRtKind()"><option value="company">ใบเสร็จ/ใบกำกับภาษี ในนามบริษัท</option><option value="person">ใบเสร็จ/ใบกำกับภาษี ในนามบุคคล</option></select></div>
+      <div class="fg"><label>ภาษาเอกสาร</label><select id="r-lang"><option value="TH">ภาษาไทย</option><option value="EN">English</option></select></div>
+    </div>
+    <div class="row c3">
+      <div class="fg"><label id="r-tax-l">เลขประจำตัวผู้เสียภาษี (13 หลัก) *</label><input id="r-tax" type="text" inputmode="numeric" maxlength="13" oninput="digits(this);rtTax()"><div class="sub" id="r-tax-hint"></div></div>
+      <div class="fg" id="r-branch-wrap"><label>รหัสสาขา *</label><input id="r-branch" type="text" inputmode="numeric" maxlength="5" placeholder="00000" oninput="digits(this)"></div>
+      <div class="fg"><label>ชื่อที่ออกในเอกสาร *</label><input id="r-name" type="text" maxlength="200"></div>
+    </div>
+    <div class="row"><div class="fg"><label>ที่อยู่ตามเอกสาร *</label><textarea id="r-addr" rows="2" maxlength="600"></textarea></div></div>
+  </div>
+  <div class="card">
+    <h2>2. รายการที่ชำระ</h2>
+    <div class="row c3">
+      <div class="fg"><label id="r-stu-l">ชื่อ / ID ผู้เรียนใน Whitehouse *</label><input id="r-stu" type="text" maxlength="200" placeholder="เช่น (ID: 214631) รดา พรชัยฯ"></div>
+      <div class="fg"><label>Package ID / รหัสคอร์ส *</label><input id="r-pkg" type="text" maxlength="300" placeholder="เช่น 4890, 4863"></div>
+      <div class="fg"><label>เอกสารอ้างอิง (ถ้ามี)</label><input id="r-ref" type="text" maxlength="120" placeholder="เลข INV / QT / Order ID ใน WH"></div>
+    </div>
+    <div class="row"><div class="fg"><label>ชื่อคอร์ส / รายละเอียดที่ให้ขึ้นในเอกสาร</label><textarea id="r-desc" rows="2" maxlength="1500"></textarea></div></div>
+    <div class="row c4">
+      <div class="fg"><label>ราคาขาย (ก่อนหักส่วนลด) *</label><input id="r-price" type="number" min="0" step="0.01"></div>
+      <div class="fg"><label>ส่วนลด</label><input id="r-disc" type="number" min="0" step="0.01" placeholder="0"></div>
+      <div class="fg"><label>หัก ณ ที่จ่าย *</label><select id="r-wht"><option value="">— เลือก —</option><option value="0">ไม่หัก</option><option value="3">หัก 3%</option><option value="1">หัก 1%</option><option value="2">หัก 2%</option><option value="5">หัก 5%</option></select></div>
+      <div class="fg"><label>วันที่ลูกค้าชำระ *</label><input id="r-paid" type="date"></div>
+    </div>
+    <div class="row"><div class="fg"><label>หลักฐานการชำระ (ถ้ามี · PDF / JPG / PNG ไม่เกิน 3 MB)</label><input id="r-file" type="file" accept=".pdf,.jpg,.jpeg,.png"></div></div>
+  </div>
+  <div class="card">
+    <h2>3. ส่งเอกสาร</h2>
+    <div class="row c3">
+      <div class="fg"><label>ช่องทาง *</label><select id="r-ch" onchange="onRtCh()"><option value="sales">ส่งไฟล์ให้ Sales</option><option value="email">ส่งอีเมลลูกค้า</option><option value="post">ส่งตัวจริงตามที่อยู่</option><option value="email_post">ส่งอีเมลและส่งตัวจริง</option></select></div>
+      <div class="fg" id="r-email-wrap" hidden><label>อีเมลลูกค้า *</label><input id="r-email" type="email" maxlength="120"></div>
+    </div>
+    <div class="row" id="r-dlv-wrap" hidden><div class="fg"><label>ที่อยู่จัดส่ง (ถ้าไม่ใช่ที่อยู่ตามเอกสาร)</label><textarea id="r-dlv" rows="2" maxlength="600" placeholder="ชื่อผู้รับ เบอร์โทร ที่อยู่"></textarea></div></div>
+    <div class="row c1"><div class="fg"><label>หมายเหตุถึงฝ่ายบัญชี</label><input id="r-note" type="text" maxlength="1000"></div></div>
+  </div>
+  <button class="btn btn-p btn-block" id="r-submit" onclick="submitRT()">📨 ส่งคำขอใบเสร็จ</button>
+  <div id="r-msg"></div>
+</section>
+
 <!-- ═══════════════ MINE ═══════════════ -->
 <section id="tab-pend" class="tab">
   <div class="filters">
@@ -153,6 +205,8 @@
       <button class="on" onclick="setPend('qt',this)">ใบเสนอราคา <span id="pend-qt-n"></span></button>
       <button onclick="setPend('inv',this)">ใบแจ้งหนี้ <span id="pend-inv-n"></span></button>
       <button onclick="setPend('orig',this)">ส่งตัวจริง <span id="pend-orig-n"></span></button>
+      <button onclick="setPend('rt',this)">ใบเสร็จ <span id="pend-rt-n"></span></button>
+      <button onclick="setPend('edit',this)">ขอแก้ไข <span id="pend-edit-n"></span></button>
     </div>
     <button class="btn btn-g btn-sm" onclick="loadAll()">↻ รีเฟรช</button>
   </div>
@@ -162,6 +216,10 @@
   <p class="hint" id="pend-hint-orig" hidden>INV ที่ลูกค้าขอเอกสารตัวจริง ส่งแล้วใส่ <b>เลขพัสดุ</b> (ถ้ามี) แล้วกด <b>ส่งตัวจริงแล้ว</b> Sales จะเห็นเลขพัสดุในหน้าคำขอของตัวเอง</p>
   <div id="pend-inv" hidden><div class="empty">กำลังโหลด...</div></div>
   <div id="pend-orig" hidden><div class="empty">กำลังโหลด...</div></div>
+  <p class="hint" id="pend-hint-rt" hidden>ออกใบเสร็จ / ใบกำกับภาษีใน PEAK แล้วใส่ <b>เลขเอกสาร</b> และ <b>ลิงก์ PEAK</b> ถ้าต้องส่งตัวจริง บันทึกเลขพัสดุหลังส่ง</p>
+  <div id="pend-rt" hidden></div>
+  <p class="hint" id="pend-hint-edit" hidden>Sales ขอแก้เอกสารที่ออกไปแล้ว แก้ใน PEAK (หรือออกใบใหม่) แล้วกด <b>แก้แล้ว</b> พร้อมเลขเอกสารใหม่ถ้ามี</p>
+  <div id="pend-edit" hidden></div>
 </section>
 
 <section id="tab-mine" class="tab">
@@ -169,11 +227,15 @@
     <div class="seg" id="mine-seg">
       <button class="on" onclick="setMine('qt',this)">ใบเสนอราคา</button>
       <button onclick="setMine('inv',this)">ใบแจ้งหนี้</button>
+      <button onclick="setMine('rt',this)">ใบเสร็จ</button>
+      <button onclick="setMine('edit',this)">ขอแก้ไข</button>
     </div>
     <button class="btn btn-g btn-sm" onclick="loadAll()">↻ รีเฟรช</button>
   </div>
   <div id="mine-qt"><div class="empty">กำลังโหลด...</div></div>
   <div id="mine-inv" hidden><div class="empty">กำลังโหลด...</div></div>
+  <div id="mine-rt" hidden></div>
+  <div id="mine-edit" hidden></div>
 </section>
 </main></div></div>
 
@@ -228,15 +290,15 @@ async function api(url, opts = {}) {
   return d;
 }
 function go(tab) {
-  ['qt', 'inv', 'mine', 'pend'].forEach((t) => { $('tab-' + t).classList.toggle('on', t === tab); $('nav-' + t).classList.toggle('on', t === tab); });
+  ['qt', 'inv', 'rt', 'mine', 'pend'].forEach((t) => { $('tab-' + t).classList.toggle('on', t === tab); $('nav-' + t).classList.toggle('on', t === tab); });
   history.replaceState(null, '', '#' + tab);
-  const T = { qt: 'ขอใบเสนอราคา (QT)', inv: 'ขอใบแจ้งหนี้ (INV)', mine: 'คำขอของฉัน', pend: 'รออนุมัติ' };
+  const T = { qt: 'ขอใบเสนอราคา (QT)', inv: 'ขอใบแจ้งหนี้ (INV)', rt: 'ขอใบเสร็จ / ใบกำกับภาษี', mine: 'คำขอของฉัน', pend: 'รออนุมัติ' };
   if ($('page-title')) $('page-title').textContent = T[tab]; document.title = T[tab] + ' · Globish Sales Desk';
   if (tab === 'mine' || tab === 'pend') loadAll();
 }
 async function signOut() { try { await fetch('/api/auth/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' } }); } catch {} location.href = '/signin.html'; }
 
-let ME = null, PKGS = [], REQS = [], IVS = [];
+let ME = null, PKGS = [], REQS = [], IVS = [], RTS = [], EDITS = [];
 
 
 const isoD = (s) => { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(String(s || '')); return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : ''; };
@@ -468,7 +530,8 @@ function renderItems() {
       } else {
         desc = `<span class="kind service" id="svk-${i}">Whitehouse Package</span>
           <input type="text" class="mono" placeholder="Package ID เช่น 3822" maxlength="40" autocomplete="off" ${inp(i, 'code', it.code)}>
-          <div class="svc-name" id="svc-${i}"></div>`;
+          <div class="svc-name" id="svc-${i}"></div>
+          <input type="text" maxlength="300" placeholder="🎁 ของแถม (ถ้ามี) เช่น FMC 3 ครั้ง + Business Talk 4" style="margin-top:4px" ${inp(i, 'freebie', it.freebie)}>`;
       }
       qtyCell = `<input class="r" type="number" min="1" ${inp(i, 'qty', it.qty)}><div class="small">จำนวน</div>`;
     }
@@ -555,7 +618,7 @@ async function submitQT() {
   const body = {
     segment: seg, dealType: v('q-deal'), opportunityId: seg === 'B2S' ? '' : getOpp('q'),
     taxId: v('q-tax'), branch: v('q-branch'), clientCode: v('q-client'), company: v('q-company'),
-    docLang: v('q-lang'), wantedQtDate: v('q-date'), creditTermDays: v('q-term'), whtRate: v('q-wht'), poRequired: v('q-po') === 'yes', note: v('q-note'),
+    docLang: v('q-lang'), wantedQtDate: v('q-date'), creditTermDays: v('q-term'), whtRate: v('q-wht'), poRequired: v('q-po') === 'yes', note: v('q-note'), customerEmail: v('q-email'),
     items: CART,
   };
   if (!CART.length) return msg('q-msg', 'err', 'ยังไม่มีรายการสินค้า');
@@ -704,7 +767,7 @@ async function submitINV() {
     taxId: v('i-tax'), branch: v('i-branch'),
     evidenceType: v('i-evtype'), evidenceOther: v('i-evother'),
     financeContact: v('i-fin-name'), financeEmail: v('i-fin-email'), financePhone: v('i-fin-phone'), note: v('i-note'),
-    overReason: $('i-over-wrap').hidden ? '' : v('i-over'), offReason: $('i-off-wrap').hidden ? '' : v('i-off'), invoices: INVS,
+    overReason: $('i-over-wrap').hidden ? '' : v('i-over'), offReason: $('i-off-wrap').hidden ? '' : v('i-off'), invoices: INVS, poNeeded: v('i-poneed'), payCycle: v('i-paycycle'),
   };
   if (!body.qtNo) return msg('i-msg', 'err', 'ใส่เลขที่ใบเสนอราคา (QT)');
   if (!body.company) return msg('i-msg', 'err', 'ใส่ชื่อลูกค้าตาม QT');
@@ -735,26 +798,32 @@ async function submitINV() {
     if (!again) return msg('i-msg', 'info', 'ยังไม่ได้ส่ง ดูคำขอเดิมได้ที่ "คำขอของฉัน"');
     body.confirmDuplicate = true;
   }
+  if (!body.poNeeded) return msg('i-msg', 'err', 'เลือกว่าลูกค้าต้องใช้ PO ในการวางบิลไหม');
+  if ($('i-docs').files.length > 2) return msg('i-msg', 'err', 'แนบหนังสือรับรอง / ภ.พ.20 ได้ไม่เกิน 2 ไฟล์');
   if (!$('i-off-wrap').hidden && !body.offReason) return msg('i-msg', 'err', 'เลือก QT จากระบบ หรือใส่เหตุผลที่ใช้ QT นอกระบบ');
   if (!$('i-over-wrap').hidden && !body.overReason) return msg('i-msg', 'err', 'ยอดรวมเกิน QT ใส่เหตุผลก่อนส่ง');
   if (f.size > 3 * 1024 * 1024) return msg('i-msg', 'err', 'ไฟล์ใหญ่เกิน 3 MB ลองย่อหรือแปลงเป็น PDF ก่อน');
+  const docs = [...$('i-docs').files];
+  if (f.size + docs.reduce((t, x) => t + x.size, 0) > 3 * 1024 * 1024) return msg('i-msg', 'err', 'ไฟล์หลักฐานรวมกับหนังสือรับรอง / ภ.พ.20 ใหญ่เกิน 3 MB ลองย่อไฟล์ก่อน');
   const sum = INVS.reduce((s, x) => s + toNum(x.amountPreVat), 0);
   const ok = await ask({ title: 'ยืนยันส่งคำขอออก INV', ok: '📨 ส่งคำขอ', html: `<table>
     <tr><td>QT</td><td><b>${esc(body.qtNo)}</b> · ${esc(body.company)}</td></tr>
     <tr><td>จำนวน INV</td><td>${INVS.length} ใบ · รวมก่อน VAT <b>${fmt(sum)}</b></td></tr>
     ${INVS.map((x, i) => `<tr><td>ใบที่ ${i + 1}</td><td>${fmt(toNum(x.amountPreVat))} · ${esc(x.students)} ผู้เรียน · วันที่ ${esc(x.wantedIssueDate)} · เครดิต ${esc(x.creditTermDays)} วัน${x.billTo === 'other' ? ' · ออกในนาม ' + esc(x.company) : ''}</td></tr>`).join('')}
     <tr><td>หัก ณ ที่จ่าย</td><td>${whtText(body.whtRate)}</td></tr>
-    <tr><td>หลักฐาน</td><td>${esc(body.evidenceType)} · ${esc(f.name)}</td></tr></table>` });
+    <tr><td>หลักฐาน</td><td>${esc(body.evidenceType)} · ${esc(f.name)}${docs.length ? ` + เอกสารบริษัท ${docs.length} ไฟล์` : ''}</td></tr>
+    <tr><td>วางบิล</td><td>${{ yes: 'ต้องใช้ PO', no: 'ไม่ต้องใช้ PO', unknown: 'ยังไม่ทราบเรื่อง PO' }[body.poNeeded]}${body.payCycle ? ' · ' + esc(body.payCycle) : ''}</td></tr></table>` });
   if (!ok) return;
   const btn = $('i-submit'); btn.disabled = true; msg('i-msg', '', '');
   try {
     body.file = { name: f.name, type: f.type, data: await readFileB64(f) };
+    if (docs.length) body.docs = await Promise.all(docs.map(async (x) => ({ name: x.name, type: x.type, data: await readFileB64(x) })));
     const d = await withLoading('กำลังส่งคำขอ INV และอัปโหลดไฟล์…', () => postChecked('/api/invoice-requests', body, true), 'อัปโหลดไฟล์อาจใช้เวลา 5–15 วินาที อย่าปิดหน้านี้');
     if (!d) { msg('i-msg', 'info', 'ยังไม่ได้ส่ง ดูคำขอเดิมได้ที่ "คำขอของฉัน"'); return; }
     INV_DIRTY = false;
     $('i-msg').innerHTML = `<div class="done-card"><b>✓ ส่งคำขอ ${esc(d.batchId)} (${d.ivRequestIds.length} ใบ) แล้ว</b><div style="margin:6px 0 10px">${d.remaining !== null && d.remaining !== undefined ? `QT คงเหลือ ${fmt(d.remaining)} · ` : ''}${esc(d.message)}</div><button class="btn btn-o btn-sm" onclick="go('mine');setMine('inv',document.querySelectorAll('#mine-seg button')[1])">ดูสถานะในคำขอของฉัน</button></div>`;
-    ['i-req', 'i-qt', 'i-seg', 'i-wht', 'i-opp-y', 'i-opp-n', 'i-company', 'i-tax', 'i-branch', 'i-evother', 'i-fin-name', 'i-fin-email', 'i-fin-phone', 'i-note', 'i-over', 'i-off'].forEach((id) => { $(id).value = ''; }); paintOpp('i');
-    $('i-file').value = ''; $('i-qt').readOnly = false; $('i-seg').disabled = false; onInvSeg(); $('i-qt-hint').textContent = ''; INVS = [blankInv()]; renderInvs(); taxHint('i');
+    ['i-req', 'i-qt', 'i-seg', 'i-wht', 'i-opp-y', 'i-opp-n', 'i-company', 'i-tax', 'i-branch', 'i-evother', 'i-fin-name', 'i-fin-email', 'i-fin-phone', 'i-note', 'i-over', 'i-off', 'i-poneed', 'i-paycycle'].forEach((id) => { $(id).value = ''; }); paintOpp('i');
+    $('i-file').value = ''; $('i-docs').value = ''; $('i-qt').readOnly = false; $('i-seg').disabled = false; onInvSeg(); $('i-qt-hint').textContent = ''; INVS = [blankInv()]; renderInvs(); taxHint('i');
     loadAll();
   } catch (e) { msg('i-msg', 'err', e.message); }
   finally { btn.disabled = false; }
@@ -771,12 +840,12 @@ const IV_ST = { new: ['รอฝ่ายบัญชีออก INV', 'new'], 
 const ORIG_ST = { not_needed: ['ไม่ต้องส่งตัวจริง', ''], pending_decision: ['ยังไม่ทราบเรื่องตัวจริง', 'new'], requested: ['รอส่งตัวจริง', 'blue'], sent: ['ส่งตัวจริงแล้ว', 'green'] };
 const st = (map, k) => { const [t, c] = map[k] || [k || '-', '']; return `<span class="st ${c}">${esc(t)}</span>`; };
 
-function setMine(w, btn) { document.querySelectorAll('#mine-seg button').forEach((b) => b.classList.toggle('on', b === btn)); $('mine-qt').hidden = w !== 'qt'; $('mine-inv').hidden = w !== 'inv'; }
+function setMine(w, btn) { document.querySelectorAll('#mine-seg button').forEach((b) => b.classList.toggle('on', b === btn)); ['qt', 'inv', 'rt', 'edit'].forEach((k) => { $('mine-' + k).hidden = w !== k; }); }
 
 async function loadAll() {
   try {
-    const [a, b] = await Promise.all([api('/api/requests'), api('/api/invoice-requests')]);
-    REQS = a.requests; IVS = b.requests;
+    const [a, b, c, d] = await Promise.all([api('/api/requests'), api('/api/invoice-requests'), api('/api/invoice-requests?view=receipts'), api('/api/invoice-requests?view=edits')]);
+    REQS = a.requests; IVS = b.requests; RTS = c.requests; EDITS = d.requests;
     fillQTPicker(); renderMine(); renderPending(); updateSum();
   } catch (e) {
     $('mine-qt').innerHTML = $('mine-inv').innerHTML = `<div class="empty">${esc(e.message)}</div>`;
@@ -794,7 +863,7 @@ function renderMine() {
       <div class="list-sub">${esc(q.requestId)} · ${esc(q.createdAt)} · ${esc(q.segment)}${q.opportunityId ? ' · ' + esc(q.opportunityId) : ''}${op ? ' · ' + esc(q.salesName) : ''}<br>
         ${heroes}<br>ยอดก่อน VAT <b>${fmt(total)}</b> · ขอ INV แล้ว ${fmt(done)} · คงเหลือ <b>${fmt(total - done)}</b>${q.peakNote ? `<br><span class="small">หมายเหตุ: ${esc(q.peakNote)}</span>` : ''}</div>
       ${mineIvs.length ? `<div class="inv-mini">${mineIvs.map((v) => `<div class="inv-mini-row"><span class="mono">${esc(v.ivRequestId)}</span><span>${esc(v.company)} · ${fmt(toNum(v.amountPreVat))}</span><span>${st(IV_ST, v.status)} ${st(ORIG_ST, v.originalStatus)}</span></div>`).join('')}</div>` : ''}
-      ${q.peakQtNo && QT_LIVE.includes(q.status) ? `<div style="margin-top:8px"><button class="btn btn-o btn-sm" onclick="startInvFor('${esc(q.requestId)}')">🧾 ขอ INV จาก QT นี้</button></div>` : ''}
+      ${q.peakQtNo && QT_LIVE.includes(q.status) ? `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-o btn-sm" onclick="startInvFor('${esc(q.requestId)}')">🧾 ขอ INV จาก QT นี้</button><button class="btn btn-g btn-sm" onclick="askEdit('QT','${esc(q.peakQtNo)}','${esc(q.requestId)}')">✏️ ขอแก้ไข QT</button></div>` : ''}
     </div>`;
   }).join('') : '<div class="empty">ยังไม่มีคำขอใบเสนอราคา</div>';
 
@@ -808,14 +877,109 @@ function renderMine() {
       <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
         ${canOrig && v.originalStatus !== 'requested' ? `<button class="btn btn-o btn-sm" onclick="openOrig('${esc(v.ivRequestId)}')">📮 ลูกค้าขอตัวจริง</button>` : ''}
         ${canOrig && v.originalStatus !== 'not_needed' ? `<button class="btn btn-g btn-sm" onclick="setOrig('${esc(v.ivRequestId)}','no')">ไม่ต้องส่งตัวจริง</button>` : ''}
+        ${v.peakIvNo && v.status === 'iv_issued' ? `<button class="btn btn-g btn-sm" onclick="askEdit('INV','${esc(v.peakIvNo)}','${esc(v.ivRequestId)}')">✏️ ขอแก้ไข INV</button>` : ''}
       </div>
       <div id="orig-${esc(v.ivRequestId)}"></div>
     </div>`;
   }).join('') : '<div class="empty">ยังไม่มีคำขอออก INV</div>';
+  renderMineMore();
+}
+
+
+// ─── receipts + edit requests ───────────────────────────────
+const RT_ST = { new: ['รอฝ่ายบัญชีออก', 'new'], issued: ['ออกแล้ว', 'green'], rejected: ['ตีกลับ', 'red'] };
+const ED_ST = { new: ['รอฝ่ายบัญชีแก้', 'new'], done: ['แก้แล้ว', 'green'], rejected: ['ตีกลับ', 'red'] };
+function onRtKind() { const per = $('r-kind').value === 'person'; $('r-branch-wrap').hidden = per; $('r-tax-l').textContent = per ? 'เลขบัตรประชาชน (13 หลัก) *' : 'เลขประจำตัวผู้เสียภาษี (13 หลัก) *'; }
+function onRtCh() { const c = $('r-ch').value; $('r-email-wrap').hidden = !/email/.test(c); $('r-dlv-wrap').hidden = !/post/.test(c); }
+let rtSeq = 0;
+async function rtTax() {
+  const t = $('r-tax').value; taxHintEl($('r-tax-hint'), t);
+  if (t.length !== 13 || $('r-kind').value === 'person') return;
+  const seq = ++rtSeq;
+  try { const r = await fetch(`/api/contacts?taxId=${t}`, { cache: 'no-store' }); const d = await r.json(); if (seq !== rtSeq || !r.ok) return;
+    const m = d.matches || []; if (m.length && !$('r-name').value) { $('r-name').value = m[0].name || ''; if (!$('r-branch').value) $('r-branch').value = m[0].branch || '00000'; }
+    $('r-tax-hint').textContent = m.length ? `พบใน PEAK: ${m.map((x) => x.code + ' สาขา ' + x.branch).join(', ')}` : 'ยังไม่มีลูกค้านี้ใน PEAK ฝ่ายบัญชีจะสร้างให้'; } catch {}
+}
+function taxHintEl(el, t) { el.textContent = t.length === 13 && !validTax(t) ? '⚠️ หลักสุดท้ายไม่ตรง ตรวจเลขอีกครั้ง' : ''; }
+async function submitRT() {
+  const v = (id) => $(id).value.trim();
+  const body = { action: 'receipt', segment: v('r-seg'), docKind: v('r-kind'), docLang: v('r-lang'), taxId: v('r-tax'), branch: v('r-kind') === 'person' ? '00000' : v('r-branch').padStart(5, '0'),
+    billName: v('r-name'), address: v('r-addr'), whStudent: v('r-stu'), packages: v('r-pkg'), refDoc: v('r-ref'), description: v('r-desc'),
+    price: v('r-price'), discount: v('r-disc'), whtRate: v('r-wht'), paidDate: v('r-paid'), deliveryChannel: v('r-ch'), email: v('r-email'), deliveryAddress: v('r-dlv'), note: v('r-note') };
+  const need = [[body.taxId.length === 13, 'กรอกเลข 13 หลัก'], [body.billName, 'ใส่ชื่อที่ออกในเอกสาร'], [body.address, 'ใส่ที่อยู่ตามเอกสาร'],
+    [!['B2C', 'B2E', 'MaoMao'].includes(body.segment) || body.whStudent, 'ใส่ชื่อ / ID ผู้เรียนใน Whitehouse'], [body.packages, 'ใส่ Package ID / รหัสคอร์ส'],
+    [toNum(body.price) > 0, 'ใส่ราคาขาย'], [body.whtRate !== '', 'เลือกหัก ณ ที่จ่าย'], [body.paidDate, 'ใส่วันที่ลูกค้าชำระ'],
+    [!/email/.test(body.deliveryChannel) || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email), 'ใส่อีเมลลูกค้าให้ถูกต้อง']];
+  const miss = need.find((x) => !x[0]); if (miss) return msg('r-msg', 'err', miss[1]);
+  const f = $('r-file').files[0]; if (f && f.size > 3 * 1024 * 1024) return msg('r-msg', 'err', 'ไฟล์ใหญ่เกิน 3 MB');
+  const net = toNum(body.price) - toNum(body.discount);
+  if (!(await ask({ title: 'ยืนยันส่งคำขอใบเสร็จ', ok: '📨 ส่งคำขอ', html: `<table><tr><td>ออกในนาม</td><td><b>${esc(body.billName)}</b> · ${esc(body.taxId)}</td></tr><tr><td>รายการ</td><td>${esc(body.packages)} ${esc(body.whStudent)}</td></tr><tr><td>ยอด</td><td>${fmt(toNum(body.price))}${toNum(body.discount) ? ' − ' + fmt(toNum(body.discount)) + ' = <b>' + fmt(net) + '</b>' : ''} · ${whtText(body.whtRate)}</td></tr><tr><td>ส่งเอกสาร</td><td>${esc($('r-ch').selectedOptions[0].text)}${body.email ? ' · ' + esc(body.email) : ''}</td></tr></table>` }))) return;
+  const btn = $('r-submit'); btn.disabled = true;
+  try {
+    if (f) body.file = { name: f.name, type: f.type, data: await readFileB64(f) };
+    const d = await withLoading('กำลังส่งคำขอใบเสร็จ…', () => postChecked('/api/invoice-requests', body, true));
+    if (!d) { msg('r-msg', 'info', 'ยังไม่ได้ส่ง'); return; }
+    $('r-msg').innerHTML = `<div class="done-card"><b>✓ ส่งคำขอ ${esc(d.rtRequestId)} แล้ว</b><div style="margin:6px 0 10px">${esc(d.message)}</div><button class="btn btn-o btn-sm" onclick="go('mine');setMine('rt',document.querySelectorAll('#mine-seg button')[2])">ดูในคำขอของฉัน</button></div>`;
+    ['r-tax', 'r-branch', 'r-name', 'r-addr', 'r-stu', 'r-pkg', 'r-ref', 'r-desc', 'r-price', 'r-disc', 'r-wht', 'r-paid', 'r-email', 'r-dlv', 'r-note'].forEach((id) => { $(id).value = ''; }); $('r-file').value = ''; $('r-tax-hint').textContent = '';
+    loadAll();
+  } catch (e) { msg('r-msg', 'err', e.message); } finally { btn.disabled = false; }
+}
+async function askEdit(docType, docNo, refId) {
+  const company = (REQS.find((q) => q.requestId === refId) || IVS.find((v) => v.ivRequestId === refId) || {}).company || '';
+  if (!(await ask({ title: `ขอแก้ไข ${docType} ${docNo}`, ok: 'ส่งคำขอแก้ไข', html: `<p>${esc(company)}</p><div class="fg"><label>ต้องการแก้อะไร *</label><textarea id="ed-detail" rows="4" maxlength="1500" style="width:100%" placeholder="เช่น เปลี่ยนจำนวนผู้เรียนจาก 12 เป็น 10 / แก้ชื่อบริษัทเป็น ... / เปลี่ยนที่อยู่"></textarea></div>` }))) return;
+  const detail = (document.getElementById('ed-detail') || {}).value || '';
+  if (detail.trim().length < 5) { alertMsg('อธิบายสิ่งที่ต้องการแก้ก่อนส่ง'); return; }
+  try { await withLoading('กำลังส่งคำขอแก้ไข…', () => api('/api/invoice-requests', { method: 'POST', body: JSON.stringify({ action: 'edit', docType, docNo, refId, company, detail }) })); await loadAll(); alertMsg(`ส่งคำขอแก้ไข ${docNo} แล้ว ดูสถานะได้ที่แท็บ "ขอแก้ไข"`, true); }
+  catch (e) { alertMsg(e.message); }
+}
+function alertMsg(t, ok) { ask({ title: ok ? 'เรียบร้อย' : 'ทำรายการไม่สำเร็จ', html: `<p>${esc(t)}</p>`, ok: 'ตกลง', cancel: null }); }
+function renderMineMore() {
+  const op = ME && ME.role === 'op';
+  $('mine-rt').innerHTML = RTS.length ? RTS.map((r) => `<div class="list-row"><div class="list-head"><div><span class="list-id">${r.peakRtNo ? docLink(r.peakRtNo, r.peakDocLink) : esc(r.rtRequestId)}</span> · ${esc(r.billName)}</div><div>${st(RT_ST, r.status)}${r.sentStatus === 'waiting' && r.status === 'issued' ? ' <span class="st blue">รอส่งตัวจริง</span>' : r.sentStatus === 'sent' ? ' <span class="st green">ส่งแล้ว</span>' : ''}</div></div>
+    <div class="list-sub">${esc(r.rtRequestId)} · ${esc(r.createdAt)} · ${esc(r.segment)}${op ? ' · ' + esc(r.salesName) : ''}<br>${esc(r.packages)} ${esc(r.whStudent)} · ${fmt(toNum(r.price) - toNum(r.discount))} บาท · ${esc(r.deliveryChannel)}${r.trackingNo ? ' · เลขพัสดุ ' + esc(r.trackingNo) : ''}${r.accountNote ? `<br><span class="small">ฝ่ายบัญชี: ${esc(r.accountNote)}</span>` : ''}</div>
+    ${r.status === 'issued' && r.peakRtNo ? `<div style="margin-top:8px"><button class="btn btn-g btn-sm" onclick="askEdit('RT','${esc(r.peakRtNo)}','${esc(r.rtRequestId)}')">✏️ ขอแก้ไขใบเสร็จ</button></div>` : ''}</div>`).join('') : '<div class="empty">ยังไม่มีคำขอใบเสร็จ</div>';
+  $('mine-edit').innerHTML = EDITS.length ? EDITS.map((e) => `<div class="list-row"><div class="list-head"><div><span class="list-id">${esc(e.docType)} ${esc(e.docNo)}</span> · ${esc(e.company)}</div>${st(ED_ST, e.status)}</div>
+    <div class="list-sub">${esc(e.editId)} · ${esc(e.createdAt)}${op ? ' · ' + esc(e.salesName) : ''}<br>${esc(e.detail).replace(/\n/g, '<br>')}${e.accountNote || e.newDocNo ? `<br><span class="small">ฝ่ายบัญชี: ${esc(e.accountNote)}${e.newDocNo ? ' · เอกสารใหม่ ' + esc(e.newDocNo) : ''}</span>` : ''}</div></div>`).join('') : '<div class="empty">ยังไม่มีคำขอแก้ไข</div>';
+}
+function renderPendingMore() {
+  const waitR = RTS.filter((r) => r.status === 'new'), postR = RTS.filter((r) => r.status === 'issued' && r.sentStatus === 'waiting');
+  const waitE = EDITS.filter((e) => e.status === 'new');
+  $('pend-rt-n').textContent = waitR.length + postR.length ? `(${waitR.length + postR.length})` : '';
+  $('pend-edit-n').textContent = waitE.length ? `(${waitE.length})` : '';
+  const F = (label, val) => (val ? `<div class="f"><span>${label}</span><b>${val}</b></div>` : '');
+  const card = (r) => `<div class="pcard"><div class="pc-body"><div class="pc-top"><div class="pc-title">${esc(r.billName)}<small>${esc(r.rtRequestId)} · ${esc(r.createdAt)} · โดย ${esc(r.salesName)}</small></div><div class="pc-amt"><b>${fmt(toNum(r.price) - toNum(r.discount))}</b><span>ราคาหลังส่วนลด</span></div></div>
+    <div class="facts">${F('ประเภท', esc(r.docKind))}${F('กลุ่ม', esc(r.segment))}${F('เลขภาษี / สาขา', esc(r.taxId) + ' / ' + esc(r.branch))}${F('ผู้เรียน WH', esc(r.whStudent))}${F('Package', esc(r.packages))}${F('ราคา / ส่วนลด', fmt(toNum(r.price)) + (toNum(r.discount) ? ' / ' + fmt(toNum(r.discount)) : ''))}${F('หัก ณ ที่จ่าย', whtShort(r.whtRate))}${F('ชำระเมื่อ', esc(r.paidDate))}${F('อ้างอิง', esc(r.refDoc))}${F('ส่งเอกสาร', esc(r.deliveryChannel) + (r.email ? ' · ' + esc(r.email) : ''))}${F('ภาษา', esc(r.docLang))}${F('หลักฐาน', /^https:\/\//.test(r.paymentProof || '') ? `<a href="${esc(r.paymentProof)}" target="_blank" rel="noopener">เปิดดู ↗</a>` : '')}</div>
+    <div class="pc-note">ที่อยู่: ${esc(r.address)}${r.deliveryAddress ? '<br>ส่งที่: ' + esc(r.deliveryAddress) : ''}${r.description ? '<br>รายละเอียด: ' + esc(r.description) : ''}${r.note ? '<br>💬 ' + esc(r.note) : ''}</div></div>`;
+  $('pend-rt').innerHTML = (waitR.length ? waitR.map((r) => card(r) + `<div class="pc-act"><input id="rtn-${esc(r.rtRequestId)}" type="text" maxlength="40" placeholder="เลขใบเสร็จ เช่น 202611A00020" style="width:210px"><input id="rtl-${esc(r.rtRequestId)}" class="grow" type="text" maxlength="500" placeholder="ลิงก์เอกสารใน PEAK *"><button class="btn btn-p btn-sm" onclick="rtAction('${esc(r.rtRequestId)}','rt_issued')">✓ ออกแล้ว</button><span id="rtm-${esc(r.rtRequestId)}"></span>
+      <details class="rej"><summary>ตีกลับ</summary><div class="in"><input id="rtr-${esc(r.rtRequestId)}" type="text" maxlength="500" placeholder="เหตุผล"><button class="btn btn-danger btn-sm" onclick="rtAction('${esc(r.rtRequestId)}','rt_reject')">ตีกลับ</button></div></details></div></div>`).join('') : '<div class="empty">ไม่มีคำขอใบเสร็จรอออก</div>')
+    + (postR.length ? `<div class="sec-h">รอส่งตัวจริง <span class="n">${postR.length} รายการ</span></div>` + postR.map((r) => `<div class="pcard"><div class="pc-body"><div class="pc-top"><div class="pc-title">${esc(r.billName)}<small>${docLink(r.peakRtNo, r.peakDocLink)} · ${esc(r.salesName)}</small></div></div><div class="pc-note">ส่งที่: ${esc(r.deliveryAddress || r.address)}</div></div><div class="pc-act"><input id="rtk-${esc(r.rtRequestId)}" class="grow" type="text" maxlength="60" placeholder="เลขพัสดุ (ถ้ามี)"><button class="btn btn-p btn-sm" onclick="rtAction('${esc(r.rtRequestId)}','rt_sent')">✅ ส่งแล้ว</button><span id="rtm-${esc(r.rtRequestId)}"></span></div></div>`).join('') : '');
+  $('pend-edit').innerHTML = waitE.length ? waitE.map((e) => `<div class="pcard"><div class="pc-body"><div class="pc-top"><div class="pc-title">${esc(e.docType)} ${esc(e.docNo)} · ${esc(e.company)}<small>${esc(e.editId)} · ${esc(e.createdAt)} · โดย ${esc(e.salesName)}</small></div></div><div class="pc-note">${esc(e.detail).replace(/\n/g, '<br>')}</div></div>
+    <div class="pc-act"><input id="edn-${esc(e.editId)}" type="text" maxlength="40" placeholder="เลขเอกสารใหม่ (ถ้ามี)" style="width:190px"><input id="edt-${esc(e.editId)}" class="grow" type="text" maxlength="500" placeholder="หมายเหตุถึง Sales"><button class="btn btn-p btn-sm" onclick="editAction('${esc(e.editId)}','edit_done')">✓ แก้แล้ว</button><button class="btn btn-g btn-sm" onclick="editAction('${esc(e.editId)}','edit_reject')">ตีกลับ</button><span id="edm-${esc(e.editId)}"></span></div></div>`).join('') : '<div class="empty">ไม่มีคำขอแก้ไข</div>';
+  return waitR.length + postR.length + waitE.length;
+}
+async function rtAction(id, action) {
+  const r = RTS.find((x) => x.rtRequestId === id) || {};
+  const body = { action, rtRequestId: id, seen: seenOf(r) };
+  const g = (k) => (($(k + '-' + id) || {}).value || '').trim();
+  if (action === 'rt_issued') { body.peakRtNo = g('rtn'); body.peakDocLink = g('rtl'); if (!body.peakRtNo || !body.peakDocLink) { $('rtm-' + id).innerHTML = '<span class="err-line">ใส่เลขเอกสารและลิงก์ PEAK</span>'; return; } }
+  if (action === 'rt_reject') { body.note = g('rtr'); if (!body.note) { $('rtm-' + id).innerHTML = '<span class="err-line">ใส่เหตุผล</span>'; return; } }
+  if (action === 'rt_sent') body.trackingNo = g('rtk');
+  const T = { rt_issued: ['ยืนยันว่าออกใบเสร็จแล้ว?', `เลข ${esc(body.peakRtNo || '')}`], rt_reject: ['ตีกลับคำขอใบเสร็จ?', esc(body.note || '')], rt_sent: ['บันทึกว่าส่งตัวจริงแล้ว?', body.trackingNo ? 'เลขพัสดุ ' + esc(body.trackingNo) : 'ไม่ระบุเลขพัสดุ'] }[action];
+  if (!(await ask({ title: T[0], kind: action === 'rt_reject' ? 'danger' : '', html: `<p><b>${esc(r.billName)}</b></p><p>${T[1]}</p>` }))) return;
+  try { await withLoading('กำลังบันทึก…', async () => { await api('/api/invoice-requests', { method: 'PATCH', body: JSON.stringify(body) }); await loadAll(); }); }
+  catch (e) { const el = $('rtm-' + id); if (el) el.innerHTML = `<span class="err-line">${esc(e.message)}</span>`; }
+}
+async function editAction(id, action) {
+  const e = EDITS.find((x) => x.editId === id) || {};
+  const body = { action, editId: id, note: ($('edt-' + id).value || '').trim(), newDocNo: ($('edn-' + id).value || '').trim() };
+  if (action === 'edit_reject' && !body.note) { $('edm-' + id).innerHTML = '<span class="err-line">ใส่เหตุผลในช่องหมายเหตุ</span>'; return; }
+  if (!(await ask({ title: action === 'edit_done' ? `แก้ ${e.docNo} แล้ว?` : `ตีกลับคำขอแก้ ${e.docNo}?`, kind: action === 'edit_reject' ? 'danger' : '', html: `<p>${esc(e.detail)}</p>${body.newDocNo ? `<p>เอกสารใหม่ ${esc(body.newDocNo)}</p>` : ''}` }))) return;
+  try { await withLoading('กำลังบันทึก…', async () => { await api('/api/invoice-requests', { method: 'PATCH', body: JSON.stringify(body) }); await loadAll(); }); }
+  catch (err) { $('edm-' + id).innerHTML = `<span class="err-line">${esc(err.message)}</span>`; }
 }
 
 // ─── Accountant / Admin: requests waiting for approval ────
-function setPend(w, btn) { document.querySelectorAll('#pend-seg button').forEach((b) => b.classList.toggle('on', b === btn)); ['qt', 'inv', 'orig'].forEach((k) => { $('pend-' + k).hidden = w !== k; $('pend-hint-' + k).hidden = w !== k; }); }
+function setPend(w, btn) { document.querySelectorAll('#pend-seg button').forEach((b) => b.classList.toggle('on', b === btn)); ['qt', 'inv', 'orig', 'rt', 'edit'].forEach((k) => { $('pend-' + k).hidden = w !== k; $('pend-hint-' + k).hidden = w !== k; }); }
 function renderPending() {
   const op = ME && ME.role === 'op';
   $('nav-pend').hidden = !op;
@@ -839,10 +1003,11 @@ function renderPending() {
         ? `<div class="pc-act"><input id="trk-${esc(v.ivRequestId)}" class="grow" type="text" maxlength="60" placeholder="เลขพัสดุ (ถ้ามี)"><button class="btn btn-p btn-sm" onclick="markSent('${esc(v.ivRequestId)}')">✅ ส่งตัวจริงแล้ว</button></div>`
         : `<div class="pc-act"><span class="small warn">รออนุมัติ INV ก่อน (แท็บ "ใบแจ้งหนี้") แล้วจึงบันทึกการส่งตัวจริงได้</span></div>`}
     </div>`).join('') : '<div class="empty">ไม่มีเอกสารตัวจริงที่ต้องส่ง</div>';
-  $('pend-count').textContent = n; $('pend-count').hidden = !n;
+  const extra = renderPendingMore();
+  $('pend-count').textContent = n + extra; $('pend-count').hidden = !(n + extra);
   $('pend-qt-n').textContent = waitQ.length ? `(${waitQ.length})` : '';
   $('pend-inv-n').textContent = waitI.length ? `(${waitI.length})` : '';
-  const lineRows = (q) => (q.lines || []).map((l) => `<tr><td>${esc(l.qtDescription || l.description).replace(/\n/g, '<br>')}${l.salesNote && !l.qtDescription ? `<div class="small note-box">✍️ Sales เขียนเพิ่ม (ระบบจะเกลารวมกับคำอธิบายตอนสร้าง QT): ${esc(l.salesNote)}</div>` : ''}${l.peakServiceCode ? `<div class="small mono">${esc(l.peakServiceCode)}</div>` : '<div class="err-line">ยังไม่มีรหัสบริการ PEAK</div>'}</td><td class="num">${esc(l.qty)}</td><td class="num">${esc(l.unitPrice)}</td><td class="num">${esc(l.discount || '')}</td></tr>`).join('');
+  const lineRows = (q) => (q.lines || []).map((l) => `<tr><td>${esc(l.qtDescription || l.description).replace(/\n/g, '<br>')}${l.salesNote && !l.qtDescription ? `<div class="small note-box">✍️ Sales เขียนเพิ่ม (ระบบจะเกลารวมกับคำอธิบายตอนสร้าง QT): ${esc(l.salesNote)}</div>` : ''}${l.freebie ? `<div class="small note-box">🎁 ของแถม: ${esc(l.freebie)}</div>` : ''}${l.peakServiceCode ? `<div class="small mono">${esc(l.peakServiceCode)}</div>` : '<div class="err-line">ยังไม่มีรหัสบริการ PEAK</div>'}</td><td class="num">${esc(l.qty)}</td><td class="num">${esc(l.unitPrice)}</td><td class="num">${esc(l.discount || '')}</td></tr>`).join('');
   const F = (label, val, cls) => (val === '' || val === undefined || val === null ? '' : `<div class="f"><span>${label}</span><b${cls ? ` class="${cls}"` : ''}>${val}</b></div>`);
   const rej = (id, fn, pref) => `<details class="rej"><summary>✕ ตีกลับคำขอนี้…</summary><div class="in"><input id="${pref}-${esc(id)}" class="grow" type="text" maxlength="300" placeholder="เหตุผลที่ตีกลับ (Sales จะเห็น)"><button class="btn btn-danger btn-sm" onclick="${fn}('${esc(id)}','reject')">ตีกลับ</button></div></details>`;
   const qCard = (q, fix) => `<div class="pcard"><div class="pc-body">
@@ -886,7 +1051,10 @@ function renderPending() {
         ${F('ผู้เรียน', v.students ? esc(v.students) + ' คน' : '')}
         ${F('เลขภาษี / สาขา', esc(v.taxId) + ' / ' + esc(v.branch))}
         ${F('PO', esc(v.poNo))}
+        ${F('วางบิลต้องใช้ PO', { yes: 'ใช่', no: 'ไม่ใช้', unknown: 'ยังไม่ทราบ' }[v.poNeeded] || '')}
+        ${F('รอบจ่ายลูกค้า', esc(v.payCycle))}
         ${F('หลักฐาน', ev)}
+        ${F('เอกสารบริษัท', String(v.companyDocsLink || '').split('\n').filter((x) => /^https:\/\//.test(x)).map((x, k) => `<a href="${esc(x)}" target="_blank" rel="noopener">ไฟล์ ${k + 1} ↗</a>`).join(' '))}
         ${F('ตัวจริง', st(ORIG_ST, v.originalStatus))}
       </div>
       ${v.note ? `<div class="pc-note">💬 Sales: ${esc(v.note)}</div>` : ''}${v.overReason ? `<div class="pc-note warn">${/^QT นอกระบบ/.test(v.overReason) ? '' : 'เกินยอด QT: '}${esc(v.overReason)}</div>` : ''}
@@ -996,7 +1164,7 @@ function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch {} }
   // Only the "เลือกจาก B2B Catalog" trip keeps the draft (data-keep).
   let KEEP = false;
   const QT_FIELDS = ['q-opp-y', 'q-opp-n', 'q-tax', 'q-branch', 'q-client', 'q-company', 'q-date', 'q-term', 'q-wht', 'q-note'];
-  const dirty = () => CART.length > 0 || QT_FIELDS.some((id) => $(id).value.trim()) || !!$('i-qt').value.trim() || (INV_DIRTY && INVS.some((x) => x.amountPreVat || x.wantedIssueDate));
+  const dirty = () => ['r-tax', 'r-name', 'r-price', 'r-pkg'].some((id) => $(id).value.trim()) || CART.length > 0 || QT_FIELDS.some((id) => $(id).value.trim()) || !!$('i-qt').value.trim() || (INV_DIRTY && INVS.some((x) => x.amountPreVat || x.wantedIssueDate));
   const clearAll = () => { try { localStorage.removeItem(CART_KEY); localStorage.removeItem(DRAFT_KEY); } catch {} };
   const leaveAsk = () => ask({ kind: 'warn', title: 'ออกจากหน้านี้?', ok: 'ออกและล้างข้อมูล', cancel: 'อยู่ต่อ',
     html: '<p>ข้อมูลที่กรอกไว้ในฟอร์ม QT / INV และรายการสินค้าในคำขอจะถูกล้าง ถ้ายังไม่ได้ส่ง ให้กด <b>อยู่ต่อ</b> แล้วส่งก่อน</p>' });
@@ -1021,8 +1189,8 @@ function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch {} }
   try { const r = await fetch('/packages.json', { cache: 'no-store' }); if (r.ok) { PKGS = await r.json(); renderItems(); } } catch {}
   try { const d = await api('/api/auth/me'); ME = d.user; $('me').textContent = ME.email; onSegment(); } catch {}
   const h = (location.hash || '').slice(1);
-  if (['qt', 'inv', 'mine', 'pend'].includes(h)) go(h);
-  window.addEventListener('hashchange', () => { const t = location.hash.slice(1); if (['qt', 'inv', 'mine', 'pend'].includes(t)) go(t); });
+  if (['qt', 'inv', 'rt', 'mine', 'pend'].includes(h)) go(h);
+  window.addEventListener('hashchange', () => { const t = location.hash.slice(1); if (['qt', 'inv', 'rt', 'mine', 'pend'].includes(t)) go(t); });
   if ($('q-tax').value.length === 13) onTaxInput('q');
   loadAll();
 })();

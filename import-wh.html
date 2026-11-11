@@ -12,6 +12,7 @@
 main{max-width:820px}
 .sub{color:var(--muted);font-size:13px;line-height:1.7}
 .card{margin-top:16px}
+.steps{padding-left:20px;line-height:2.1;margin:6px 0 4px;font-size:13.5px}
 </style>
 </head>
 <body data-page="wh">
@@ -19,25 +20,52 @@ main{max-width:820px}
 <header class="top"><h1 id="page-title">แพ็กเกจ Whitehouse</h1><div class="top-r" id="top-r"></div></header>
 <script src="/shell.js"></script>
 <main>
-  <p class="sub">อัปเดตแท็บ WHPackages ใน Revenue Hub (จำนวนคลาส ระยะเวลา และสิ่งที่รวมในแต่ละแพ็กเกจ) ระบบใช้ข้อมูลนี้เขียนคำอธิบายรายการใน QT / INV ของแพ็กเกจ Whitehouse ให้ลูกค้าอ่านเข้าใจ หน้านี้รับข้อมูลที่ส่งมาจากแท็บ Whitehouse เท่านั้น (ให้ Claude ช่วยดึงให้)</p>
-  <div class="card"><div id="status"><div class="msg info">รอข้อมูลจากแท็บ Whitehouse…</div></div></div>
+  <p class="sub">ข้อมูลแพ็กเกจ Whitehouse (จำนวนคลาส ระยะเวลา สิ่งที่รวม) ที่ระบบใช้เขียนคำอธิบายรายการใน QT / INV ของแพ็กเกจ WH เก็บในแท็บ WHPackages ของ Revenue Hub (เฉพาะแพ็กเกจที่เป็นรหัสบริการใน PEAK)</p>
+  <div class="card"><h2>ข้อมูลตอนนี้</h2><div id="now" class="hint" style="margin:6px 0 0">กำลังโหลด…</div></div>
+  <div class="card">
+    <h2>อัปเดตจาก Whitehouse</h2>
+    <p class="hint">หน้านี้ดึงข้อมูลจาก Whitehouse เองไม่ได้ (ต้องใช้สิทธิ์ล็อกอิน Whitehouse ของคุณ) ใช้ปุ่มลัดด้านล่าง ทำครั้งแรกครั้งเดียว ครั้งต่อไปกดปุ่มลัดอย่างเดียว</p>
+    <ol class="steps">
+      <li>ลากปุ่มนี้ไปวางที่แถบบุ๊กมาร์กของเบราว์เซอร์ → <a class="btn btn-o btn-sm" id="bm" href="#" onclick="event.preventDefault();alertDrag()">📦 ส่งแพ็กเกจ WH</a></li>
+      <li>เปิด <a href="https://whitehouse-app.globish.co.th/products/packages" target="_blank" rel="noopener">Whitehouse</a> (ล็อกอินไว้)</li>
+      <li>กดบุ๊กมาร์ก "📦 ส่งแพ็กเกจ WH" ระบบจะเปิดหน้านี้ขึ้นมาและบันทึกให้เอง (ใช้เวลาประมาณ 10–20 วินาที)</li>
+    </ol>
+    <div id="status"></div>
+  </div>
 </main></div></div>
 <script>
 const $ = (id) => document.getElementById(id);
 const say = (cls, text) => { $('status').innerHTML = ''; const d = document.createElement('div'); d.className = 'msg ' + cls; d.textContent = text; $('status').appendChild(d); };
 const WH = 'https://whitehouse-app.globish.co.th';
+const APP = location.origin;
+// Bookmarklet: runs on the Whitehouse tab with the user's own sign-in, reads every package and
+// hands them to this page (window opened first, so the popup isn't blocked).
+const BM = `(async()=>{const APP=${JSON.stringify(APP)};if(location.host!=='whitehouse-app.globish.co.th'){alert('เปิดหน้า Whitehouse ก่อน แล้วกดอีกครั้ง');return}const w=window.open(APP+'/import-wh','whimp');let ready=false,rows=null;const send=()=>{if(ready&&rows)w.postMessage({type:'wh-packages',rows},APP)};addEventListener('message',e=>{if(e.origin===APP&&e.data&&e.data.type==='import-wh-ready'){ready=true;send()}});try{const t=decodeURIComponent((document.cookie.split('; ').find(c=>c.startsWith('wh_access_token='))||'').split('=').slice(1).join('='));const all=[];for(let p=1;p<=30;p++){const r=await fetch('https://api-admin.globish.co.th/Packages?currentPage='+p+'&perPage=500&statuses=0,1,2',{headers:{Authorization:'Bearer '+t}});if(!r.ok)throw new Error('Whitehouse '+r.status);const d=(await r.json()).data;all.push(...d.data);if(!d.nextPage)break}rows=all.map(p=>({id:String(p.id),packageName:p.packageName||'',type:p.type||'',product:p.productName||'',privateClass:p.ticket||0,freeTalk:p.freeTalkTicket||0,discussion:p.groupClassTicket||0,realwork:p.realworkTicket||0,months:p.duration||0,extras:[p.isMasterClass?'MC':'',p.isAIPractice?'AI':'',p.isEngoo?'EN':'',p.isGlobishPlusELearning?'GP':''].filter(Boolean).join('+')}));send()}catch(e){alert('ดึงแพ็กเกจไม่สำเร็จ: '+e.message+' (ลองล็อกอิน Whitehouse ใหม่)')}})()`;
+$('bm').href = 'javascript:' + encodeURIComponent(BM);
+function alertDrag() { say('info', 'ลากปุ่มนี้ไปวางที่แถบบุ๊กมาร์ก (ถ้าไม่เห็นแถบ กด Ctrl/⌘ + Shift + B) แล้วไปกดที่หน้า Whitehouse'); }
+async function loadNow() {
+  try {
+    const r = await fetch('/api/wh-packages', { cache: 'no-store' }); const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.error || 'HTTP ' + r.status);
+    $('now').innerHTML = d.count ? `มี <b>${d.count.toLocaleString('th-TH')}</b> แพ็กเกจ · อัปเดตล่าสุด <b>${d.updatedAt || '-'}</b>` : 'ยังไม่มีข้อมูล';
+  } catch (e) { $('now').textContent = 'โหลดไม่ได้: ' + e.message; }
+}
+loadNow();
 let busy = false;
+const fromWh = !!window.opener;
+if (fromWh) say('info', 'รอข้อมูลจากแท็บ Whitehouse… (กำลังดึงแพ็กเกจ อาจใช้เวลา 10–20 วินาที)');
 window.addEventListener('message', async (ev) => {
   if (ev.origin !== WH) return;
   const d = ev.data || {};
   if (d.type !== 'wh-packages' || !Array.isArray(d.rows) || busy) return;
   busy = true;
-  say('info', `ได้รับ ${d.rows.length.toLocaleString('th-TH')} แพ็กเกจ กำลังบันทึก…`);
+  say('info', `ได้รับ ${d.rows.length.toLocaleString('th-TH')} แพ็กเกจจาก Whitehouse กำลังบันทึก…`);
   try {
     const r = await fetch('/api/wh-packages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rows: d.rows }) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok || !j.ok) throw new Error(j.error || 'HTTP ' + r.status);
-    say('ok', `บันทึกแล้ว ${j.written.toLocaleString('th-TH')} แพ็กเกจ ลงแท็บ WHPackages`);
+    say('ok', `บันทึกแล้ว ${j.written.toLocaleString('th-TH')} แพ็กเกจ (เฉพาะที่เป็นรหัสบริการใน PEAK) ปิดหน้านี้ได้`);
+    loadNow();
     try { ev.source.postMessage({ type: 'wh-packages-done', written: j.written }, WH); } catch (e) {}
   } catch (e) {
     say('err', 'นำเข้าไม่สำเร็จ: ' + e.message);
@@ -45,12 +73,6 @@ window.addEventListener('message', async (ev) => {
   } finally { busy = false; }
 });
 if (window.opener) try { window.opener.postMessage({ type: 'import-wh-ready' }, WH); } catch (e) {}
-fetch('/api/auth/me', { cache: 'no-store' }).then((r) => {
-  if (r.status === 401) location.href = '/signin.html?next=/import-wh';
-  return r.json();
-}).then((d) => {
-  if (d && d.user && d.user.role !== 'op') say('err', 'หน้านี้สำหรับฝ่ายบัญชี / Admin เท่านั้น');
-}).catch(() => {});
 </script>
 </body>
 </html>

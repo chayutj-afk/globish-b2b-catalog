@@ -1,12 +1,13 @@
 // POST /api/wh-packages  (Accountant / Admin) { rows: [{ id, packageName, type, product, privateClass,
 //   freeTalk, discussion, realwork, months, extras, status }] }
-// Rebuilds the Revenue Hub "WHPackages" tab: what each Whitehouse package includes, used to write the
+// GET → { count, updatedAt } of the current tab.
+// Rebuilds the Revenue Hub "WHPackages" tab (only packages that are PEAK service codes): what each Whitehouse package includes, used to write the
 // customer-readable line descriptions on QT/INV. Sent from /import-wh (handed over by the Whitehouse tab).
 const { checkOrigin, sendError } = require('../lib/session');
 const { requireUser } = require('../lib/users');
 const hub = require('../lib/hub');
 
-const MAX_ROWS = 6000;
+const MAX_ROWS = 20000;
 function cleanRows(list) {
   const text = (v, n) => String(v ?? '').replace(/[\u0000-\u001F\u007F]/g, ' ').trim().slice(0, n);
   const int = (v) => { const x = Math.floor(Number(v)); return Number.isFinite(x) && x >= 0 && x < 100000 ? x : 0; };
@@ -25,13 +26,22 @@ function cleanRows(list) {
 
 module.exports = async function handler(req, res) {
   try {
-    if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+    if (req.method === 'GET') {
+      await requireUser(req, { role: 'op' });
+      const rows = await hub.readTable('WHPackages');
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(200).json({ ok: true, count: rows.length, updatedAt: rows.reduce((m, r) => (r.updatedAt > m ? r.updatedAt : m), '') });
+    }
+    if (req.method !== 'POST') return res.status(405).json({ error: 'GET or POST only' });
     checkOrigin(req);
     const user = await requireUser(req, { role: 'op' });
     const b = req.body || {};
     if (!Array.isArray(b.rows) || !b.rows.length || b.rows.length > MAX_ROWS) return res.status(400).json({ error: `ต้องมี rows 1–${MAX_ROWS} แถว` });
     const now = hub.sheetDateTime();
-    const rows = cleanRows(b.rows).map((r) => ({ ...r, updatedAt: now }));
+    // Keep only packages that are PEAK service codes (e.g. 3822 or 4884_TikTok → 4884).
+    let codes = null;
+    try { codes = new Set([...(await hub.readServices()).keys()].map((c) => String(c).replace(/_.*$/, ''))); } catch (e) { console.error('services read failed', e); }
+    const rows = cleanRows(b.rows).filter((r) => !codes || codes.has(r.id)).map((r) => ({ ...r, updatedAt: now }));
     if (!rows.length) return res.status(400).json({ error: 'ไม่มีแถวที่ใช้ได้' });
     await hub.replaceTable('WHPackages', rows);
     await hub.log('wh-import', 'wh_packages_replaced', 'Whitehouse', `${user.email} · ${rows.length} rows`);

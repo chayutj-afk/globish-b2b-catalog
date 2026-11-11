@@ -293,7 +293,6 @@ code{font-size:11px;background:var(--panel-2);padding:2px 5px;border-radius:4px;
 <div class="cat-bar"><nav class="nav">
         <!-- Sales tabs -->
         <button id="nav-calc" class="nav-btn on" onclick="switchTab('calc',this)">🧮 คำนวณราคา</button>
-        <a id="nav-request" class="nav-btn" href="/request#qt" style="text-decoration:none">📝 ไปหน้าขอ QT <span class="cart-badge" id="cart-badge" hidden>0</span></a>
         <!-- Shared tab -->
         <button id="nav-catalog" class="nav-btn" onclick="switchTab('catalog',this)">📋 Catalog</button>
         <!-- Operation tabs (hidden in sales mode) -->
@@ -986,14 +985,14 @@ async function loadMe() {
     const d = await r.json();
     ME = d.user;
     document.getElementById('user-email').textContent = ME.email;
-    document.getElementById('role-toggle').style.display = ME.role === 'op' ? '' : 'none';
+    document.getElementById('role-toggle').style.display = ME.catalogOp ? '' : 'none';
   } catch (e) {
     console.warn('Could not load the signed-in user', e);
   }
 }
 
 function setRole(r) {
-  if (r === 'op' && (!ME || ME.role !== 'op')) { toast('บัญชีนี้ไม่มีสิทธิ์ Operation'); return; }
+  if (r === 'op' && (!ME || !ME.catalogOp)) { toast('บัญชีนี้ไม่มีสิทธิ์ Operation ให้ผู้ดูแลสิทธิ์ตั้งที่หน้าจัดการสิทธิ์'); return; }
   if (r !== ROLE) applyRole(r);
 }
 
@@ -2220,11 +2219,45 @@ function suppText(keyHS) {
   return out.join(' · ');
 }
 
-function addToRequest() {
+// Small promise dialog (shared look from /app.css): buttons = [{ label, value, cls }].
+function dialog({ title, html, buttons }) {
+  return new Promise((resolve) => {
+    const ov = document.createElement('div');
+    ov.className = 'ov';
+    ov.innerHTML = `<div class="modal" role="dialog" aria-modal="true"><div class="modal-title">${title}</div><div class="mb">${html}</div><div class="mf" style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:16px">${buttons.map((b, i) => `<button class="btn ${b.cls || 'btn-gray'}" data-i="${i}">${b.label}</button>`).join('')}</div></div>`;
+    const done = (v) => { ov.remove(); document.removeEventListener('keydown', key); resolve(v); };
+    const key = (e) => { if (e.key === 'Escape') done(null); };
+    ov.addEventListener('click', (e) => { const btn = e.target.closest('button[data-i]'); if (btn) done(buttons[Number(btn.dataset.i)].value); else if (e.target === ov) done(null); });
+    document.addEventListener('keydown', key);
+    document.body.appendChild(ov);
+    const last = ov.querySelector('.btn-primary'); if (last) last.focus();
+  });
+}
+const escH = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+async function addToRequest() {
   if (!LAST_CALC) return;
   const pkg = PKGS.find((p) => p.id === LAST_CALC.pkgId);
   if (!pkg) return;
+  loadCart();
   if (CART.length >= 20) { toast('ใส่ได้ไม่เกิน 20 แพ็กเกจต่อคำขอ'); return; }
+  const qty = LAST_CALC.numClasses ? LAST_CALC.n * LAST_CALC.numClasses : LAST_CALC.n;
+  const money = (v) => '฿' + Math.round(Number(v) || 0).toLocaleString('th-TH');
+  const info = `<table style="width:100%;font-size:13px;border-collapse:collapse">
+    <tr><td style="padding:4px 0;color:var(--muted)">แพ็กเกจ</td><td><b>${escH(pkg.id)}</b></td></tr>
+    <tr><td style="padding:4px 0;color:var(--muted)">ผู้เรียน</td><td>${escH(LAST_CALC.n)} คน${LAST_CALC.numClasses ? ' · ' + escH(LAST_CALC.numClasses) + ' คลาส' : ''}</td></tr>
+    <tr><td style="padding:4px 0;color:var(--muted)">ราคาต่อหน่วย (อ้างอิง)</td><td>${money(LAST_CALC.unitPrice)}</td></tr>
+    <tr><td style="padding:4px 0;color:var(--muted)">รวมโดยประมาณ</td><td><b>${money(LAST_CALC.unitPrice * qty)}</b></td></tr></table>`;
+  const has = CART.length;
+  const choice = await dialog({
+    title: 'เพิ่มแพ็กเกจนี้เข้าคำขอใบเสนอราคา?',
+    html: info + (has ? `<p style="margin-top:12px;padding:9px 11px;border-radius:6px;background:var(--primary-soft);font-size:13px">ในคำขอตอนนี้มีอยู่แล้ว <b>${has} รายการ</b>: ${CART.map((c) => escH(c.packageId || c.keyHS || c.code || c.kind)).join(', ')}<br>จะเพิ่มต่อในคำขอเดิม หรือเริ่มคำขอใหม่?</p>` : ''),
+    buttons: has
+      ? [{ label: 'ยกเลิก', value: null }, { label: 'ล้างของเดิม เริ่มคำขอใหม่', value: 'fresh', cls: 'btn-gray' }, { label: '➕ เพิ่มต่อในคำขอเดิม', value: 'add', cls: 'btn-primary' }]
+      : [{ label: 'ยกเลิก', value: null }, { label: '➕ เพิ่มเข้าคำขอ', value: 'add', cls: 'btn-primary' }],
+  });
+  if (!choice) return;
+  if (choice === 'fresh') { CART = []; try { localStorage.removeItem('gc_qt_draft_v1'); } catch (e) {} }
   CART.push({
     kind: 'catalog', packageId: pkg.id, students: LAST_CALC.n, classes: LAST_CALC.numClasses,
     unitPrice: LAST_CALC.unitPrice, intl: LAST_CALC.intl, loc: LAST_CALC.loc,
@@ -2232,10 +2265,15 @@ function addToRequest() {
   saveCart();
   if (RETURN_TO_REQUEST) {
     toast(`✅ เพิ่ม ${pkg.id} แล้ว กำลังกลับไปหน้าขอ QT...`);
-    setTimeout(() => { location.href = '/request#qt'; }, 700);
+    setTimeout(() => { location.href = '/request#qt'; }, 600);
     return;
   }
-  toast(`✅ เพิ่ม ${pkg.id} เข้าคำขอแล้ว (${CART.length} รายการ) · กด 📝 ขอเอกสาร ด้านบนเพื่อส่งคำขอ`);
+  const go = await dialog({
+    title: '✅ เพิ่มเข้าคำขอแล้ว',
+    html: `<p style="font-size:13.5px">ตอนนี้ในคำขอมี <b>${CART.length} รายการ</b> ไปกรอกข้อมูลลูกค้าและส่งคำขอที่หน้าขอ QT ได้เลย หรือเลือกแพ็กเกจเพิ่มต่อ</p>`,
+    buttons: [{ label: 'เลือกแพ็กเกจต่อ', value: false }, { label: '📝 ไปหน้าขอ QT', value: true, cls: 'btn-primary' }],
+  });
+  if (go) location.href = '/request#qt';
 }
 
 // Opened from the request page ("เลือกจาก B2B Catalog"): go straight back after adding.

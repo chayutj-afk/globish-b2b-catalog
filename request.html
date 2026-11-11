@@ -316,7 +316,7 @@ function onSegment() {
   $('q-opp-label').textContent = 'Opportunity ID ใน CRM *';
   const k = KINDS[seg];
   const add = [];
-  if (k.includes('catalog') && !(ME && ME.catalog === false)) add.push('<a class="btn btn-o" href="/catalog?return=request" onclick="saveDraft()">➕ เลือกจาก B2B Catalog</a>');
+  if (k.includes('catalog') && !(ME && ME.catalog === false)) add.push('<a class="btn btn-o" href="/catalog?return=request" data-keep="1" onclick="saveDraft()">➕ เลือกจาก B2B Catalog</a>');
   if (k.includes('keyhs')) add.push('<button class="btn btn-o" type="button" onclick="addLine(\'keyhs\')">➕ Customized Package (Key H.S.)</button>');
   if (k.includes('surcharge')) add.push('<button class="btn btn-o" type="button" onclick="addLine(\'surcharge\')">➕ ค่าเพิ่ม (โค้ชต่างชาติ / เดินทาง)</button>');
   if (k.includes('service')) add.push('<button class="btn btn-o" type="button" onclick="addLine(\'service\')">➕ แพ็กเกจ Whitehouse / รหัสบริการ PEAK</button>');
@@ -983,7 +983,32 @@ function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch {} }
   ['input', 'change'].forEach((ev) => $('tab-qt').addEventListener(ev, saveDraft));
   $('tab-inv').addEventListener('input', () => { INV_DIRTY = true; });
   // INV form isn't kept as a draft: warn before leaving with unsent data, or while something is still saving.
-  window.addEventListener('beforeunload', (e) => { if (LOADING > 0 || (INV_DIRTY && $('i-qt').value.trim())) { e.preventDefault(); e.returnValue = ''; } });
+  // Leaving the request page with something filled in: ask, then clear the QT draft, the cart and the INV form,
+  // so a later visit (or a package added from the Catalog) never lands on top of an old, half-written request.
+  // Only the "เลือกจาก B2B Catalog" trip keeps the draft (data-keep).
+  let KEEP = false;
+  const QT_FIELDS = ['q-opp-y', 'q-opp-n', 'q-tax', 'q-branch', 'q-client', 'q-company', 'q-date', 'q-term', 'q-wht', 'q-note'];
+  const dirty = () => CART.length > 0 || QT_FIELDS.some((id) => $(id).value.trim()) || !!$('i-qt').value.trim() || (INV_DIRTY && INVS.some((x) => x.amountPreVat || x.wantedIssueDate));
+  const clearAll = () => { try { localStorage.removeItem(CART_KEY); localStorage.removeItem(DRAFT_KEY); } catch {} };
+  const leaveAsk = () => ask({ kind: 'warn', title: 'ออกจากหน้านี้?', ok: 'ออกและล้างข้อมูล', cancel: 'อยู่ต่อ',
+    html: '<p>ข้อมูลที่กรอกไว้ในฟอร์ม QT / INV และรายการสินค้าในคำขอจะถูกล้าง ถ้ายังไม่ได้ส่ง ให้กด <b>อยู่ต่อ</b> แล้วส่งก่อน</p>' });
+  document.addEventListener('click', async (e) => {
+    const a = e.target.closest('a[href]'), out = e.target.closest('#out-btn');
+    if (!a && !out) return;
+    if (a) {
+      if (a.dataset.keep) { KEEP = true; return; }
+      const u = new URL(a.href, location.href);
+      if (a.target === '_blank' || u.origin !== location.origin || u.pathname === location.pathname) return;
+    }
+    if (LOADING > 0 || !dirty()) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    if (!(await leaveAsk())) return;
+    clearAll(); KEEP = true;
+    if (a) location.href = a.href;
+    else { try { await fetch('/api/auth/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' } }); } catch {} location.href = '/signin.html'; }
+  }, true);
+  window.addEventListener('beforeunload', (e) => { if (LOADING > 0 || (!KEEP && dirty())) { e.preventDefault(); e.returnValue = ''; } });
+  window.addEventListener('pagehide', () => { if (!KEEP && LOADING <= 0 && dirty()) clearAll(); });
   onSegment(); renderInvs(); taxHint('q');
   try { const r = await fetch('/packages.json', { cache: 'no-store' }); if (r.ok) { PKGS = await r.json(); renderItems(); } } catch {}
   try { const d = await api('/api/auth/me'); ME = d.user; $('me').textContent = ME.email; onSegment(); } catch {}

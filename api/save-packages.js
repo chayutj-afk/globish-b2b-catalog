@@ -35,7 +35,8 @@ module.exports = async function handler(req, res) {
   try {
     let user;
     try {
-      user = await requireUser(req, { role: 'op' });
+      user = await requireUser(req);
+      if (!user.catalogOp) throw Object.assign(new Error('เฉพาะผู้ใช้ที่มีสิทธิ์ Operation (ตั้งที่หน้าจัดการสิทธิ์)'), { status: 403 });
       checkOrigin(req);
     } catch (e) {
       sendError(res, e);

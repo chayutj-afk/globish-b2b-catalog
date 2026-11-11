@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="/app.css">
 <style>
 /* request page extras (shared look lives in /app.css) */
+[hidden]{display:none!important}
 .tab{display:none}.tab.on{display:block}
 .svc-name{margin-top:5px;padding:6px 10px;border-radius:4px;background:var(--panel-2);font-size:13px;min-height:30px}
 .svc-name.bad{background:var(--bad-bg);color:var(--bad-ink)}.svc-name.warnbg{background:var(--primary-soft);color:var(--warn-ink)}
@@ -167,7 +168,7 @@
       <div class="fg" id="r-branch-wrap"><label>รหัสสาขา *</label><input id="r-branch" type="text" inputmode="numeric" maxlength="5" placeholder="00000" oninput="digits(this)"></div>
       <div class="fg"><label>ชื่อที่ออกในเอกสาร *</label><input id="r-name" type="text" maxlength="200"></div>
     </div>
-    <div class="row"><div class="fg"><label>ที่อยู่ตามเอกสาร *</label><textarea id="r-addr" rows="2" maxlength="600"></textarea></div></div>
+    <div class="row c1"><div class="fg"><label>ที่อยู่ตามเอกสาร *</label><textarea id="r-addr" rows="2" maxlength="600"></textarea></div></div>
   </div>
   <div class="card">
     <h2>2. รายการที่ชำระ</h2>
@@ -176,7 +177,7 @@
       <div class="fg"><label>Package ID / รหัสคอร์ส *</label><input id="r-pkg" type="text" maxlength="300" placeholder="เช่น 4890, 4863"></div>
       <div class="fg"><label>เอกสารอ้างอิง (ถ้ามี)</label><input id="r-ref" type="text" maxlength="120" placeholder="เลข INV / QT / Order ID ใน WH"></div>
     </div>
-    <div class="row"><div class="fg"><label>ชื่อคอร์ส / รายละเอียดที่ให้ขึ้นในเอกสาร</label><textarea id="r-desc" rows="2" maxlength="1500"></textarea></div></div>
+    <div class="row c1"><div class="fg"><label>ชื่อคอร์ส / รายละเอียดที่ให้ขึ้นในเอกสาร</label><textarea id="r-desc" rows="2" maxlength="1500"></textarea></div></div>
     <div class="row c4">
       <div class="fg"><label>ราคาขาย (ก่อนหักส่วนลด) *</label><input id="r-price" type="number" min="0" step="0.01"></div>
       <div class="fg"><label>ส่วนลด</label><input id="r-disc" type="number" min="0" step="0.01" placeholder="0"></div>
@@ -191,7 +192,7 @@
       <div class="fg"><label>ช่องทาง *</label><select id="r-ch" onchange="onRtCh()"><option value="sales">ส่งไฟล์ให้ Sales</option><option value="email">ส่งอีเมลลูกค้า</option><option value="post">ส่งตัวจริงตามที่อยู่</option><option value="email_post">ส่งอีเมลและส่งตัวจริง</option></select></div>
       <div class="fg" id="r-email-wrap" hidden><label>อีเมลลูกค้า *</label><input id="r-email" type="email" maxlength="120"></div>
     </div>
-    <div class="row" id="r-dlv-wrap" hidden><div class="fg"><label>ที่อยู่จัดส่ง (ถ้าไม่ใช่ที่อยู่ตามเอกสาร)</label><textarea id="r-dlv" rows="2" maxlength="600" placeholder="ชื่อผู้รับ เบอร์โทร ที่อยู่"></textarea></div></div>
+    <div class="row c1" id="r-dlv-wrap" hidden><div class="fg"><label>ที่อยู่จัดส่ง (ถ้าไม่ใช่ที่อยู่ตามเอกสาร)</label><textarea id="r-dlv" rows="2" maxlength="600" placeholder="ชื่อผู้รับ เบอร์โทร ที่อยู่"></textarea></div></div>
     <div class="row c1"><div class="fg"><label>หมายเหตุถึงฝ่ายบัญชี</label><input id="r-note" type="text" maxlength="1000"></div></div>
   </div>
   <button class="btn btn-p btn-block" id="r-submit" onclick="submitRT()">📨 ส่งคำขอใบเสร็จ</button>

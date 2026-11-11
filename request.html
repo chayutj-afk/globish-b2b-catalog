@@ -667,7 +667,7 @@ function updateSum() {
 
 function fillQTPicker() {
   const sel = $('i-req'); const keep = sel.value;
-  sel.innerHTML = '<option value="">— QT นอกระบบ / กรอกเอง —</option>' + REQS.filter((q) => q.status !== 'cancelled').map((q) => {
+  sel.innerHTML = '<option value="">— QT นอกระบบ / กรอกเอง —</option>' + REQS.filter((q) => QT_LIVE.includes(q.status)).map((q) => {
     const left = toNum(q.totalPreVat) - toNum(q.invoicedPreVat);
     return `<option value="${esc(q.requestId)}">${esc(q.peakQtNo || q.requestId)} · ${esc(q.company)} · คงเหลือ ${fmt(left)}</option>`;
   }).join('');
@@ -788,7 +788,7 @@ function renderMine() {
       <div class="list-sub">${esc(q.requestId)} · ${esc(q.createdAt)} · ${esc(q.segment)}${q.opportunityId ? ' · ' + esc(q.opportunityId) : ''}${op ? ' · ' + esc(q.salesName) : ''}<br>
         ${heroes}<br>ยอดก่อน VAT <b>${fmt(total)}</b> · ขอ INV แล้ว ${fmt(done)} · คงเหลือ <b>${fmt(total - done)}</b>${q.peakNote ? `<br><span class="small">หมายเหตุ: ${esc(q.peakNote)}</span>` : ''}</div>
       ${mineIvs.length ? `<div class="inv-mini">${mineIvs.map((v) => `<div class="inv-mini-row"><span class="mono">${esc(v.ivRequestId)}</span><span>${esc(v.company)} · ${fmt(toNum(v.amountPreVat))}</span><span>${st(IV_ST, v.status)} ${st(ORIG_ST, v.originalStatus)}</span></div>`).join('')}</div>` : ''}
-      ${q.peakQtNo && !['cancelled', 'rejected'].includes(q.status) ? `<div style="margin-top:8px"><button class="btn btn-o btn-sm" onclick="startInvFor('${esc(q.requestId)}')">🧾 ขอ INV จาก QT นี้</button></div>` : ''}
+      ${q.peakQtNo && QT_LIVE.includes(q.status) ? `<div style="margin-top:8px"><button class="btn btn-o btn-sm" onclick="startInvFor('${esc(q.requestId)}')">🧾 ขอ INV จาก QT นี้</button></div>` : ''}
     </div>`;
   }).join('') : '<div class="empty">ยังไม่มีคำขอใบเสนอราคา</div>';
 

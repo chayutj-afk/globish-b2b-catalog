@@ -132,6 +132,8 @@ async function create(req, res, user) {
   if (r.requestId) {
     linked = requests.find((x) => x.requestId === r.requestId);
     if (!linked || (user.role !== 'op' && linked.requestedBy !== user.email)) throw bad('ไม่พบคำขอใบเสนอราคาที่เลือก');
+    // Only a QT accounting has approved in PEAK can be billed.
+    if (!['qt_approved', 'accepted', 'iv_requested', 'iv_issued'].includes(linked.status)) throw bad('QT นี้ยังไม่ได้อนุมัติใน PEAK ขอ INV ได้หลังฝ่ายบัญชีอนุมัติ QT แล้ว', 409);
     if (!r.opportunityId) r.opportunityId = linked.opportunityId || '';
     r.segment = linked.segment || r.segment;
   }

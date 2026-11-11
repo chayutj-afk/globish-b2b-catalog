@@ -161,3 +161,33 @@ a.doc{color:var(--primary);font-weight:500;text-decoration:none}a.doc:hover{text
 @keyframes sp{to{transform:rotate(360deg)}}
 .ldbox{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:22px 26px;text-align:center;min-width:220px;font-size:14px;color:var(--head)}
 .ldbox small{display:block;color:var(--muted);margin-top:4px}
+
+/* ── review cards (approval queue) ──────────────────────── */
+.pcard{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:14px;overflow:hidden}
+.pc-body{padding:16px 18px 14px}
+.pc-top{display:flex;justify-content:space-between;align-items:flex-start;gap:14px}
+.pc-title{font-size:16px;color:var(--head);font-weight:500;line-height:1.35}
+.pc-title small{display:block;font-size:12px;color:var(--muted);font-weight:400;margin-top:3px}
+.pc-amt{text-align:right;white-space:nowrap}
+.pc-amt b{display:block;font-size:20px;color:var(--head);font-weight:500;line-height:1.2}
+.pc-amt span{font-size:11.5px;color:var(--muted)}
+.facts{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px 18px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.facts .f > span{display:block;font-size:11.5px;color:var(--muted);margin-bottom:1px}
+.facts .f b{font-weight:400;color:var(--head);font-size:13.5px;word-break:break-word}
+.facts .f b.hl{color:var(--primary);font-weight:500}
+.pc-note{margin-top:12px;padding:8px 11px;border-radius:6px;background:var(--panel-2);font-size:12.5px;line-height:1.6}
+.pc-note.warn{background:var(--primary-soft);color:var(--warn-ink)}
+.pc-note.err{background:var(--bad-bg);color:var(--bad-ink)}
+.pc-act{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:12px 18px;background:var(--panel-2);border-top:1px solid var(--line)}
+.pc-act input{padding:7px 10px;border:1px solid var(--line2);border-radius:4px;font-size:13px;background:var(--input);color:var(--ink);min-width:0}
+.pc-act .grow{flex:1;min-width:180px}
+.pc-act .sp{flex:1}
+details.rej{width:100%}
+details.rej summary{cursor:pointer;font-size:12.5px;color:var(--muted);list-style:none;display:inline-block}
+details.rej summary::-webkit-details-marker{display:none}
+details.rej summary:hover{color:var(--bad-ink)}
+details.rej[open] summary{color:var(--bad-ink);margin-bottom:8px}
+details.rej .in{display:flex;gap:8px;flex-wrap:wrap}
+.sec-h{display:flex;align-items:baseline;gap:8px;margin:22px 0 10px;font-size:15px;color:var(--head);font-weight:500}
+.sec-h .n{font-size:12px;color:var(--muted);font-weight:400}
+@media(max-width:560px){.pc-top{flex-direction:column}.pc-amt{text-align:left}}

@@ -209,6 +209,7 @@ async function signOut() { try { await fetch('/api/auth/logout', { method: 'POST
 let ME = null, PKGS = [], REQS = [], IVS = [];
 
 
+const whtShort = (r) => (r === undefined || r === '' ? '— ไม่ได้ระบุ' : String(r) === '0' ? 'ไม่หัก' : `${r}%`);
 const whtText = (r) => (r === undefined || r === '' ? '—' : String(r) === '0' ? 'ไม่หัก ณ ที่จ่าย' : `หัก ณ ที่จ่าย ${r}%`);
 // ─── modal + loading ──────────────────────────────────────
 // ask({ title, html, ok, kind: 'warn'|'danger', cancel }) → Promise<boolean>
@@ -772,50 +773,76 @@ function renderPending() {
   const draftQ = REQS.filter((q) => q.status === 'qt_draft');
   const n = waitQ.length + waitI.length + readyO.length;
   $('pend-orig-n').textContent = readyO.length ? `(${readyO.length})` : '';
-  $('pend-orig').innerHTML = waitO.length ? waitO.map((v) => `<div class="list-row">
-      <div class="list-head"><div><span class="list-id">${esc(v.company)}</span> · ${esc(v.ivRequestId)}</div>${st(ORIG_ST, v.originalStatus)}</div>
-      <div class="list-sub">QT ${esc(v.qtNo)}${v.peakIvNo ? ' · INV ' + docLink(v.peakIvNo, v.peakDocLink) : ' · <span class="warn">ยังไม่ได้ออก INV</span>'} · โดย ${esc(v.salesName)}${v.originalRequestedAt ? ' · ขอเมื่อ ' + esc(v.originalRequestedAt) : ''}<br>
-        ส่งถึง: <b>${esc(v.originalRecipient)}</b> ${esc(v.originalAddress)}</div>
+  $('pend-orig').innerHTML = waitO.length ? waitO.map((v) => `<div class="pcard"><div class="pc-body">
+      <div class="pc-top"><div class="pc-title">${esc(v.company)}<small>${esc(v.ivRequestId)} · โดย ${esc(v.salesName)}${v.originalRequestedAt ? ' · ขอเมื่อ ' + esc(v.originalRequestedAt) : ''}</small></div>${st(ORIG_ST, v.originalStatus)}</div>
+      <div class="facts">
+        <div class="f"><span>INV</span><b>${v.peakIvNo ? docLink(v.peakIvNo, v.peakDocLink) : '<span class="warn">ยังไม่ได้ออก INV</span>'}</b></div>
+        <div class="f"><span>จาก QT</span><b>${esc(v.qtNo)}</b></div>
+        <div class="f" style="grid-column:span 2"><span>ส่งถึง</span><b>${esc(v.originalRecipient || '-')} · ${esc(v.originalAddress)}</b></div>
+      </div></div>
       ${v.status === 'iv_issued'
-        ? `<div class="op-bar"><input id="trk-${esc(v.ivRequestId)}" type="text" maxlength="60" placeholder="เลขพัสดุ (ถ้ามี)" style="flex:1;min-width:160px"><button class="btn btn-p btn-sm" onclick="markSent('${esc(v.ivRequestId)}')">✅ ส่งตัวจริงแล้ว</button></div>`
-        : `<div class="op-bar"><span class="small warn">รออนุมัติ INV ก่อน (แท็บ "ใบแจ้งหนี้") แล้วจึงบันทึกการส่งตัวจริงได้</span></div>`}
+        ? `<div class="pc-act"><input id="trk-${esc(v.ivRequestId)}" class="grow" type="text" maxlength="60" placeholder="เลขพัสดุ (ถ้ามี)"><button class="btn btn-p btn-sm" onclick="markSent('${esc(v.ivRequestId)}')">✅ ส่งตัวจริงแล้ว</button></div>`
+        : `<div class="pc-act"><span class="small warn">รออนุมัติ INV ก่อน (แท็บ "ใบแจ้งหนี้") แล้วจึงบันทึกการส่งตัวจริงได้</span></div>`}
     </div>`).join('') : '<div class="empty">ไม่มีเอกสารตัวจริงที่ต้องส่ง</div>';
   $('pend-count').textContent = n; $('pend-count').hidden = !n;
   $('pend-qt-n').textContent = waitQ.length ? `(${waitQ.length})` : '';
   $('pend-inv-n').textContent = waitI.length ? `(${waitI.length})` : '';
   const lineRows = (q) => (q.lines || []).map((l) => `<tr><td>${esc(l.qtDescription || l.description).replace(/\n/g, '<br>')}${l.salesNote && !l.qtDescription ? `<div class="small note-box">✍️ Sales เขียนเพิ่ม (ระบบจะเกลารวมกับคำอธิบายตอนสร้าง QT): ${esc(l.salesNote)}</div>` : ''}${l.peakServiceCode ? `<div class="small mono">${esc(l.peakServiceCode)}</div>` : '<div class="err-line">ยังไม่มีรหัสบริการ PEAK</div>'}</td><td class="num">${esc(l.qty)}</td><td class="num">${esc(l.unitPrice)}</td><td class="num">${esc(l.discount || '')}</td></tr>`).join('');
-  const qCard = (q, fix) => `<div class="list-row">
-    <div class="list-head"><div><span class="list-id">${esc(q.company)}</span> · ${esc(q.segment)}</div>${st(QT_ST, q.status)}</div>
-    <div class="list-sub">${esc(q.requestId)} · ${esc(q.createdAt)} · โดย ${esc(q.salesName)}${q.opportunityId ? ' · ' + esc(q.opportunityId) : ''}<br>
-      เลขภาษี ${esc(q.taxId)} · สาขา ${esc(q.branch)} · รหัส PEAK ${esc(q.clientCode || '— (ระบบจะหาจากเลขภาษี)')} · ภาษาเอกสาร ${esc(q.docLang)}${q.creditTermDays ? ' · เครดิต ' + esc(q.creditTermDays) + ' วัน' : ''} · <b>${whtText(q.whtRate)}</b>${q.poRequired === 'Yes' ? ' · ต้องมี PO' : ''}
-      ${q.note ? `<br>หมายเหตุจาก Sales: ${esc(q.note)}` : ''}${q.belowFloor ? `<br><span class="warn">ต่ำกว่าราคาขั้นต่ำ Catalog: ${esc(q.belowFloor)}</span>` : ''}${fix && q.peakNote ? `<br><span class="err-line">${esc(q.peakNote)}</span>` : ''}</div>
-    <div style="overflow-x:auto;margin-top:6px"><table class="items"><thead><tr><th>รายการ (ข้อความที่จะลงใน QT)</th><th class="num">จำนวน</th><th class="num">ราคา/หน่วย</th><th class="num">ส่วนลด</th></tr></thead><tbody>${lineRows(q)}</tbody></table></div>
-    <div class="total"><span>ยอดก่อน VAT</span><strong>${fmt(toNum(q.totalPreVat))}</strong></div>
-    <div class="op-bar">
+  const F = (label, val, cls) => (val === '' || val === undefined || val === null ? '' : `<div class="f"><span>${label}</span><b${cls ? ` class="${cls}"` : ''}>${val}</b></div>`);
+  const rej = (id, fn, pref) => `<details class="rej"><summary>✕ ตีกลับคำขอนี้…</summary><div class="in"><input id="${pref}-${esc(id)}" class="grow" type="text" maxlength="300" placeholder="เหตุผลที่ตีกลับ (Sales จะเห็น)"><button class="btn btn-danger btn-sm" onclick="${fn}('${esc(id)}','reject')">ตีกลับ</button></div></details>`;
+  const qCard = (q, fix) => `<div class="pcard"><div class="pc-body">
+    <div class="pc-top"><div class="pc-title">${esc(q.company)}<small>${esc(q.segment)} · ${esc(q.requestId)} · ${esc(q.createdAt)} · โดย ${esc(q.salesName)}</small></div>
+      <div class="pc-amt"><b>${fmt(toNum(q.totalPreVat))}</b><span>ยอดก่อน VAT</span></div></div>
+    <div class="facts">
+      ${F('เลขภาษี / สาขา', esc(q.taxId) + ' / ' + esc(q.branch))}
+      ${F('รหัส PEAK', esc(q.clientCode || '— ระบบหาให้'))}
+      ${F('หัก ณ ที่จ่าย', whtShort(q.whtRate), 'hl')}
+      ${F('เครดิต', q.creditTermDays ? esc(q.creditTermDays) + ' วัน' : '')}
+      ${F('วันที่ใน QT', esc(q.wantedQtDate))}
+      ${F('ภาษา / PO', esc(q.docLang) + (q.poRequired === 'Yes' ? ' · ต้องมี PO' : ''))}
+      ${F('Opportunity', esc(q.opportunityId))}
+    </div>
+    ${q.note ? `<div class="pc-note">💬 Sales: ${esc(q.note)}</div>` : ''}${(q.lines || []).filter((l) => l.salesNote && !l.qtDescription).map((l) => `<div class="pc-note warn">✍️ Sales เขียนเพิ่มในรายการ (ระบบจะเกลารวมกับคำอธิบายตอนสร้าง QT): ${esc(l.salesNote)}</div>`).join('')}${q.belowFloor ? `<div class="pc-note warn">ต่ำกว่าราคาขั้นต่ำ Catalog: ${esc(q.belowFloor)}</div>` : ''}${fix && q.peakNote ? `<div class="pc-note err">${esc(q.peakNote)}</div>` : ''}
+    <details style="margin-top:12px"><summary class="small" style="cursor:pointer">ดูรายการสินค้า (${(q.lines || []).length} บรรทัด)</summary>
+      <div style="overflow-x:auto;margin-top:6px"><table class="items"><thead><tr><th>รายการ (ข้อความที่จะลงใน QT)</th><th class="num">จำนวน</th><th class="num">ราคา/หน่วย</th><th class="num">ส่วนลด</th></tr></thead><tbody>${lineRows(q)}</tbody></table></div></details>
+    </div>
+    <div class="pc-act">
       ${fix ? `<button class="btn btn-p btn-sm" onclick="qtAction('${esc(q.requestId)}','reopen')">↻ แก้แล้ว ให้ระบบสร้าง QT ใหม่</button>` : `<button class="btn btn-p btn-sm" onclick="qtAction('${esc(q.requestId)}','approve')">✓ อนุมัติ</button>`}
-      <input id="qn-${esc(q.requestId)}" type="text" maxlength="300" placeholder="เหตุผลที่ตีกลับ" style="flex:1;min-width:160px"><button class="btn btn-g btn-sm" onclick="qtAction('${esc(q.requestId)}','reject')">ตีกลับ</button>
-      <span id="qm-${esc(q.requestId)}"></span></div>
-  </div>`;
+      <span id="qm-${esc(q.requestId)}"></span>
+      ${rej(q.requestId, 'qtAction', 'qn')}
+    </div></div>`;
+  const secH = (t, n) => `<div class="sec-h">${t} <span class="n">${n} รายการ</span></div>`;
   $('pend-qt').innerHTML = (waitQ.length ? waitQ.map((q) => qCard(q, false)).join('') : '<div class="empty">ไม่มีคำขอ QT รออนุมัติ</div>')
-    + (fixQ.length ? `<h3 style="margin:18px 0 8px;font-size:15px">ต้องแก้ใน PEAK ก่อนสร้าง QT (${fixQ.length})</h3>` + fixQ.map((q) => qCard(q, true)).join('') : '')
-    + (draftQ.length ? `<h3 style="margin:18px 0 8px;font-size:15px">QT Draft รออนุมัติใน PEAK (${draftQ.length})</h3><p class="hint">อนุมัติใน PEAK แล้วกดปุ่มด้านล่าง (หรือรอระบบอัปเดตเองในรอบ 10:49 / 17:49) Sales จึงจะเปิดลิงก์ QT ส่งลูกค้าได้</p>` + draftQ.map((q) => `<div class="list-row"><div class="list-head"><div><span class="list-id">${esc(q.company)}</span> · ${esc(q.peakQtNo)}</div>${st(QT_ST, q.status)}</div>
-      <div class="list-sub">${esc(q.requestId)} · โดย ${esc(q.salesName)} · ยอดก่อน VAT ${fmt(toNum(q.totalPreVat))}${q.peakDocLink ? ` · <a href="${esc(q.peakDocLink)}" target="_blank" rel="noopener">เปิดใน PEAK ↗</a>` : ''}</div>
-      <div class="op-bar"><button class="btn btn-p btn-sm" onclick="qtAction('${esc(q.requestId)}','qt_approved')">✓ อนุมัติ QT ใน PEAK แล้ว</button><span id="qm-${esc(q.requestId)}"></span></div></div>`).join('') : '');
+    + (fixQ.length ? secH('ต้องแก้ใน PEAK ก่อนสร้าง QT', fixQ.length) + fixQ.map((q) => qCard(q, true)).join('') : '')
+    + (draftQ.length ? secH('QT Draft รออนุมัติใน PEAK', draftQ.length) + '<p class="hint">อนุมัติใน PEAK แล้วกดปุ่ม (หรือรอระบบอัปเดตเองรอบ 10:49 / 17:49) Sales จึงจะเปิดลิงก์ QT ส่งลูกค้าได้</p>' + draftQ.map((q) => `<div class="pcard"><div class="pc-body">
+      <div class="pc-top"><div class="pc-title">${esc(q.company)}<small>${esc(q.peakQtNo)} · ${esc(q.requestId)} · โดย ${esc(q.salesName)}</small></div><div class="pc-amt"><b>${fmt(toNum(q.totalPreVat))}</b><span>ยอดก่อน VAT</span></div></div></div>
+      <div class="pc-act">${q.peakDocLink ? `<a class="btn btn-g btn-sm" href="${esc(q.peakDocLink)}" target="_blank" rel="noopener">เปิดใน PEAK ↗</a>` : ''}<span class="sp"></span><button class="btn btn-p btn-sm" onclick="qtAction('${esc(q.requestId)}','qt_approved')">✓ อนุมัติ QT ใน PEAK แล้ว</button><span id="qm-${esc(q.requestId)}"></span></div></div>`).join('') : '');
   $('pend-inv').innerHTML = waitI.length ? waitI.map((v) => {
     const q = REQS.find((x) => x.requestId === v.requestId);
-    return `<div class="list-row">
-      <div class="list-head"><div><span class="list-id">${esc(v.company)}</span>${v.billToRelation ? ` <span class="small">(${esc(v.billToRelation)})</span>` : ''}</div>${st(IV_ST, v.status)}</div>
-      <div class="list-sub">${esc(v.ivRequestId)} · ${esc(v.createdAt)} · โดย ${esc(v.salesName)}<br>
-        จาก QT ${q && q.peakQtNo === v.qtNo ? qtLink(q) : esc(v.qtNo)} · เลขภาษี ${esc(v.taxId)} · สาขา ${esc(v.branch)}<br>
-        ยอดก่อน VAT <b>${fmt(toNum(v.amountPreVat))}</b>${v.installment ? ' · ' + esc(v.installment) : ''}${v.students ? ' · ' + esc(v.students) + ' ผู้เรียน' : ''}${v.creditTermDays ? ' · เครดิต ' + esc(v.creditTermDays) + ' วัน' : ''} · <b>${whtText(v.whtRate)}</b>${v.poNo ? ' · PO ' + esc(v.poNo) : ''}${v.wantedIssueDate ? ' · ต้องการวันที่ ' + esc(v.wantedIssueDate) : ''}<br>
-        หลักฐาน: ${esc(v.evidenceType)}${v.evidenceLink && /^https:\/\//.test(v.evidenceLink) ? ` · <a href="${esc(v.evidenceLink)}" target="_blank" rel="noopener">เปิดดู</a>` : ''} · ตัวจริง: ${st(ORIG_ST, v.originalStatus)}${v.note ? `<br>หมายเหตุ: ${esc(v.note)}` : ''}${v.overReason ? `<br><span class="warn">เกินยอด QT: ${esc(v.overReason)}</span>` : ''}</div>
-      <div class="op-bar">
-        <input id="ivn-${esc(v.ivRequestId)}" type="text" maxlength="40" placeholder="เลข INV เช่น IV-20261100014" style="width:180px">
-        <input id="ivl-${esc(v.ivRequestId)}" type="text" maxlength="500" placeholder="ลิงก์เอกสาร INV ใน PEAK *" style="flex:1;min-width:200px">
-        <button class="btn btn-p btn-sm" onclick="ivAction('${esc(v.ivRequestId)}','issued')">✓ อนุมัติ (ออก INV แล้ว)</button>
+    const ev = v.evidenceLink && /^https:\/\//.test(v.evidenceLink) ? `<a href="${esc(v.evidenceLink)}" target="_blank" rel="noopener">${esc(v.evidenceType || 'เปิดดู')} ↗</a>` : esc(v.evidenceType);
+    return `<div class="pcard"><div class="pc-body">
+      <div class="pc-top"><div class="pc-title">${esc(v.company)}${v.billToRelation ? ` <span class="small">(${esc(v.billToRelation)})</span>` : ''}<small>${esc(v.ivRequestId)} · ${esc(v.createdAt)} · โดย ${esc(v.salesName)}</small></div>
+        <div class="pc-amt"><b>${fmt(toNum(v.amountPreVat))}</b><span>ยอดก่อน VAT${v.installment ? ' · ' + esc(v.installment) : ''}</span></div></div>
+      <div class="facts">
+        ${F('จาก QT', q && q.peakQtNo === v.qtNo ? qtLink(q) : esc(v.qtNo))}
+        ${F('หัก ณ ที่จ่าย', whtShort(v.whtRate), 'hl')}
+        ${F('วันที่ใน INV', esc(v.wantedIssueDate))}
+        ${F('เครดิต', v.creditTermDays ? esc(v.creditTermDays) + ' วัน' : '')}
+        ${F('ผู้เรียน', v.students ? esc(v.students) + ' คน' : '')}
+        ${F('เลขภาษี / สาขา', esc(v.taxId) + ' / ' + esc(v.branch))}
+        ${F('PO', esc(v.poNo))}
+        ${F('หลักฐาน', ev)}
+        ${F('ตัวจริง', st(ORIG_ST, v.originalStatus))}
       </div>
-      <div class="op-bar" style="margin-top:6px"><input id="ivr-${esc(v.ivRequestId)}" type="text" maxlength="300" placeholder="เหตุผลที่ตีกลับ" style="flex:1;min-width:160px"><button class="btn btn-g btn-sm" onclick="ivAction('${esc(v.ivRequestId)}','reject')">ตีกลับ</button><span id="ivm-${esc(v.ivRequestId)}"></span></div>
-    </div>`;
+      ${v.note ? `<div class="pc-note">💬 Sales: ${esc(v.note)}</div>` : ''}${v.overReason ? `<div class="pc-note warn">เกินยอด QT: ${esc(v.overReason)}</div>` : ''}
+      </div>
+      <div class="pc-act">
+        <input id="ivn-${esc(v.ivRequestId)}" type="text" maxlength="40" placeholder="เลข INV เช่น IV-20261100014" style="width:200px">
+        <input id="ivl-${esc(v.ivRequestId)}" class="grow" type="text" maxlength="500" placeholder="ลิงก์เอกสาร INV ใน PEAK *">
+        <button class="btn btn-p btn-sm" onclick="ivAction('${esc(v.ivRequestId)}','issued')">✓ อนุมัติ (ออก INV แล้ว)</button>
+        <span id="ivm-${esc(v.ivRequestId)}"></span>
+        ${rej(v.ivRequestId, 'ivAction', 'ivr')}
+      </div></div>`;
   }).join('') : '<div class="empty">ไม่มีคำขอ INV รออนุมัติ</div>';
 }
 

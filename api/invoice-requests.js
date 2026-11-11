@@ -60,6 +60,7 @@ function validate(b) {
     financePhone: text(b.financePhone, 40),
     note: text(b.note, 1000),
     overReason: text(b.overReason, 300),
+    offReason: text(b.offReason, 300),
   };
   if (!r.qtNo) throw bad('ใส่เลขที่ใบเสนอราคา (QT) ที่ต้องการออก INV');
   if (!['0', '1', '2', '3', '5'].includes(r.whtRate)) throw bad('เลือกหัก ณ ที่จ่าย (ไม่หัก / 1% / 2% / 3% / 5%)');
@@ -137,6 +138,8 @@ async function create(req, res, user) {
     if (!r.opportunityId) r.opportunityId = linked.opportunityId || '';
     r.segment = linked.segment || r.segment;
   }
+  // A QT typed by hand (not a request in this app): no balance or approval check is possible, so a reason is required.
+  if (!r.requestId && !r.offReason) throw bad('เลือก QT จากระบบ หรือใส่เหตุผลที่ใช้ QT นอกระบบ');
   // CRM Opportunity ID: required for every segment except B2S.
   if (r.segment === 'B2S') r.opportunityId = '';
   else if (!r.opportunityId) throw bad('ใส่ Opportunity ID จาก CRM (CRM-OPP-YYYY-NNNNN) ยกเว้นลูกค้า B2S');
@@ -178,7 +181,7 @@ async function create(req, res, user) {
     batchId, branch: v.branch, billToRelation: v.billTo === 'other' ? v.relation : '',
     originalDoc: v.originalDoc, originalStatus: ORIGINAL[v.originalDoc], originalRecipient: v.originalRecipient,
     originalAddress: v.originalAddress, originalRequestedAt: v.originalDoc === 'yes' ? at : '', originalSentAt: '', trackingNo: '',
-    overReason: over ? r.overReason : '', whtRate: r.whtRate,
+    overReason: over ? r.overReason : (!r.requestId ? `QT นอกระบบ: ${r.offReason}` : ''), whtRate: r.whtRate,
   }));
   await hub.appendRows('InvoiceRequests', rows);
 
@@ -200,6 +203,7 @@ async function create(req, res, user) {
     `ออกในนาม: ${entities.join(', ')}`,
     originals ? `📮 ต้องส่งตัวจริง ${originals} ใบ` : '',
     over ? `⚠️ เกินยอด QT: ${r.overReason}` : '',
+    !r.requestId ? `⚠️ QT นอกระบบ: ${r.offReason}` : '',
   ].filter(Boolean).join('\n')));
   await Promise.all(after);
 
@@ -219,6 +223,7 @@ async function update(req, res, user) {
   const row = rows.find((x) => x.ivRequestId === id);
   if (!row || (user.role !== 'op' && row.requestedBy !== user.email)) throw bad('ไม่พบคำขอ INV นี้', 404);
   const at = hub.sheetDateTime();
+  if (user.role === 'op') hub.checkSeen(row, text(b.seen, 80));
 
   if (b.action === 'original') {
     const want = b.originalDoc === 'no' ? 'no' : 'yes';
@@ -245,7 +250,7 @@ async function update(req, res, user) {
     if (row.originalStatus === 'sent') throw bad(`บันทึกว่าส่งตัวจริงไปแล้ว${row.trackingNo ? ' (เลขพัสดุ ' + row.trackingNo + ')' : ''} รีเฟรชหน้าเพื่อดูข้อมูลล่าสุด`, 409);
     if (row.originalStatus !== 'requested') throw bad('ลูกค้ายังไม่ได้ขอเอกสารตัวจริงสำหรับ INV นี้', 409);
     const trackingNo = text(b.trackingNo, 60);
-    await hub.updateRow('InvoiceRequests', row._row, { originalStatus: 'sent', originalSentAt: at, trackingNo, updatedAt: at });
+    await hub.writeChecked('InvoiceRequests', 'ivRequestId', row, { originalStatus: 'sent', originalSentAt: at, trackingNo, updatedAt: at });
     await hub.log('catalog', 'original_sent', id, `${user.email}${trackingNo ? ' · ' + trackingNo : ''}`);
     await notify.chat(`✅ ส่งเอกสารตัวจริงแล้ว ${id} · ${row.company}${trackingNo ? ' · เลขพัสดุ ' + trackingNo : ''} (แจ้ง ${row.salesName || row.requestedBy})`);
     return res.status(200).json({ ok: true, originalStatus: 'sent' });
@@ -261,16 +266,16 @@ async function update(req, res, user) {
     }
     if (b.action === 'reject') {
       if (!note) throw bad('ใส่เหตุผลที่ตีกลับ');
-      await hub.updateRow('InvoiceRequests', row._row, { status: 'rejected', accountNote: `${note} — ${user.name || user.email}`, updatedAt: at });
+      await hub.writeChecked('InvoiceRequests', 'ivRequestId', row, { status: 'rejected', accountNote: `${note} — ${user.name || user.email}`, updatedAt: at });
     } else if (b.action === 'reopen') {
-      await hub.updateRow('InvoiceRequests', row._row, { status: 'new', updatedAt: at });
+      await hub.writeChecked('InvoiceRequests', 'ivRequestId', row, { status: 'new', updatedAt: at });
     } else {
       const ivNo = text(b.peakIvNo, 40).toUpperCase();
       if (!/^[A-Z]{1,6}-?\d{6,}$/.test(ivNo)) throw bad('ใส่เลข INV จาก PEAK เช่น IV-20261100014');
       // Accounting issues the INV from the QT in PEAK; approving here needs the link to that INV.
       const link = text(b.peakDocLink, 500);
       if (!/^https:\/\/(doc|secure)\.peakaccount\.com\//.test(link)) throw bad('ใส่ลิงก์เอกสาร INV จาก PEAK (https://doc.peakaccount.com/… หรือ https://secure.peakaccount.com/…)');
-      await hub.updateRow('InvoiceRequests', row._row, { status: 'iv_issued', peakIvNo: ivNo, peakDocLink: link, accountNote: note || row.accountNote, updatedAt: at });
+      await hub.writeChecked('InvoiceRequests', 'ivRequestId', row, { status: 'iv_issued', peakIvNo: ivNo, peakDocLink: link, accountNote: note || row.accountNote, updatedAt: at });
     }
     await hub.log('catalog', `iv_${b.action}`, id, `${user.email}${note ? ' · ' + note : ''}`);
     return res.status(200).json({ ok: true });

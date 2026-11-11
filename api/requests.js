@@ -251,11 +251,12 @@ async function update(req, res, user) {
     const done = { approve: 'คำขอนี้อนุมัติไปแล้วหรือไม่ได้รออนุมัติ', reject: 'ตีกลับไม่ได้: คำขอนี้ไม่ได้อยู่ในสถานะที่ตีกลับได้ (อาจสร้าง QT ใน PEAK แล้ว)', reopen: 'คำขอนี้ไม่ได้ติดปัญหาแล้ว', qt_approved: 'QT นี้ไม่ได้อยู่ในสถานะ Draft' };
     throw bad(`${done[b.action]} (สถานะตอนนี้: ${row.status}) รีเฟรชหน้าเพื่อดูข้อมูลล่าสุด`, 409);
   }
+  hub.checkSeen(row, text(b.seen, 80));
   if (b.action === 'qt_approved') fields.qtApprovedAt = at;
   const who = user.name || user.email;
   const auto = { approve: `ฝ่ายบัญชีอนุมัติคำขอแล้ว รอระบบสร้าง QT Draft ใน PEAK — ${who}`, reopen: `ให้ระบบสร้าง QT ใหม่ — ${who}`, qt_approved: `อนุมัติ QT ใน PEAK แล้ว — ${who}` };
   fields.peakNote = note ? `${note} — ${who}` : (auto[b.action] || row.peakNote);
-  await hub.updateRow('Requests', row._row, fields);
+  await hub.writeChecked('Requests', 'requestId', row, fields);
   await hub.log('catalog', `qt_${b.action}`, row.requestId, `${user.email}${note ? ' · ' + note : ''}`);
   res.status(200).json({ ok: true, status });
 }

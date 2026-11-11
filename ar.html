@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ติดตามหนี้ · Globish Sales Desk</title>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem('gsd_theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500&family=Rubik:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/app.css">
+<style>
+.tab{display:none}.tab.on{display:block}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+@media(max-width:760px){.stats{grid-template-columns:1fr 1fr}}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px}
+.stat .k{font-size:12px;color:var(--muted)}.stat .v{font-size:22px;color:var(--head);font-weight:500;line-height:1.35}.stat .v.hot{color:var(--bad-ink)}.stat .s{font-size:12px;color:var(--muted)}
+.wl{width:100%;border-collapse:collapse;font-size:13.5px}
+.wl th{font-size:12px;color:var(--muted);text-align:left;padding:8px;border-bottom:1px solid var(--line2);font-weight:500;white-space:nowrap}
+.wl td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+.wl tr.r{cursor:pointer}.wl tr.r:hover td{background:var(--panel-2)}
+.wl td.num,.wl th.num{text-align:right;white-space:nowrap}
+.wl tr.open td{background:var(--panel-2)}
+.wl .co{color:var(--head)}.wl .sub{font-size:12px;color:var(--muted)}
+.days{font-weight:500}.days.d90{color:var(--bad-ink)}.days.d30{color:var(--warn-ink)}
+.det td{background:var(--panel-2);padding:0 8px 14px}
+.det .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:900px){.det .grid2{grid-template-columns:1fr}}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px}
+.box h4{margin:0 0 8px;font-size:13.5px;color:var(--head);font-weight:500}
+.box .row{gap:10px}
+.log{max-height:220px;overflow:auto;font-size:12.5px}
+.log div{padding:6px 0;border-bottom:1px dashed var(--line)}
+.log div:last-child{border-bottom:none}
+.kv{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px 14px;font-size:12.5px;margin-bottom:12px}
+.kv span{display:block;color:var(--muted);font-size:11.5px}
+.wrap{overflow-x:auto}
+.bar{height:8px;border-radius:4px;background:var(--primary);min-width:2px}
+.bar.cash{background:var(--ok-ink)}
+table.sum{width:100%;border-collapse:collapse;font-size:13px}
+table.sum th,table.sum td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+table.sum th:first-child,table.sum td:first-child{text-align:left}
+table.sum th{font-size:12px;color:var(--muted);font-weight:500}
+table.sum tr.tot td{font-weight:500;color:var(--head)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:900px){.two{grid-template-columns:1fr}}
+.more{margin-top:10px;text-align:center}
+.filters select.sel{width:auto;min-width:140px}.filters .search{flex:1;min-width:200px}
+</style>
+</head>
+<body data-page="ar">
+<div class="ov" id="ov-modal" hidden><div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="m-title"><h3 id="m-title"></h3><div class="mb" id="m-body"></div><div class="mf"><button class="btn btn-g" id="m-cancel">ยกเลิก</button><button class="btn btn-p" id="m-ok">ยืนยัน</button></div></div></div>
+<div class="ov" id="ov-load" hidden><div class="ldbox" role="status" aria-live="polite"><div class="spin"></div><b id="ld-text">กำลังดำเนินการ…</b><small id="ld-sub">กรุณารอสักครู่</small></div></div>
+<div class="app"><nav class="rail" id="rail"></nav><div class="main">
+<header class="top"><h1 id="page-title">ติดตามหนี้ (AR)</h1><div class="top-r" id="top-r"></div></header>
+<script src="/shell.js"></script>
+<main>
+  <div id="msg"></div>
+  <div class="stats">
+    <div class="stat"><div class="k">ยอดค้างรับทั้งหมด (รวม VAT หัก WHT)</div><div class="v" id="s-open">–</div><div class="s" id="s-open-n"></div></div>
+    <div class="stat"><div class="k">เกินกำหนดชำระ</div><div class="v hot" id="s-over">–</div><div class="s" id="s-over-n"></div></div>
+    <div class="stat"><div class="k">คาดว่าเข้าสัปดาห์นี้ (ตัดวันพฤหัส)</div><div class="v" id="s-week">–</div><div class="s" id="s-week-n"></div></div>
+    <div class="stat"><div class="k">เฉลี่ยวันรับเงิน (จ่ายใน 90 วัน)</div><div class="v" id="s-avg">–</div><div class="s">นับจากวันออก INV</div></div>
+  </div>
+  <div class="seg" id="tabs"><button class="on" data-t="work" type="button">รายการติดตาม</button><button data-t="sum" type="button">สรุป</button></div>
+
+  <section class="tab on" id="tab-work">
+    <div class="card">
+      <div class="filters">
+        <div class="seg" id="f-state">
+          <button class="on" data-v="due" type="button">ต้องตาม</button>
+          <button data-v="Overdue" type="button">เกินกำหนด</button>
+          <button data-v="Outstanding" type="button">ยังไม่ถึงกำหนด</button>
+          <button data-v="Paid" type="button">จ่ายแล้ว</button>
+          <button data-v="all" type="button">ทั้งหมด</button>
+          <button data-v="check" type="button" id="b-check" hidden>ข้อมูลเก่ารอตรวจ</button>
+        </div>
+        <select class="sel" id="f-seg"><option value="">ทุกกลุ่ม</option></select>
+        <select class="sel" id="f-sales"><option value="">ทุกเซล</option></select>
+        <input type="search" class="search" id="f-q" placeholder="ค้นหา บริษัท / เลข INV / QT / เลขภาษี">
+      </div>
+      <p class="hint" id="f-hint">"ต้องตาม" = เกินกำหนด หรือครบกำหนดใน 7 วัน หรือถึงวันนัดติดตาม เรียงจากเกินนานสุด</p>
+      <div class="wrap"><table class="wl"><thead><tr><th>INV</th><th>บริษัท</th><th>เซล</th><th>ครบกำหนด</th><th class="num">เกิน (วัน)</th><th class="num">ยอดที่ต้องได้รับ</th><th>สถานะติดตาม</th><th>นัดถัดไป</th></tr></thead><tbody id="wl"></tbody></table></div>
+      <div class="more" id="more"></div>
+    </div>
+  </section>
+
+  <section class="tab" id="tab-sum">
+    <div class="two">
+      <div class="card"><h2>คาดการณ์เงินเข้า 8 สัปดาห์ (ตัดวันพฤหัส)</h2><p class="hint">ใช้วันนัดจ่าย ถ้าไม่มีใช้วันครบกำหนด</p><div id="fc"></div></div>
+      <div class="card"><h2>เงินเข้าจริง 8 สัปดาห์ที่ผ่านมา</h2><p class="hint">ตามวันที่รับเงินที่บันทึก</p><div id="cash"></div></div>
+    </div>
+    <div class="card"><h2>ยอดค้างรับตามอายุหนี้</h2><div class="wrap" id="aging"></div></div>
+    <div class="card"><h2>ออก INV และเงินเข้ารายเดือน (12 เดือน)</h2><p class="hint">ยอด INV ก่อน VAT ไม่นับเอกสารยกเลิก / เปลี่ยนเอกสาร</p><div class="wrap" id="months"></div></div>
+    <div class="card"><h2>ค้างรับแยกตามเซล</h2><div class="wrap" id="bysales"></div></div>
+    <div class="card" id="imp" hidden><h2>นำเข้าข้อมูลจากชีทเดิม (ผู้ดูแลเท่านั้น)</h2>
+      <p class="hint">ใช้ครั้งเดียวตอนย้ายระบบ: ไฟล์ .json ที่ Claude เตรียมจากชีท Debt (INV + ประวัติติดตาม) หรือ QT จาก PEAK ระบบข้ามรายการที่มีอยู่แล้ว นำเข้าซ้ำได้ไม่เกิดข้อมูลซ้ำ</p>
+      <input type="file" id="imp-file" accept=".json,application/json"> <button class="btn btn-p btn-sm" id="imp-go" type="button">นำเข้า</button>
+      <div id="imp-msg"></div></div>
+  </section>
+</main></div></div>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+const fmt = (n) => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
+const fmt0 = (n) => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 });
+const toNum = (v) => Number(String(v ?? '').replace(/[^\d.-]/g, '')) || 0;
+const pd = (s) => { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(String(s || '')); return m ? Date.UTC(+m[3], m[2] - 1, +m[1]) : null; };
+const iso = (s) => { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(String(s || '')); return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : ''; };
+const whtPct = (v) => { const s = String(v ?? '').trim(); if (!s) return ''; const n = toNum(s); const p = s.includes('%') ? n : n < 1 ? n * 100 : n; return p ? p + '%' : 'ไม่หัก'; };
+const TODAY = (() => { const t = new Date(Date.now() + 7 * 3600e3); return Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate()); })();
+const ST = { Overdue: ['red', 'เกินกำหนด'], Outstanding: ['blue', 'ยังไม่ถึงกำหนด'], Paid: ['green', 'จ่ายแล้ว'], Closed: ['', 'ปิด (ยกเลิก/เปลี่ยน)'] };
+const st = (s) => `<span class="st ${ST[s] ? ST[s][0] : ''}">${esc(ST[s] ? ST[s][1] : s)}</span>`;
+
+function ask({ title, html = '', ok = 'ยืนยัน', cancel = 'ยกเลิก', kind = '' }) {
+  return new Promise((resolve) => {
+    $('m-title').textContent = title; $('m-body').innerHTML = html; $('modal').className = 'modal ' + kind;
+    const okB = $('m-ok'), noB = $('m-cancel');
+    okB.textContent = ok; okB.className = 'btn ' + (kind === 'danger' ? 'btn-danger' : 'btn-p'); noB.textContent = cancel;
+    $('ov-modal').hidden = false; setTimeout(() => okB.focus(), 30);
+    const done = (v) => { $('ov-modal').hidden = true; okB.onclick = noB.onclick = null; document.removeEventListener('keydown', key); resolve(v); };
+    const key = (e) => { if (e.key === 'Escape') done(false); };
+    okB.onclick = () => done(true); noB.onclick = () => done(false); document.addEventListener('keydown', key);
+  });
+}
+async function withLoading(text, fn) { $('ld-text').textContent = text; $('ov-load').hidden = false; try { return await fn(); } finally { $('ov-load').hidden = true; } }
+async function api(url, opts = {}) {
+  const r = await fetch(url, { cache: 'no-store', ...opts, headers: { 'Content-Type': 'application/json' } });
+  if (r.status === 401) { location.href = '/signin.html?next=/ar'; throw new Error('ต้องเข้าสู่ระบบใหม่'); }
+  const d = await r.json().catch(() => null);
+  if (!r.ok || !d || !d.ok) throw new Error((d && d.error) || `HTTP ${r.status}`);
+  return d;
+}
+
+let D = null, OPEN = null, SHOW = 100;
+document.querySelectorAll('#tabs button').forEach((b) => b.onclick = () => {
+  document.querySelectorAll('#tabs button').forEach((x) => x.classList.toggle('on', x === b));
+  document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('on', t.id === 'tab-' + b.dataset.t));
+});
+document.querySelectorAll('#f-state button').forEach((b) => b.onclick = () => { document.querySelectorAll('#f-state button').forEach((x) => x.classList.toggle('on', x === b)); SHOW = 100; render(); });
+['f-seg', 'f-sales'].forEach((id) => $(id).onchange = () => { SHOW = 100; render(); });
+$('f-q').oninput = () => { SHOW = 100; render(); };
+
+async function load() {
+  try { D = await api('/api/invoice-requests?view=ar'); }
+  catch (e) { $('msg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; return; }
+  const s = D.summary;
+  $('s-open').textContent = fmt0(s.open); $('s-open-n').textContent = `${s.openCount} ใบ`;
+  $('s-over').textContent = fmt0(s.overdue); $('s-over-n').textContent = `${s.overdueCount} ใบ`;
+  const w = s.forecast.weeks[0] || {}; $('s-week').textContent = fmt0(w.expected); $('s-week-n').textContent = `${w.count || 0} ใบ · สัปดาห์ถึง ${w.weekEnd || ''}`;
+  $('s-avg').textContent = s.avgDaysToPay ? s.avgDaysToPay + ' วัน' : '–';
+  $('b-check').hidden = !s.legacyCheckCount; $('b-check').textContent = `ข้อมูลเก่ารอตรวจ (${s.legacyCheckCount})`;
+  if (s.legacyCheckCount) $('f-hint').innerHTML = `"ต้องตาม" = เกินกำหนด หรือครบกำหนดใน 7 วัน หรือถึงวันนัดติดตาม · <b>ข้อมูลเก่ารอตรวจ ${s.legacyCheckCount} ใบ (${fmt0(s.legacyCheck)} บาท)</b> คือ INV ปี 2023–2025 ที่ชีท Debt ยังเป็น "รอชำระ" ไม่นับในยอดค้างรับจนกว่าจะตรวจกับ PEAK`;
+  const segs = [...new Set(D.invoices.map((r) => r.segment).filter(Boolean))].sort();
+  const sales = [...new Set(D.invoices.map((r) => r.salesName || r.salesEmail).filter(Boolean))].sort();
+  const keepS = $('f-seg').value, keepP = $('f-sales').value;
+  $('f-seg').innerHTML = '<option value="">ทุกกลุ่ม</option>' + segs.map((x) => `<option>${esc(x)}</option>`).join(''); $('f-seg').value = keepS;
+  $('f-sales').innerHTML = '<option value="">ทุกเซล</option>' + sales.map((x) => `<option>${esc(x)}</option>`).join(''); $('f-sales').value = keepP;
+  render(); renderSum();
+}
+
+function rowsFor() {
+  const mode = document.querySelector('#f-state button.on').dataset.v;
+  const seg = $('f-seg').value, sal = $('f-sales').value, q = $('f-q').value.trim().toLowerCase();
+  let xs = D.invoices.filter((r) => {
+    if (seg && r.segment !== seg) return false;
+    if (sal && (r.salesName || r.salesEmail) !== sal) return false;
+    if (q && ![r.company, r.ivNo, r.qtNo, r.taxId, r.rtNo].some((v) => String(v || '').toLowerCase().includes(q))) return false;
+    if (mode === 'all') return true;
+    if (mode === 'check') return r.legacyCheck;
+    if (r.legacyCheck) return false;
+    if (mode === 'due') {
+      if (r.state === 'Overdue') return true;
+      if (r.state !== 'Outstanding') return false;
+      const due = pd(r.dueDate), nxt = pd(r.nextActionDate);
+      return (due !== null && due - TODAY <= 7 * 864e5) || (nxt !== null && nxt <= TODAY);
+    }
+    return r.state === mode;
+  });
+  xs.sort((a, b) => (b.daysOverdue - a.daysOverdue) || ((pd(a.dueDate) || 0) - (pd(b.dueDate) || 0)));
+  return xs;
+}
+
+function render() {
+  const xs = rowsFor();
+  $('wl').innerHTML = xs.slice(0, SHOW).map((r) => {
+    const d = r.daysOverdue;
+    const open = OPEN === r.ivNo;
+    return `<tr class="r${open ? ' open' : ''}" data-iv="${esc(r.ivNo)}"><td class="mono">${r.peakDocLink ? `<a class="doc" href="${esc(r.peakDocLink)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(r.ivNo)}</a>` : esc(r.ivNo)}<div class="sub">${esc(r.segment)}${r.dealType ? ' · ' + esc(r.dealType) : ''}</div></td>
+      <td><div class="co">${esc(r.company)}</div><div class="sub">${esc(r.packageName || '')}${r.students ? ' · ' + esc(r.students) + ' คน' : ''}</div></td>
+      <td>${esc(r.salesName || r.salesEmail || '')}</td>
+      <td>${esc(r.dueDate)}<div class="sub">${st(r.state)}</div></td>
+      <td class="num">${d ? `<span class="days ${d > 90 ? 'd90' : d > 30 ? 'd30' : ''}">${d}</span>` : ''}</td>
+      <td class="num">${fmt(r.state === 'Paid' ? (toNum(r.paidAmount) || r.expected) : r.expected)}</td>
+      <td>${esc(r.followStatus || '')}${r.commitDate ? `<div class="sub">นัดจ่าย ${esc(r.commitDate)}</div>` : ''}</td>
+      <td>${esc(r.nextActionDate || '')}</td></tr>${open ? detail(r) : ''}`;
+  }).join('') || `<tr><td colspan="8" class="empty">ไม่มีรายการ</td></tr>`;
+  $('more').innerHTML = xs.length > SHOW ? `<button class="btn btn-g btn-sm" onclick="SHOW+=100;render()">แสดงเพิ่ม (${xs.length - SHOW} รายการ)</button>` : `<span class="small">${xs.length} รายการ</span>`;
+  document.querySelectorAll('#wl tr.r').forEach((tr) => tr.onclick = () => { OPEN = OPEN === tr.dataset.iv ? null : tr.dataset.iv; render(); });
+}
+
+const opt = (list, v, blank) => (blank ? `<option value="">${blank}</option>` : '') + list.map((x) => `<option ${x === v ? 'selected' : ''}>${esc(x)}</option>`).join('');
+function detail(r) {
+  const L = D.lists, id = esc(r.ivNo);
+  const kv = (k, v) => v ? `<div><span>${k}</span>${v}</div>` : '';
+  const fu = (r.followUps || []).slice().reverse().map((f) => `<div><b>${esc(f.loggedAt)}</b> · ${esc(f.channel)} · ${esc(f.result)}${f.nextActionDate ? ' · นัด ' + esc(f.nextActionDate) : ''}<br><span class="small">${esc(f.by)}${f.note ? ' — ' + esc(f.note) : ''}</span></div>`).join('') || '<div class="small">ยังไม่มีบันทึก</div>';
+  const paid = r.state === 'Paid', closed = r.state === 'Closed';
+  return `<tr class="det"><td colspan="8">
+    <div class="kv">${kv('วันที่ออก', esc(r.issueDate))}${kv('เครดิต', esc(r.creditTermDays) + ' วัน')}${kv('ก่อน VAT', fmt(toNum(r.preVat)))}${kv('หัก ณ ที่จ่าย', whtPct(r.whtRate))}${kv('QT', esc(r.qtNo))}${kv('เลขภาษี', esc(r.taxId) + (r.branch ? ' / ' + esc(r.branch) : ''))}${kv('PO', esc(r.poNo))}${kv('งวด', esc(r.installment))}${kv('RT', esc(r.rtNo))}${kv('วันที่รับเงิน', esc(r.paidDate))}${kv('วิธีจ่าย', esc(r.paymentMethod))}${kv('เหตุผลจ่ายช้า', esc(r.delayReason))}${kv('หมายเหตุ', esc(r.note))}${kv('ที่มา', esc(r.source))}</div>
+    <div class="grid2">
+      <div class="box"><h4>บันทึกการติดตาม</h4>
+        <div class="row"><div class="fg"><label>ช่องทาง *</label><select id="fu-ch-${id}">${opt(L.channels, '', '— เลือก —')}</select></div>
+        <div class="fg"><label>ผล *</label><select id="fu-rs-${id}">${opt(L.follow, '', '— เลือก —')}</select></div></div>
+        <div class="row"><div class="fg"><label>ลูกค้านัดจ่าย</label><input type="date" id="fu-cm-${id}" value="${iso(r.commitDate)}"></div>
+        <div class="fg"><label>ติดตามครั้งถัดไป</label><input type="date" id="fu-nx-${id}"></div></div>
+        <div class="fg"><label>หมายเหตุ</label><input type="text" id="fu-nt-${id}" maxlength="500"></div>
+        <button class="btn btn-p btn-sm" onclick="saveFollow('${id}')">บันทึกการติดตาม</button><div id="fu-msg-${id}"></div>
+        <h4 style="margin-top:14px">ประวัติ</h4><div class="log">${fu}</div>
+      </div>
+      <div class="box"><h4>${paid ? 'แก้ไขการรับเงิน' : 'บันทึกรับเงิน'}</h4>
+        <div class="row"><div class="fg"><label>วันที่รับเงิน *</label><input type="date" id="pd-dt-${id}" value="${iso(r.paidDate)}"></div>
+        <div class="fg"><label>ยอดที่ได้รับ *</label><input type="text" inputmode="decimal" id="pd-am-${id}" value="${r.paidAmount ? esc(r.paidAmount) : (paid ? '' : r.expected)}"></div></div>
+        <div class="row"><div class="fg"><label>วิธีชำระ *</label><select id="pd-mt-${id}">${opt(L.payMethods, r.paymentMethod, '— เลือก —')}</select></div>
+        <div class="fg"><label>เลขที่ใบเสร็จ (RT)</label><input type="text" id="pd-rt-${id}" value="${esc(r.rtNo || '')}" placeholder="RT-2026…"></div></div>
+        <div class="fg"><label>เหตุผลที่จ่ายช้า (ถ้ามี)</label><select id="pd-dl-${id}">${opt(L.delay, r.delayReason, '—')}</select></div>
+        <button class="btn btn-p btn-sm" onclick="savePaid('${id}')" ${closed ? 'disabled' : ''}>✓ บันทึกรับเงิน</button><div id="pd-msg-${id}"></div>
+        <h4 style="margin-top:14px">สถานะเอกสาร</h4>
+        <div class="row"><div class="fg"><select id="ds-${id}">${opt(L.docStatus, r.docStatus || 'Active')}</select><div class="sub">Cancelled = ยกเลิก INV · Replaced = ออกใบใหม่แทน</div></div>
+        <div class="fg"><input type="text" id="ds-nt-${id}" maxlength="500" placeholder="หมายเหตุ" value="${esc(r.note || '')}"></div></div>
+        <button class="btn btn-g btn-sm" onclick="saveDoc('${id}')">บันทึกสถานะ / หมายเหตุ</button>
+      </div>
+    </div></td></tr>`;
+}
+
+const find = (iv) => D.invoices.find((r) => r.ivNo === iv);
+const show = (id, kind, t) => { const el = $(id); if (el) el.innerHTML = `<div class="msg ${kind}">${esc(t)}</div>`; };
+async function saveFollow(iv) {
+  const r = find(iv); const g = (k) => $(`fu-${k}-${iv}`).value;
+  const body = { action: 'ar_followup', ivNo: iv, channel: g('ch'), result: g('rs'), commitDate: g('cm'), nextActionDate: g('nx'), note: g('nt') };
+  if (!body.channel || !body.result) return show(`fu-msg-${iv}`, 'err', 'เลือกช่องทางและผลการติดตาม');
+  try { await withLoading('กำลังบันทึก…', () => api('/api/invoice-requests', { method: 'PATCH', body: JSON.stringify(body) })); await load(); show(`fu-msg-${iv}`, 'ok', 'บันทึกแล้ว'); }
+  catch (e) { show(`fu-msg-${iv}`, 'err', e.message); }
+}
+async function savePaid(iv) {
+  const r = find(iv); const g = (k) => $(`pd-${k}-${iv}`).value.trim();
+  const body = { action: 'ar_update', ivNo: iv, paidDate: g('dt'), paidAmount: g('am'), paymentMethod: g('mt'), rtNo: g('rt'), delayReason: g('dl') };
+  if (!body.paidDate || !body.paidAmount || !body.paymentMethod) return show(`pd-msg-${iv}`, 'err', 'ใส่วันที่รับเงิน ยอด และวิธีชำระ');
+  const diff = toNum(body.paidAmount) - r.expected;
+  if (!(await ask({ title: 'บันทึกว่าได้รับเงินแล้ว?', ok: '✓ บันทึก', html: `<p><b>${esc(r.company)}</b> · ${esc(iv)}</p><p>รับ ${fmt(toNum(body.paidAmount))} บาท วันที่ ${esc(body.paidDate)} (${esc(body.paymentMethod)})${body.rtNo ? '<br>RT ' + esc(body.rtNo) : ''}</p>${Math.abs(diff) > 1 ? `<p class="warn">ยอดต่างจากที่ควรได้รับ ${fmt(r.expected)} อยู่ ${fmt(diff)} บาท</p>` : ''}` }))) return;
+  try { await withLoading('กำลังบันทึก…', () => api('/api/invoice-requests', { method: 'PATCH', body: JSON.stringify(body) })); OPEN = null; await load(); $('msg').innerHTML = `<div class="msg ok">บันทึกรับเงิน ${esc(iv)} แล้ว</div>`; }
+  catch (e) { show(`pd-msg-${iv}`, 'err', e.message); }
+}
+async function saveDoc(iv) {
+  const r = find(iv); const ds = $(`ds-${iv}`).value, note = $(`ds-nt-${iv}`).value.trim();
+  if (ds !== (r.docStatus || 'Active') && !(await ask({ title: ds === 'Active' ? 'เปิด INV นี้กลับมา?' : `เปลี่ยนสถานะเป็น ${ds}?`, kind: ds === 'Active' ? '' : 'danger', ok: 'ยืนยัน', html: `<p><b>${esc(r.company)}</b> · ${esc(iv)}</p><p class="small">${ds === 'Active' ? 'INV จะกลับมาอยู่ในยอดค้างรับ' : 'INV จะไม่นับในยอดค้างรับและยอดออก INV อีก'}</p>` }))) return;
+  try { await withLoading('กำลังบันทึก…', () => api('/api/invoice-requests', { method: 'PATCH', body: JSON.stringify({ action: 'ar_update', ivNo: iv, docStatus: ds, note }) })); await load(); }
+  catch (e) { $('msg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
+}
+
+function renderSum() {
+  const s = D.summary;
+  const maxF = Math.max(1, ...s.forecast.weeks.map((w) => w.expected));
+  $('fc').innerHTML = `<table class="sum"><tr><th>สัปดาห์ถึง</th><th>ยอด</th><th>ใบ</th><th style="width:35%"></th></tr>
+    <tr><td>ก่อนหน้านี้ (เลยกำหนดนัด)</td><td>${fmt0(s.forecast.earlier)}</td><td>${s.forecast.earlierCount}</td><td></td></tr>
+    ${s.forecast.weeks.map((w) => `<tr><td>${esc(w.weekEnd)}</td><td>${fmt0(w.expected)}</td><td>${w.count}</td><td><div class="bar" style="width:${(w.expected / maxF) * 100}%"></div></td></tr>`).join('')}
+    <tr><td>หลังจากนั้น</td><td>${fmt0(s.forecast.later)}</td><td>${s.forecast.laterCount}</td><td></td></tr></table>`;
+  const maxC = Math.max(1, ...s.cash.map((w) => w.paid));
+  $('cash').innerHTML = `<table class="sum"><tr><th>สัปดาห์ถึง</th><th>รับเงิน</th><th>ใบ</th><th style="width:35%"></th></tr>${s.cash.map((w) => `<tr><td>${esc(w.weekEnd)}</td><td>${fmt0(w.paid)}</td><td>${w.count}</td><td><div class="bar cash" style="width:${(w.paid / maxC) * 100}%"></div></td></tr>`).join('')}</table>`;
+  const B = s.buckets;
+  const tot = Object.fromEntries(B.map((b) => [b, s.aging.reduce((t, a) => t + a[b], 0)]));
+  $('aging').innerHTML = `<table class="sum"><tr><th>กลุ่ม</th>${B.map((b) => `<th>${b === 'Not due' ? 'ยังไม่ถึงกำหนด' : b + ' วัน'}</th>`).join('')}<th>รวม</th></tr>
+    ${s.aging.map((a) => `<tr><td>${esc(a.segment)}</td>${B.map((b) => `<td>${fmt0(a[b])}</td>`).join('')}<td>${fmt0(a.total)}</td></tr>`).join('')}
+    <tr class="tot"><td>รวม</td>${B.map((b) => `<td>${fmt0(tot[b])}</td>`).join('')}<td>${fmt0(s.open)}</td></tr></table>`;
+  const segs = [...new Set(s.months.flatMap((m) => Object.keys(m.bySegment)))].sort();
+  $('months').innerHTML = `<table class="sum"><tr><th>เดือน</th>${segs.map((g) => `<th>${esc(g)}</th>`).join('')}<th>ออก INV รวม</th><th>ใบ</th><th>เงินเข้า</th></tr>
+    ${s.months.map((m) => `<tr><td>${esc(m.month)}</td>${segs.map((g) => `<td>${fmt0(m.bySegment[g] || 0)}</td>`).join('')}<td>${fmt0(m.invoiced)}</td><td>${m.count}</td><td>${fmt0(m.cash)}</td></tr>`).join('')}</table>`;
+  const by = {};
+  D.invoices.filter((r) => (r.state === 'Overdue' || r.state === 'Outstanding') && !r.legacyCheck).forEach((r) => { const k = r.salesName || r.salesEmail || '(ไม่ระบุ)'; by[k] = by[k] || { open: 0, over: 0, n: 0 }; by[k].open += r.expected; by[k].n++; if (r.state === 'Overdue') by[k].over += r.expected; });
+  $('bysales').innerHTML = `<table class="sum"><tr><th>เซล</th><th>ค้างรับ</th><th>เกินกำหนด</th><th>ใบ</th></tr>${Object.entries(by).sort((a, b) => b[1].open - a[1].open).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${fmt0(v.open)}</td><td>${fmt0(v.over)}</td><td>${v.n}</td></tr>`).join('')}</table>`;
+}
+
+$('imp-go').onclick = async () => {
+  const f = $('imp-file').files[0]; if (!f) return;
+  let data; try { data = JSON.parse(await f.text()); } catch (e) { $('imp-msg').innerHTML = '<div class="msg err">ไฟล์ไม่ใช่ JSON</div>'; return; }
+  const n = (data.invoices || []).length, q = (data.quotations || []).length;
+  if (!(await ask({ title: 'นำเข้าข้อมูลเก่า?', html: `<p>${n ? `INV ${n} รายการ · ประวัติติดตาม ${(data.followUps || []).length} รายการ` : ''}${q ? `<br>QT จาก PEAK ${q} รายการ` : ''}</p><p class="small">รายการที่มีอยู่แล้วจะถูกข้าม</p>` }))) return;
+  try { const d = await withLoading('กำลังนำเข้า…', () => api('/api/invoice-requests', { method: 'POST', body: JSON.stringify({ action: 'legacy_import', ...data }) }));
+    $('imp-msg').innerHTML = `<div class="msg ok">นำเข้าแล้ว: ${d.invoices !== undefined ? `INV ${d.invoices} (ข้าม ${d.skipped}) · ติดตาม ${d.followUps}` : ''} ${d.quotations !== undefined ? `QT ${d.quotations} (ข้าม ${d.quotationsSkipped})` : ''}</div>`; load(); }
+  catch (e) { $('imp-msg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
+};
+window.SHELL_ME.then((u) => { if (!u) return; $('imp').hidden = !u.admin; if (u.role !== 'op') { $('msg').innerHTML = '<div class="msg err">หน้านี้สำหรับฝ่ายบัญชี / Admin</div>'; return; } load(); });
+</script>
+</body>
+</html>

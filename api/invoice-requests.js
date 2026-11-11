@@ -15,6 +15,7 @@ const drive = require('../lib/drive');
 const notify = require('../lib/notify');
 const { OPP_RE, normaliseOppId } = require('../lib/crm');
 const { validTaxId, normBranch } = require('../lib/taxid');
+const ar = require('../lib/ar');
 
 const EVIDENCE = ['QT ที่ลูกค้าเซ็นแล้ว', 'PO จากลูกค้า', 'อีเมลยืนยันจากลูกค้า', 'อื่นๆ'];
 const ORIGINAL = { no: 'not_needed', yes: 'requested', unknown: 'pending_decision' };
@@ -275,7 +276,22 @@ async function update(req, res, user) {
       // Accounting issues the INV from the QT in PEAK; approving here needs the link to that INV.
       const link = text(b.peakDocLink, 500);
       if (!/^https:\/\/(doc|secure)\.peakaccount\.com\//.test(link)) throw bad('ใส่ลิงก์เอกสาร INV จาก PEAK (https://doc.peakaccount.com/… หรือ https://secure.peakaccount.com/…)');
+      // Issue date as it is on the INV in PEAK (defaults to the date sales asked for).
+      const issueDate = dmy(text(b.issueDate, 10)) || row.wantedIssueDate;
+      if (!ar.parseDate(issueDate)) throw bad('ใส่วันที่ออก INV ตามเอกสารใน PEAK');
+      const [invs, requests, lines, users, groups] = await Promise.all([
+        hub.readTable('Invoices'), row.requestId ? hub.readTable('Requests') : [], row.requestId ? hub.readTable('RequestLines') : [],
+        hub.readTable('Users'), ar.readProductGroups(),
+      ]);
+      const dup = invs.find((x) => String(x.ivNo).toUpperCase() === ivNo);
+      if (dup && dup.ivRequestId && dup.ivRequestId !== row.ivRequestId) throw bad(`เลข ${ivNo} ถูกใช้กับคำขอ ${dup.ivRequestId} แล้ว ตรวจเลข INV อีกครั้ง`, 409);
       await hub.writeChecked('InvoiceRequests', 'ivRequestId', row, { status: 'iv_issued', peakIvNo: ivNo, peakDocLink: link, accountNote: note || row.accountNote, updatedAt: at });
+      // Goes straight into AR (Invoices), so nobody re-types it for debt follow-up.
+      if (!dup) {
+        const request = requests.find((x) => x.requestId === row.requestId);
+        const ls = lines.filter((x) => x.requestId === row.requestId);
+        await hub.appendRows('Invoices', [ar.rowFromRequest(row, { request, lines: ls, users, issueDate, ivNo, peakDocLink: link, productGroups: groups })]);
+      }
     }
     await hub.log('catalog', `iv_${b.action}`, id, `${user.email}${note ? ' · ' + note : ''}`);
     return res.status(200).json({ ok: true });
@@ -284,13 +300,156 @@ async function update(req, res, user) {
   throw bad('คำสั่งไม่ถูกต้อง');
 }
 
+// ---------------------------------------------------------------- AR (debt follow-up)
+const isOp = (u) => u.role === 'op';
+function summarise(all, today) {
+  // Old rows the Debt sheet still showed as unpaid are kept apart until someone checks them in PEAK.
+  const check = all.filter((r) => r.legacyCheck);
+  const open = all.filter((r) => (r.state === 'Outstanding' || r.state === 'Overdue') && !r.legacyCheck);
+  const sum = (xs, f = 'expected') => Math.round(xs.reduce((s, r) => s + (Number(r[f]) || 0), 0) * 100) / 100;
+  const buckets = ['Not due', '1-30', '31-60', '61-90', '90+'];
+  const segs = [...new Set(open.map((r) => r.segment || 'Others'))].sort();
+  const aging = segs.map((sg) => ({ segment: sg, ...Object.fromEntries(buckets.map((b) => [b, sum(open.filter((r) => (r.segment || 'Others') === sg && r.aging === b))])), total: sum(open.filter((r) => (r.segment || 'Others') === sg)) }));
+  const DAY = 86400e3;
+  const thisThu = today + ((((4 - new Date(today).getUTCDay()) % 7) + 7) % 7) * DAY;
+  const weeks = [];
+  for (let i = 0; i < 8; i++) {
+    const end = thisThu + i * 7 * DAY;
+    const xs = open.filter((r) => r.forecastWeek === ar.fmt(end));
+    weeks.push({ weekEnd: ar.fmt(end), expected: sum(xs), count: xs.length });
+  }
+  const earlier = open.filter((r) => { const d = ar.parseDate(r.forecastWeek); return d !== null && d < thisThu; });
+  const later = open.filter((r) => { const d = ar.parseDate(r.forecastWeek); return d !== null && d > thisThu + 7 * 7 * DAY; });
+  const cash = [];
+  for (let i = 1; i <= 8; i++) {
+    const end = thisThu - i * 7 * DAY; const start = end - 6 * DAY;
+    const xs = all.filter((r) => r.paidMs !== null && r.paidMs >= start && r.paidMs <= end);
+    cash.push({ weekEnd: ar.fmt(end), paid: Math.round(xs.reduce((s, r) => s + (ar.num(r.paidAmount) || r.expected), 0) * 100) / 100, count: xs.length });
+  }
+  const months = [];
+  const t = new Date(today);
+  for (let i = 0; i < 12; i++) {
+    const y = t.getUTCFullYear(), m = t.getUTCMonth() - i;
+    const start = Date.UTC(y, m, 1), end = Date.UTC(y, m + 1, 1) - 1;
+    const iss = all.filter((r) => r.issueMs !== null && r.issueMs >= start && r.issueMs <= end && r.state !== 'Closed');
+    const paid = all.filter((r) => r.paidMs !== null && r.paidMs >= start && r.paidMs <= end);
+    months.push({ month: ar.fmt(start).slice(3), invoiced: sum(iss, 'preVatN'), count: iss.length, cash: Math.round(paid.reduce((s, r) => s + (ar.num(r.paidAmount) || r.expected), 0) * 100) / 100,
+      bySegment: Object.fromEntries([...new Set(iss.map((r) => r.segment || 'Others'))].map((sg) => [sg, sum(iss.filter((r) => (r.segment || 'Others') === sg), 'preVatN')])) });
+  }
+  const recentPaid = all.filter((r) => r.paidMs !== null && r.paidMs >= today - 90 * DAY && r.cycleDays !== '');
+  return {
+    legacyCheck: sum(check), legacyCheckCount: check.length,
+    open: sum(open), openCount: open.length, overdue: sum(open.filter((r) => r.state === 'Overdue')), overdueCount: open.filter((r) => r.state === 'Overdue').length,
+    avgDaysToPay: recentPaid.length ? Math.round(recentPaid.reduce((s, r) => s + r.cycleDays, 0) / recentPaid.length) : 0,
+    aging, buckets, forecast: { earlier: sum(earlier), earlierCount: earlier.length, weeks, later: sum(later), laterCount: later.length }, cash, months,
+  };
+}
+
+async function arList(req, res, user) {
+  if (!isOp(user)) throw bad('เฉพาะฝ่ายบัญชี / Admin', 403);
+  const [rows, fus] = await Promise.all([hub.readTable('Invoices'), hub.readTable('FollowUps')]);
+  const today = ar.todayMs();
+  const all = rows.filter((r) => r.ivNo).map((r) => ({ ...ar.enrich(r, today), preVatN: ar.num(r.preVat) }));
+  const byIv = new Map();
+  for (const f of fus) { if (!byIv.has(f.ivNo)) byIv.set(f.ivNo, []); byIv.get(f.ivNo).push(f); }
+  const keep = all.filter((r) => r.state === 'Outstanding' || r.state === 'Overdue' || (r.paidMs !== null && r.paidMs >= today - 120 * 86400e3) || (r.issueMs !== null && r.issueMs >= today - 120 * 86400e3));
+  const out = keep.map(({ _row, issueMs, dueMs, paidMs, preVatN, ...r }) => ({ ...r, followUps: (byIv.get(r.ivNo) || []).slice(-20).map(({ _row: x, ...f }) => f) }));
+  res.status(200).json({ ok: true, summary: summarise(all, today), invoices: out, total: all.length,
+    lists: { docStatus: ar.DOC_STATUS, payMethods: ar.PAY_METHODS, channels: ar.CHANNELS, follow: ar.FOLLOW, delay: ar.DELAY } });
+}
+
+async function arUpdate(req, res, user) {
+  checkOrigin(req);
+  if (!isOp(user)) throw bad('เฉพาะฝ่ายบัญชี / Admin', 403);
+  const b = req.body || {};
+  const ivNo = text(b.ivNo, 40);
+  const rows = await hub.readTable('Invoices');
+  const row = rows.find((x) => x.ivNo === ivNo);
+  if (!row) throw bad('ไม่พบ INV นี้ใน AR', 404);
+  const at = hub.sheetDateTime();
+  const who = user.name || user.email;
+  const dateIn = (v, label) => { const s = text(v, 10); if (!s) return ''; const d = dmy(s) || s; if (!ar.parseDate(d)) throw bad(`${label} ไม่ถูกต้อง`); return d; };
+  if (b.action === 'ar_followup') {
+    const channel = text(b.channel, 30);
+    if (!ar.CHANNELS.includes(channel)) throw bad('เลือกช่องทางติดตาม');
+    const result = text(b.result, 80);
+    if (!result) throw bad('เลือกผลการติดตาม');
+    const next = dateIn(b.nextActionDate, 'วันที่ติดตามครั้งถัดไป');
+    const note = text(b.note, 500);
+    await hub.appendRows('FollowUps', [{ loggedAt: at, ivNo, channel, by: who, result, nextActionDate: next, note }]);
+    const f = { followStatus: result, nextActionDate: next };
+    const commit = dateIn(b.commitDate, 'วันนัดจ่าย');
+    if (commit) f.commitDate = commit;
+    await hub.updateRow('Invoices', row._row, f);
+    await hub.log('catalog', 'ar_followup', ivNo, `${user.email} · ${channel} · ${result}`);
+    return res.status(200).json({ ok: true });
+  }
+  if (b.action === 'ar_update') {
+    const f = {};
+    if ('commitDate' in b) f.commitDate = dateIn(b.commitDate, 'วันนัดจ่าย');
+    if ('paidDate' in b) f.paidDate = dateIn(b.paidDate, 'วันที่รับเงิน');
+    if ('paidAmount' in b) { const n = b.paidAmount === '' ? '' : Number(String(b.paidAmount).replace(/,/g, '')); if (n !== '' && !(n > 0)) throw bad('ยอดรับเงินไม่ถูกต้อง'); f.paidAmount = n; }
+    if ('paymentMethod' in b) { const m = text(b.paymentMethod, 40); if (m && !ar.PAY_METHODS.includes(m)) throw bad('วิธีชำระเงินไม่ถูกต้อง'); f.paymentMethod = m; }
+    if ('rtNo' in b) f.rtNo = text(b.rtNo, 40).toUpperCase();
+    if ('delayReason' in b) f.delayReason = text(b.delayReason, 200);
+    if ('docStatus' in b) { const d = text(b.docStatus, 20); if (!ar.DOC_STATUS.includes(d)) throw bad('สถานะเอกสารไม่ถูกต้อง'); f.docStatus = d; }
+    if ('note' in b) f.note = text(b.note, 500);
+    if (f.paidDate && !(f.paidAmount || ar.num(row.paidAmount))) throw bad('ใส่ยอดเงินที่ได้รับ');
+    if (f.paidDate && !(f.paymentMethod || row.paymentMethod)) throw bad('เลือกวิธีชำระเงิน');
+    if (!Object.keys(f).length) throw bad('ไม่มีข้อมูลที่จะบันทึก');
+    await hub.updateRow('Invoices', row._row, f);
+    await hub.log('catalog', 'ar_update', ivNo, `${user.email} · ${Object.keys(f).join(',')}`);
+    return res.status(200).json({ ok: true });
+  }
+  throw bad('คำสั่งไม่ถูกต้อง');
+}
+
+// One-off moves from the legacy sheets (file prepared by Claude, uploaded by an admin on /ar).
+// invoices → Invoices (+ followUps → FollowUps); quotations → Requests (QTs issued in PEAK before the app).
+async function importLegacy(req, res, user) {
+  checkOrigin(req);
+  if (!user.admin) throw bad('เฉพาะผู้ดูแลสิทธิ์ (finance@ / chayut.j@)', 403);
+  const b = req.body || {};
+  const out = {};
+  if (Array.isArray(b.invoices)) {
+    const have = new Set((await hub.readTable('Invoices')).map((x) => String(x.ivNo).toUpperCase()));
+    const cols = hub.TABLES.Invoices.filter((c) => !c.startsWith('_'));
+    const rows = b.invoices.filter((x) => x && /^[A-Z]{2,6}-?\d{6,}$/.test(String(x.ivNo || '').toUpperCase()) && !have.has(String(x.ivNo).toUpperCase()))
+      .map((x) => Object.fromEntries(cols.map((c) => [c, x[c] === undefined ? '' : x[c]])));
+    if (rows.length) await hub.appendRows('Invoices', rows);
+    const ivs = new Set(rows.map((x) => x.ivNo));
+    const fus = (Array.isArray(b.followUps) ? b.followUps : []).filter((f) => f && ivs.has(f.ivNo));
+    if (fus.length) await hub.appendRows('FollowUps', fus);
+    out.invoices = rows.length; out.skipped = b.invoices.length - rows.length; out.followUps = fus.length;
+  }
+  if (Array.isArray(b.quotations)) {
+    const reqs = await hub.readTable('Requests');
+    const haveId = new Set(reqs.map((x) => String(x.peakQtId || '')).filter(Boolean));
+    const rows = b.quotations.filter((x) => x && x.peakQtId && !haveId.has(String(x.peakQtId)) && x.requestId && x.peakQtNo);
+    if (rows.length) await hub.appendRows('Requests', rows.map((x) => ({ ...x, status: 'qt_approved' })));
+    out.quotations = rows.length; out.quotationsSkipped = b.quotations.length - rows.length;
+  }
+  await hub.log('catalog', 'legacy_import', '', `${user.email} · ${JSON.stringify(out)}`);
+  res.status(200).json({ ok: true, ...out });
+}
+
 async function list(req, res, user) {
-  const rows = await hub.readTable('InvoiceRequests');
+  if (req.query && req.query.view === 'ar') return arList(req, res, user);
+  const [rows, invs] = await Promise.all([hub.readTable('InvoiceRequests'), hub.readTable('Invoices').catch(() => [])]);
+  // Payment status from AR, so sales see whether their customer has paid.
+  const byReq = new Map(), byNo = new Map();
+  for (const x of invs) { if (x.ivRequestId) byReq.set(x.ivRequestId, x); if (x.ivNo) byNo.set(String(x.ivNo).toUpperCase(), x); }
+  const today = ar.todayMs();
   const out = rows
     .filter((r) => user.role === 'op' || r.requestedBy === user.email)
     .reverse()
     .slice(0, 100)
-    .map(({ _row, ...r }) => r);
+    .map(({ _row, ...r }) => {
+      const a = byReq.get(r.ivRequestId) || (r.peakIvNo && byNo.get(String(r.peakIvNo).toUpperCase()));
+      if (!a) return r;
+      const e = ar.enrich(a, today);
+      return { ...r, ar: { state: e.state, dueDate: e.dueDate, paidDate: a.paidDate, daysOverdue: e.daysOverdue, commitDate: a.commitDate, followStatus: a.followStatus } };
+    });
   res.status(200).json({ ok: true, uploads: drive.enabled(), requests: out });
 }
 
@@ -298,8 +457,8 @@ module.exports = async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   try {
     const user = await requireUser(req);
-    if (req.method === 'POST') return await create(req, res, user);
-    if (req.method === 'PATCH') return await update(req, res, user);
+    if (req.method === 'POST') return await ((req.body || {}).action === 'legacy_import' ? importLegacy : create)(req, res, user);
+    if (req.method === 'PATCH') return await (String((req.body || {}).action || '').startsWith('ar_') ? arUpdate : update)(req, res, user);
     if (req.method === 'GET') return await list(req, res, user);
     res.status(405).json({ ok: false, error: 'Method not allowed' });
   } catch (e) {

@@ -239,6 +239,7 @@ async function signOut() { try { await fetch('/api/auth/logout', { method: 'POST
 let ME = null, PKGS = [], REQS = [], IVS = [];
 
 
+const isoD = (s) => { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(String(s || '')); return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : ''; };
 const whtShort = (r) => (r === undefined || r === '' ? '— ไม่ได้ระบุ' : String(r) === '0' ? 'ไม่หัก' : `${r}%`);
 const whtText = (r) => (r === undefined || r === '' ? '—' : String(r) === '0' ? 'ไม่หัก ณ ที่จ่าย' : `หัก ณ ที่จ่าย ${r}%`);
 // ─── modal + loading ──────────────────────────────────────
@@ -764,6 +765,8 @@ const QT_ST = { new: ['รอฝ่ายบัญชีอนุมัติ', 
   needs_contact: ['รอฝ่ายบัญชี: ลูกค้าใน PEAK', 'new'], needs_review: ['รอตรวจคำอธิบายเพิ่มเติม', 'new'], needs_service_code: ['รอฝ่ายบัญชี: รหัสบริการ', 'new'], qt_error: ['รอฝ่ายบัญชีตรวจ', 'red'],
   qt_draft: ['QT Draft · รอบัญชีอนุมัติ', 'blue'], qt_approved: ['QT อนุมัติแล้ว · ส่งลูกค้าได้', 'green'], rejected: ['ตีกลับ', 'red'], changes_requested: ['ขอแก้ไข', 'new'],
   accepted: ['ลูกค้าตอบรับ', 'green'], iv_requested: ['ขอ INV แล้ว', 'green'], iv_issued: ['ออก INV แล้ว', 'green'], cancelled: ['ยกเลิก', 'red'] };
+// Payment status from AR (Invoices tab) once the INV is issued.
+const payChip = (v) => { const a = v.ar; if (!a) return ''; const m = { Paid: ['green', 'ลูกค้าจ่ายแล้ว' + (a.paidDate ? ' ' + a.paidDate : '')], Overdue: ['red', `เกินกำหนด ${a.daysOverdue} วัน`], Outstanding: ['blue', 'ครบกำหนด ' + a.dueDate], Closed: ['', 'INV ปิดแล้ว'] }[a.state]; return m ? `<span class="st ${m[0]}" title="${esc(a.followStatus || '')}${a.commitDate ? ' · นัดจ่าย ' + esc(a.commitDate) : ''}">${esc(m[1])}</span>` : ''; };
 const IV_ST = { new: ['รอฝ่ายบัญชีออก INV', 'new'], iv_draft: ['INV Draft · รอบัญชีอนุมัติ', 'blue'], iv_issued: ['ออก INV แล้ว', 'green'], rejected: ['ตีกลับ', 'red'] };
 const ORIG_ST = { not_needed: ['ไม่ต้องส่งตัวจริง', ''], pending_decision: ['ยังไม่ทราบเรื่องตัวจริง', 'new'], requested: ['รอส่งตัวจริง', 'blue'], sent: ['ส่งตัวจริงแล้ว', 'green'] };
 const st = (map, k) => { const [t, c] = map[k] || [k || '-', '']; return `<span class="st ${c}">${esc(t)}</span>`; };
@@ -798,7 +801,7 @@ function renderMine() {
   $('mine-inv').innerHTML = IVS.length ? IVS.map((v) => {
     const canOrig = v.originalStatus !== 'sent';
     return `<div class="list-row" id="row-${esc(v.ivRequestId)}">
-      <div class="list-head"><div><span class="list-id">${esc(v.ivRequestId)}</span> · ${esc(v.company)}${v.billToRelation ? ` <span class="small">(${esc(v.billToRelation)})</span>` : ''}</div><div>${st(IV_ST, v.status)} ${st(ORIG_ST, v.originalStatus)}</div></div>
+      <div class="list-head"><div><span class="list-id">${esc(v.ivRequestId)}</span> · ${esc(v.company)}${v.billToRelation ? ` <span class="small">(${esc(v.billToRelation)})</span>` : ''}</div><div>${st(IV_ST, v.status)} ${payChip(v)} ${st(ORIG_ST, v.originalStatus)}</div></div>
       <div class="list-sub">QT ${esc(v.qtNo)}${v.peakIvNo ? ' · INV ' + docLink(v.peakIvNo, v.peakDocLink) : ''} · ${esc(v.createdAt)}${op ? ' · ' + esc(v.salesName) : ''}${v.accountNote ? `<br><span class="small">ฝ่ายบัญชี: ${esc(v.accountNote)}</span>` : ''}<br>
         ยอดก่อน VAT <b>${fmt(toNum(v.amountPreVat))}</b>${v.installment ? ' · ' + esc(v.installment) : ''} · ${esc(v.evidenceType)}${v.evidenceLink && /^https:\/\//.test(v.evidenceLink) ? ` · <a href="${esc(v.evidenceLink)}" target="_blank" rel="noopener">ดูหลักฐาน</a>` : ''}
         ${v.originalStatus === 'requested' || v.originalStatus === 'sent' ? `<br>ตัวจริงส่งถึง: ${esc(v.originalRecipient)} ${esc(v.originalAddress)}${v.trackingNo ? ' · เลขพัสดุ ' + esc(v.trackingNo) : ''}` : ''}</div>
@@ -890,6 +893,7 @@ function renderPending() {
       </div>
       <div class="pc-act">
         <input id="ivn-${esc(v.ivRequestId)}" type="text" maxlength="40" placeholder="เลข INV เช่น IV-20261100014" style="width:200px">
+        <input id="ivd-${esc(v.ivRequestId)}" type="date" title="วันที่ออก INV ตามเอกสารใน PEAK" value="${isoD(v.wantedIssueDate)}" style="width:150px">
         <input id="ivl-${esc(v.ivRequestId)}" class="grow" type="text" maxlength="500" placeholder="ลิงก์เอกสาร INV ใน PEAK *">
         <button class="btn btn-p btn-sm" onclick="ivAction('${esc(v.ivRequestId)}','issued')">✓ อนุมัติ (ออก INV แล้ว)</button>
         <span id="ivm-${esc(v.ivRequestId)}"></span>
@@ -933,10 +937,10 @@ async function qtActionDo(id, action) {
 async function ivAction(id, action) {
   const v = IVS.find((x) => x.ivRequestId === id) || {};
   const body = { ivRequestId: id, action, seen: seenOf(v) };
-  if (action === 'issued') { body.peakIvNo = $('ivn-' + id).value.trim(); body.peakDocLink = $('ivl-' + id).value.trim(); if (!body.peakIvNo || !body.peakDocLink) { $('ivm-' + id).innerHTML = '<span class="err-line">ใส่เลข INV และลิงก์เอกสาร INV ใน PEAK</span>'; return; } }
+  if (action === 'issued') { body.peakIvNo = $('ivn-' + id).value.trim(); body.peakDocLink = $('ivl-' + id).value.trim(); body.issueDate = $('ivd-' + id).value; if (!body.issueDate) { $('ivm-' + id).innerHTML = '<span class="err-line">ใส่วันที่ออก INV</span>'; return; } if (!body.peakIvNo || !body.peakDocLink) { $('ivm-' + id).innerHTML = '<span class="err-line">ใส่เลข INV และลิงก์เอกสาร INV ใน PEAK</span>'; return; } }
   if (action === 'reject') { body.note = $('ivr-' + id).value.trim(); if (!body.note) { $('ivm-' + id).innerHTML = '<span class="err-line">ใส่เหตุผลก่อน</span>'; return; } }
   const ok = await ask(action === 'issued'
-    ? { title: 'ยืนยันว่าออก INV แล้ว?', ok: '✓ อนุมัติ', html: `<p><b>${esc(v.company)}</b> · ${fmt(toNum(v.amountPreVat))}</p><p>เลข INV: <b class="mono">${esc(body.peakIvNo)}</b><br><span class="small">ลิงก์: ${esc(body.peakDocLink)}</span></p><p class="small">Sales จะเห็นเลข INV และเปิดเอกสารได้ทันที</p>` }
+    ? { title: 'ยืนยันว่าออก INV แล้ว?', ok: '✓ อนุมัติ', html: `<p><b>${esc(v.company)}</b> · ${fmt(toNum(v.amountPreVat))}</p><p>เลข INV: <b class="mono">${esc(body.peakIvNo)}</b> · วันที่ ${esc(body.issueDate)}<br><span class="small">ลิงก์: ${esc(body.peakDocLink)}</span></p><p class="small">Sales จะเห็นเลข INV และเปิดเอกสารได้ทันที · INV นี้จะเข้าหน้าติดตามหนี้ (AR) อัตโนมัติ</p>` }
     : { title: 'ตีกลับคำขอ INV นี้?', ok: 'ตีกลับ', kind: 'danger', html: `<p><b>${esc(v.company)}</b> · ${fmt(toNum(v.amountPreVat))}</p><p>เหตุผล: ${esc(body.note)}</p>` });
   if (!ok) return;
   try { await withLoading('กำลังบันทึก…', async () => { await api('/api/invoice-requests', { method: 'PATCH', body: JSON.stringify(body) }); await loadAll(); }); }

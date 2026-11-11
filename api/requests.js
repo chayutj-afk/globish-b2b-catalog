@@ -125,7 +125,7 @@ async function create(req, res, user) {
     // Customer-readable description from the Whitehouse package details (WHPackages tab, imported on /import-wh).
     let wh = new Map();
     try { wh = new Map((await hub.readTable('WHPackages')).map((x) => [String(x.id), x])); } catch (e) { console.error('WHPackages read failed', e); }
-    for (const it of items.filter((x) => x.kind === 'service')) it.wh = wh.get(it.code.replace(/_.*$/, '')) || null;
+    for (const it of items.filter((x) => x.kind === 'service')) { it.wh = wh.get(it.code.replace(/_.*$/, '')) || null; it.name = require('../lib/pricing').fullServiceName(it.name, it.wh); }
   }
 
   const priced = items.map((it) => {

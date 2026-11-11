@@ -230,7 +230,7 @@
     <div class="seg" id="mine-seg">
       <button class="on" onclick="setMine('qt',this)">ใบเสนอราคา</button>
       <button onclick="setMine('inv',this)">ใบแจ้งหนี้</button>
-      <button onclick="setMine('rt',this)">ใบเสร็จ</button>
+      <button onclick="setMine('rt',this)">ใบเสร็จ <span id="mine-rt-n" class="badge" hidden></span></button>
       <button onclick="setMine('edit',this)">ขอแก้ไข <span id="mine-edit-n" class="badge" hidden></span></button>
     </div>
     <button class="btn btn-g btn-sm" onclick="loadAll()">↻ รีเฟรช</button>
@@ -869,19 +869,29 @@ const IV_ST = { new: ['รอฝ่ายบัญชีออก INV', 'new'], 
 const ORIG_ST = { not_needed: ['ไม่ต้องส่งตัวจริง', ''], pending_decision: ['ยังไม่ทราบเรื่องตัวจริง', 'new'], requested: ['รอส่งตัวจริง', 'blue'], sent: ['ส่งตัวจริงแล้ว', 'green'] };
 const st = (map, k) => { const [t, c] = map[k] || [k || '-', '']; return `<span class="st ${c}">${esc(t)}</span>`; };
 
-function setMine(w, btn) { document.querySelectorAll('#mine-seg button').forEach((b) => b.classList.toggle('on', b === btn)); ['qt', 'inv', 'rt', 'edit'].forEach((k) => { $('mine-' + k).hidden = w !== k; }); if (w === 'edit') markEditsSeen(); }
-// Edit requests accounting finished (done / rejected) that the requester hasn't looked at yet.
+function setMine(w, btn) { document.querySelectorAll('#mine-seg button').forEach((b) => b.classList.toggle('on', b === btn)); ['qt', 'inv', 'rt', 'edit'].forEach((k) => { $('mine-' + k).hidden = w !== k; }); if (w === 'edit' || w === 'rt') markSeen(w); }
+// Results from accounting the requester hasn't looked at yet: edit requests (done / rejected),
+// receipt requests (issued / rejected — includes receipts issued from a paid INV, which get a row too).
 const SEEN_KEY = 'gc_seen_edits_v1';
-const seenEdits = () => { try { return JSON.parse(localStorage.getItem(SEEN_KEY) || '{}'); } catch { return {}; } };
-const newEdits = () => { const s = seenEdits(); return EDITS.filter((e) => ME && e.requestedBy === ME.email && e.status !== 'new' && s[e.editId] !== e.status); };
-function markEditsSeen() { try { const s = seenEdits(); EDITS.forEach((e) => { if (e.status !== 'new') s[e.editId] = e.status; }); localStorage.setItem(SEEN_KEY, JSON.stringify(s)); } catch {} paintEditNews(); }
-function paintEditNews() {
-  const xs = newEdits();
-  const b = $('mine-edit-n'); if (b) { b.textContent = xs.length; b.hidden = !xs.length; }
+const seenMap = () => { try { return JSON.parse(localStorage.getItem(SEEN_KEY) || '{}'); } catch { return {}; } };
+function newsItems() {
+  if (!ME) return [];
+  const s = seenMap(), mine = (x) => x.requestedBy === ME.email, out = [];
+  EDITS.filter((e) => mine(e) && e.status !== 'new' && s[e.editId] !== e.status).forEach((e) => out.push({ k: e.editId, v: e.status, tab: 'edit',
+    t: `${e.status === 'done' ? '✓ ฝ่ายบัญชีแก้' : '✕ ฝ่ายบัญชีตีกลับคำขอแก้'} ${esc(e.docType)} ${esc(e.docNo)}${e.newDocNo ? ' → ' + esc(e.newDocNo) : ''}${e.accountNote ? ' (' + esc(e.accountNote) + ')' : ''}` }));
+  RTS.filter((r) => mine(r) && (r.status === 'issued' || r.status === 'rejected') && s['rt:' + r.rtRequestId] !== r.status).forEach((r) => out.push({ k: 'rt:' + r.rtRequestId, v: r.status, tab: 'rt',
+    t: r.status === 'issued' ? `✓ ออกใบเสร็จแล้ว ${docLink(r.peakRtNo, r.peakDocLink)} · ${esc(r.billName)}${r.sentStatus === 'waiting' ? ' · รอส่งตัวจริง' : ''}` : `✕ ฝ่ายบัญชีตีกลับคำขอใบเสร็จ ${esc(r.rtRequestId)} · ${esc(r.billName)}${r.accountNote ? ' (' + esc(r.accountNote) + ')' : ''}` }));
+  return out;
+}
+function markSeen(tab) { try { const s = seenMap(); newsItems().filter((x) => !tab || x.tab === tab).forEach((x) => { s[x.k] = x.v; }); localStorage.setItem(SEEN_KEY, JSON.stringify(s)); } catch {} paintNews(); }
+function paintNews() {
+  const xs = newsItems(), n = (t) => xs.filter((x) => x.tab === t).length;
+  [['mine-edit-n', n('edit')], ['mine-rt-n', n('rt')]].forEach(([id, c]) => { const b = $(id); if (b) { b.textContent = c; b.hidden = !c; } });
   let rb = document.getElementById('mine-count');
   if (!rb && $('nav-mine')) { rb = document.createElement('span'); rb.className = 'badge'; rb.id = 'mine-count'; $('nav-mine').appendChild(rb); }
   if (rb) { rb.textContent = xs.length; rb.hidden = !xs.length; }
-  $('mine-news').innerHTML = xs.length ? `<div class="msg ok" style="margin-bottom:12px">🔔 ${xs.map((e) => `${e.status === 'done' ? '✓ ฝ่ายบัญชีแก้' : '✕ ฝ่ายบัญชีตีกลับคำขอแก้'} ${esc(e.docType)} ${esc(e.docNo)}${e.newDocNo ? ' → ' + esc(e.newDocNo) : ''}${e.accountNote ? ' (' + esc(e.accountNote) + ')' : ''}`).join('<br>')}<div style="margin-top:6px"><button class="btn btn-g btn-sm" onclick="markEditsSeen()">รับทราบ</button> <button class="btn btn-o btn-sm" onclick="setMine('edit',document.querySelectorAll('#mine-seg button')[3])">ดูคำขอแก้ไข</button></div></div>` : '';
+  const btn = (t, label, i) => n(t) ? ` <button class="btn btn-o btn-sm" onclick="setMine('${t}',document.querySelectorAll('#mine-seg button')[${i}])">${label}</button>` : '';
+  $('mine-news').innerHTML = xs.length ? `<div class="msg ok" style="margin-bottom:12px">🔔 ${xs.map((x) => x.t).join('<br>')}<div style="margin-top:6px"><button class="btn btn-g btn-sm" onclick="markSeen()">รับทราบ</button>${btn('rt', 'ดูใบเสร็จ', 2)}${btn('edit', 'ดูคำขอแก้ไข', 3)}</div></div>` : '';
 }
 
 async function loadAll() {
@@ -928,7 +938,7 @@ function renderMine() {
     </div>`;
   }).join('') : '<div class="empty">ยังไม่มีคำขอออก INV</div>';
   renderMineMore();
-  paintEditNews();
+  paintNews();
 }
 
 

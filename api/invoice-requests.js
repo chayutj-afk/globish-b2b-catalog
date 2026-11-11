@@ -549,7 +549,9 @@ async function updateReceipt(req, res, user) {
     if (row.sentStatus === 'sent') throw bad('บันทึกว่าส่งแล้ว', 409);
     await hub.updateRow('ReceiptRequests', row._row, { sentStatus: 'sent', sentAt: at, trackingNo: text(b.trackingNo, 60), updatedAt: at });
   } else throw bad('คำสั่งไม่ถูกต้อง');
-  await hub.log('catalog', b.action, row.rtRequestId, `${user.email}${note ? ' · ' + note : ''}`);
+  const tell = { rt_issued: () => `🧾 ออกใบเสร็จแล้ว ${text(b.peakRtNo, 40).toUpperCase()} · ${row.billName} (คำขอ ${row.rtRequestId} ของ ${row.salesName || row.requestedBy})`,
+    rt_reject: () => `↩️ ตีกลับคำขอใบเสร็จ ${row.rtRequestId} · ${row.billName} (ของ ${row.salesName || row.requestedBy})\nเหตุผล: ${note}` }[b.action];
+  await Promise.all([hub.log('catalog', b.action, row.rtRequestId, `${user.email}${note ? ' · ' + note : ''}`), tell ? notify.chat(tell()) : null]);
   res.status(200).json({ ok: true });
 }
 
@@ -630,7 +632,8 @@ async function updateEdit(req, res, user) {
     }
   }
   await hub.writeChecked('EditRequests', 'editId', row, { status: b.action === 'edit_done' ? 'done' : 'rejected', accountNote: note, newDocNo: newNo, doneBy: who, updatedAt: at });
-  await hub.log('catalog', b.action, row.editId, `${user.email} · ${row.docNo}`);
+  await Promise.all([hub.log('catalog', b.action, row.editId, `${user.email} · ${row.docNo}`),
+    notify.chat(b.action === 'edit_done' ? `✅ แก้ ${row.docType} ${row.docNo}${newNo ? ' → ' + newNo : ''} แล้ว · ${row.company} (คำขอของ ${row.salesName || row.requestedBy})` : `↩️ ตีกลับคำขอแก้ ${row.docType} ${row.docNo} · ${row.company} (ของ ${row.salesName || row.requestedBy})\nเหตุผล: ${note}`)]);
   res.status(200).json({ ok: true });
 }
 

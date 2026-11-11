@@ -5,7 +5,7 @@
 const { sendError } = require('../lib/session');
 const { requireUser } = require('../lib/users');
 const hub = require('../lib/hub');
-const { describeWh, describeKeyHS, heroName } = require('../lib/pricing');
+const { describeWh, describeKeyHS, heroName, fullServiceName } = require('../lib/pricing');
 
 let cache = null; // { at, map } per instance, 5 min
 async function services() {
@@ -49,7 +49,7 @@ module.exports = async function handler(req, res) {
       try {
         const wh = (await whPackages()).get(out.code.replace(/_.*$/, ''));
         const lang = new URL(req.url, 'http://x').searchParams.get('lang') === 'EN' ? 'EN' : 'TH';
-        if (wh) out.preview = describeWh(wh, { lang, title: out.name, code: out.code });
+        if (wh) { out.name = fullServiceName(out.name, wh); out.preview = describeWh(wh, { lang, title: out.name, code: out.code }); }
       } catch (e) { console.error('WHPackages read failed', e); }
     }
     return res.status(200).json({ ok: true, ...out });

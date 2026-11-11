@@ -170,10 +170,10 @@ async function create(req, res, user) {
     throw bad(`ยอดรวม INV (${money(prior + asked)}) เกินยอด QT (${money(qtTotal)}) ใส่เหตุผลก่อนส่ง หรือแก้ยอด`);
   }
 
-  const evidenceLink = await drive.upload(b.file, `${batchId} ${r.qtNo} ${r.company}`.slice(0, 120));
+  const evidenceLink = await drive.upload(b.file, { kind: 'inv', docNo: r.qtNo, company: r.company, ref: batchId });
   // Company documents (หนังสือรับรอง / ภ.พ.20), optional.
   const docLinks = [];
-  for (const [i, f] of (Array.isArray(b.docs) ? b.docs : []).entries()) docLinks.push(await drive.upload(f, `${batchId} เอกสารบริษัท ${i + 1} ${r.company}`.slice(0, 120)));
+  for (const [i, f] of (Array.isArray(b.docs) ? b.docs : []).entries()) docLinks.push(await drive.upload(f, { kind: 'company', part: i + 1, docNo: r.taxId, company: r.company, ref: batchId }));
   const evidenceType = r.evidenceType === 'อื่นๆ' ? `อื่นๆ: ${r.evidenceOther}` : r.evidenceType;
   const partial = invoices.length > 1 || prior > 0 || (qtTotal > 0 && Math.abs(asked - qtTotal) > 0.01);
 
@@ -461,7 +461,7 @@ async function createReceipt(req, res, user) {
     }
   }
   const id = shortId('RTREQ');
-  const proof = b.file ? await drive.upload(b.file, `${id} หลักฐานชำระ ${r.billName}`.slice(0, 120)) : '';
+  const proof = b.file ? await drive.upload(b.file, { kind: 'payment', docNo: r.refDoc || r.packages.split(/[ ,]/)[0], company: r.billName, ref: id }) : '';
   const at = hub.sheetDateTime();
   await hub.appendRows('ReceiptRequests', [{ rtRequestId: id, createdAt: at, requestedBy: user.email, salesName: user.name, ...r,
     docKind: RT_KIND[r.docKind], deliveryChannel: RT_CHANNEL[r.deliveryChannel], paidDate: dmy(r.paidDate), paymentProof: proof,

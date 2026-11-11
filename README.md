@@ -49,6 +49,9 @@
 - แชร์ Revenue Hub ให้ `GOOGLE_SERVICE_ACCOUNT_EMAIL` เป็น Editor
 - `AUTH_SECRET` ใช้เซ็น cookie เปลี่ยนค่าแล้วทุกคนต้องเข้าสู่ระบบใหม่
 - `OPERATION_PASSWORD` ไม่ใช้แล้ว ลบออกจาก Vercel ได้
+- PEAK: `PEAK_CONNECT_ID` + `PEAK_PASSWORD` (PEAK ส่งให้ทางอีเมล finance@ สำหรับแอป "Globish Sales Desk"), `PEAK_USER_TOKEN` (สร้างใน PEAK → ตั้งค่า → เชื่อมต่อแอปพลิเคชันภายนอก ด้วย Application Code **ขณะล็อกอินเป็น user ของแอปเอง** เพราะสิทธิ์ของ API = สิทธิ์ของ user นั้น อย่าใช้ token ของแอป "Globish" เดิมปี 2021) แล้วตรวจด้วย `npm run peak-check -- <เลขผู้เสียภาษี>` (อ่านอย่างเดียว) ก่อนเปลี่ยน `PEAK_MODE` จาก `off`
+  - `lib/peak.js` สร้างเอกสารได้เฉพาะ **Draft** (QT และ INV จาก QT) ไม่มีคำสั่งอนุมัติ / void / สร้างผู้ติดต่อ ถ้าไม่ส่ง status PEAK จะอนุมัติให้ทันที โค้ดจึงบังคับ Draft ทุกครั้ง
+  - โควตา API Own-Use 1,000 รายการ/เดือน ใช้ร่วมกันทั้งบัญชี PEAK (รวมแอปเดิม) ฟอร์มค้นข้อมูลจาก PeakContacts / PEAK Services ในชีต และเรียก PEAK เฉพาะตอนสร้างเอกสาร
 - `GCHAT_WEBHOOK_URL` (ไม่บังคับ) incoming webhook ของ Space ฝ่ายบัญชีใน Google Chat
 
 ## ทดสอบในเครื่อง

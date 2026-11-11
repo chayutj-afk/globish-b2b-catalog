@@ -4,10 +4,13 @@
   "version": "1.1.0",
   "description": "2026 B2B Standard Catalog + quotation requests (Google login, Revenue Hub sheet, PEAK)",
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "peak-check": "node scripts/peak-check.js"
   },
   "dependencies": {
     "google-auth-library": "9.15.1"
   },
-  "engines": { "node": ">=18" }
+  "engines": {
+    "node": ">=18"
+  }
 }

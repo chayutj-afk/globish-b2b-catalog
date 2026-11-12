@@ -392,7 +392,7 @@ code{font-size:11px;background:var(--panel-2);padding:2px 5px;border-radius:4px;
 <div id="tab-opgen" class="tab">
 <div style="max-width:860px;margin:0 auto">
   <div class="op-tab-header">🔑 Key.H.S Generator</div>
-  <div class="op-tab-sub">เลือก Hero Product และกรอก Add-ons — ระบบสร้าง Key.H.S อัตโนมัติ</div>
+  <div class="op-tab-sub">เลือก Hero Product และกรอก Add-ons ระบบสร้าง Key.H.S ให้</div>
 
   <div class="info" style="margin-bottom:16px;font-size:12px;line-height:1.9">
     <strong>รูปแบบ Key.H.S:</strong>
@@ -633,7 +633,7 @@ code{font-size:11px;background:var(--panel-2);padding:2px 5px;border-radius:4px;
 
       <!-- ② Key.S Supplementary -->
       <div class="khs-section-sep">🔢 Key.S Supplementary [2]–[15]</div>
-      <div style="font-size:11px;color:var(--gray-500);margin-bottom:8px">ตำแหน่ง Hero จะเป็น <code>HERO</code> อัตโนมัติ — ช่องตัวเลข = tickets/classes, TRUE/0 = เปิด/ปิด</div>
+      <div style="font-size:11px;color:var(--gray-500);margin-bottom:8px">ตำแหน่ง Hero จะเป็น <code>HERO</code> อัตโนมัติ · ช่องตัวเลข = tickets/classes, TRUE/0 = เปิด/ปิด</div>
       <div class="row c3" style="margin-bottom:6px">
         <div class="fg" id="nadd-f-2"><label>[2] Private Class</label><input type="number" id="n-ks-2" placeholder="0" min="0" oninput="onAddHeroChange()"><div class="khs-hero-badge" id="n-ks-h-2" style="display:none">HERO</div></div>
         <div class="fg" id="nadd-f-3"><label>[3] Discussion Class</label><input type="number" id="n-ks-3" placeholder="0" min="0" oninput="onAddHeroChange()"><div class="khs-hero-badge" id="n-ks-h-3" style="display:none">HERO</div></div>
@@ -695,7 +695,7 @@ code{font-size:11px;background:var(--panel-2);padding:2px 5px;border-radius:4px;
       </div>
       <div class="card" style="margin-bottom:14px;border:1.5px solid #86efac;background:#f0fdf4">
         <div class="card-label" style="font-size:13px;text-transform:none;font-weight:700;color:#166534;margin-bottom:8px">🚀 Publish การเปลี่ยนแปลง</div>
-        <div style="font-size:11.5px;color:#166534;margin-bottom:12px;line-height:1.6">การเพิ่ม/ลบ/แก้ package ด้านบนจะอยู่แค่ในแท็บนี้เท่านั้น จนกว่าจะกด Publish — เมื่อ publish สำเร็จ ทุกคนที่เข้าเว็บนี้จะเห็นข้อมูลใหม่ทันทีที่ deploy เสร็จ (~30–60 วิ)</div>
+        <div style="font-size:11.5px;color:#166534;margin-bottom:12px;line-height:1.6">การเพิ่ม/ลบ/แก้ package ด้านบนจะอยู่แค่ในแท็บนี้เท่านั้น จนกว่าจะกด Publish เมื่อ publish สำเร็จ ทุกคนที่เข้าเว็บนี้จะเห็นข้อมูลใหม่ทันทีที่ deploy เสร็จ (~30–60 วิ)</div>
         <button class="btn btn-block" id="save-publish-btn" onclick="savePublish()" style="background:#16a34a;color:#fff;justify-content:center">💾 Save &amp; Publish ขึ้น GitHub</button>
         <div id="publish-status" style="font-size:11.5px;margin-top:8px;line-height:1.6"></div>
         <div style="margin-top:10px;text-align:right">
@@ -709,7 +709,7 @@ code{font-size:11px;background:var(--panel-2);padding:2px 5px;border-radius:4px;
         <button class="btn btn-gray btn-block" onclick="document.getElementById('imp').click()">📤 Import JSON</button>
         <input type="file" id="imp" accept=".json" style="display:none" onchange="importJSON(event)">
         <button class="btn btn-danger btn-block" onclick="if(confirm('Reset ข้อมูลกลับเป็นเวอร์ชันล่าสุดที่ publish ไว้ (ยกเลิกการแก้ไขที่ยังไม่ได้ publish) หรือไม่?'))resetData()">🔄 Reset ข้อมูล</button>
-        <div class="info" style="margin-top:4px">Export JSON เพื่อสำรองข้อมูล · Import เพื่อโหลดกลับมา (ชั่วคราวในแท็บนี้ — อย่าลืมกด Publish ถ้าต้องการให้ติดถาวร)</div>
+        <div class="info" style="margin-top:4px">Export JSON เพื่อสำรองข้อมูล · Import เพื่อโหลดกลับมา (อยู่ในแท็บนี้ชั่วคราว ต้องกด Publish ถ้าต้องการให้ติดถาวร)</div>
       </div>
     </div>
   </div>
@@ -725,7 +725,7 @@ code{font-size:11px;background:var(--panel-2);padding:2px 5px;border-radius:4px;
         <button id="sc-cancel-btn" class="btn btn-gray" style="padding:6px 14px;font-size:12px;display:none" onclick="cancelSurchargeCfg()">❌ ยกเลิก</button>
       </div>
     </div>
-    <div style="font-size:12px;color:var(--gray-500);margin-bottom:14px">กด "แก้ไข" ก่อนเปลี่ยนค่า — กด "บันทึก" เพื่อยืนยัน</div>
+    <div style="font-size:12px;color:var(--gray-500);margin-bottom:14px">กด "แก้ไข" ก่อนเปลี่ยนค่า แล้วกด "บันทึก" เพื่อยืนยัน</div>
     <div style="font-size:12px;font-weight:600;color:var(--gray-700);margin-bottom:8px">Workshop</div>
     <div class="cfg-grid" style="margin-bottom:14px">
       <div class="fg"><label>Non-Native Coach (฿/class)</label><input type="number" id="cfg-ws-nn" value="2000" disabled style="background:var(--gray-100)"></div>
@@ -1367,7 +1367,7 @@ function renderResult(d) {
       </div>
       ${pkg.keyHS ? `
       <div class="res-hs">
-        <div class="res-hs-label">🔑 Key.H.S — บันทึกใน CRM / Pipeline Sheet</div>
+        <div class="res-hs-label">🔑 Key.H.S (บันทึกใน CRM / Pipeline Sheet)</div>
         <div class="res-hs-code" id="hs-code">${pkg.keyHS}</div>
         <button class="res-hs-copy" onclick="copyHS()">📋 คัดลอก Key.H.S</button>
       </div>` : ''}
@@ -1388,7 +1388,7 @@ function fallbackCopy(text) {
   ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
   document.body.appendChild(ta); ta.focus(); ta.select();
   try { document.execCommand('copy'); toast('✅ คัดลอก Key.H.S แล้ว!'); }
-  catch { toast('❌ คัดลอกไม่ได้ — กรุณา copy ด้วยตนเอง'); }
+  catch { toast('❌ คัดลอกไม่ได้ กรุณาคัดลอกเอง'); }
   document.body.removeChild(ta);
 }
 
@@ -1518,7 +1518,7 @@ function editPkg(id) {
       <input type="text" id="edit-pkg-id-input" value="${pkg.id}">
     </div>
     <div class="warn" style="margin-bottom:14px;font-size:12px">
-      💡 แก้ไขได้ทั้ง <strong>Package ID</strong> และ <strong>ราคา</strong> — หากต้องการแก้ข้อมูลอื่น (เช่น Coach Region, Hero Product) ให้ <strong>Export JSON → แก้ไข → Import</strong> กลับเข้าระบบ
+      💡 แก้ไขได้ทั้ง <strong>Package ID</strong> และ <strong>ราคา</strong> ถ้าต้องการแก้ข้อมูลอื่น (เช่น Coach Region, Hero Product) ให้ <strong>Export JSON → แก้ไข → Import</strong> กลับเข้าระบบ
     </div>
     ${priceSection}`;
   document.getElementById('edit-modal').style.display = 'flex';
@@ -1954,7 +1954,7 @@ function importJSON(e) {
     try {
       PKGS = JSON.parse(ev.target.result);
       renderStats(); renderProdGrid();
-      toast(`✅ Import สำเร็จ — ${PKGS.length} แพ็กเกจ`);
+      toast(`✅ Import สำเร็จ ${PKGS.length} แพ็กเกจ`);
     } catch { toast('❌ ไฟล์ JSON ไม่ถูกต้อง'); }
   };
   reader.readAsText(file);
@@ -2008,7 +2008,7 @@ async function savePublish() {
     if (resp.ok && data && data.ok) {
       INITIAL_PACKAGES = JSON.parse(JSON.stringify(PKGS));
       toast(`✅ Publish สำเร็จ! (${data.count} แพ็กเกจ)`);
-      statusEl.textContent = `✅ Publish สำเร็จเมื่อ ${new Date().toLocaleTimeString('th-TH')} — รอ Vercel deploy ประมาณ 30-60 วินาทีแล้วรีเฟรชหน้าเว็บเพื่อยืนยัน`;
+      statusEl.textContent = `✅ Publish สำเร็จเมื่อ ${new Date().toLocaleTimeString('th-TH')} รอประมาณ 30–60 วินาทีแล้วรีเฟรชหน้าเว็บ`;
     } else if (resp.status === 401) {
       alert('❌ เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่');
       location.href = '/signin.html';

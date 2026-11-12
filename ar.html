@@ -96,7 +96,7 @@ table.sum tr.tot td{font-weight:500;color:var(--head)}
     <div class="card"><h2>ออก INV และเงินเข้ารายเดือน (12 เดือน)</h2><p class="hint">ยอด INV ก่อน VAT ไม่นับเอกสารยกเลิก / เปลี่ยนเอกสาร</p><div class="wrap" id="months"></div></div>
     <div class="card"><h2>ค้างรับแยกตามเซล</h2><div class="wrap" id="bysales"></div></div>
     <div class="card" id="imp" hidden><h2>นำเข้าข้อมูลจากชีทเดิม (ผู้ดูแลเท่านั้น)</h2>
-      <p class="hint">ใช้ครั้งเดียวตอนย้ายระบบ: ไฟล์ .json ที่ Claude เตรียมจากชีท Debt (INV + ประวัติติดตาม) หรือ QT จาก PEAK ระบบข้ามรายการที่มีอยู่แล้ว นำเข้าซ้ำได้ไม่เกิดข้อมูลซ้ำ</p>
+      <p class="hint">ใช้ครั้งเดียวตอนย้ายระบบ: นำเข้าไฟล์ .json ของ INV และประวัติติดตามจากชีท Debt หรือ QT จาก PEAK รายการที่มีอยู่แล้วจะถูกข้าม จึงนำเข้าซ้ำได้</p>
       <input type="file" id="imp-file" accept=".json,application/json"> <button class="btn btn-p btn-sm" id="imp-go" type="button">นำเข้า</button>
       <div id="imp-msg"></div></div>
   </section>
@@ -205,7 +205,7 @@ const opt = (list, v, blank) => (blank ? `<option value="">${blank}</option>` : 
 function detail(r) {
   const id = esc(r.ivNo);
   const kv = (k, v) => v ? `<div><span>${k}</span>${v}</div>` : '';
-  const fu = (r.followUps || []).slice().reverse().map((f) => `<div><b>${esc(f.loggedAt)}</b> · ${esc(f.channel)} · ${esc(f.result)}${f.nextActionDate ? ' · นัด ' + esc(f.nextActionDate) : ''}<br><span class="small">${esc(f.by)}${f.note ? ' — ' + esc(f.note) : ''}</span></div>`).join('') || '<div class="small">ยังไม่มีบันทึก</div>';
+  const fu = (r.followUps || []).slice().reverse().map((f) => `<div><b>${esc(f.loggedAt)}</b> · ${esc(f.channel)} · ${esc(f.result)}${f.nextActionDate ? ' · นัด ' + esc(f.nextActionDate) : ''}<br><span class="small">${esc(f.by)}${f.note ? ' · ' + esc(f.note) : ''}</span></div>`).join('') || '<div class="small">ยังไม่มีบันทึก</div>';
   const paid = r.state === 'Paid', closed = r.state === 'Closed';
   return `<tr class="det"><td colspan="8">
     <div class="acts">${!CAN_EDIT ? '<span class="small">ดูอย่างเดียว</span>' : `

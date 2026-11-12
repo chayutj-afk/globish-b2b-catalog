@@ -27,7 +27,7 @@ details{margin-top:8px;font-size:13px;color:var(--muted)}
 <header class="top"><h1 id="page-title">นำเข้ารายชื่อลูกค้า PEAK</h1><div class="top-r" id="top-r"></div></header>
 <script src="/shell.js"></script>
 <main>
-  <p class="sub">สร้างแท็บ PeakContacts ใน Revenue Hub ใหม่จากไฟล์ export ของ PEAK เพื่อให้ฟอร์มขอ QT เติมรหัสลูกค้าจากเลขผู้เสียภาษี 13 หลักได้ (สำหรับฝ่ายบัญชี / Admin)</p>
+  <p class="sub">อัปเดตรายชื่อลูกค้า (แท็บ PeakContacts) จากไฟล์ export ของ PEAK ฟอร์มขอ QT ใช้รายชื่อนี้เติมรหัสลูกค้าจากเลขผู้เสียภาษี</p>
 
   <div class="card">
     <b>วิธี export จาก PEAK</b>
@@ -43,7 +43,7 @@ details{margin-top:8px;font-size:13px;color:var(--muted)}
   <div class="card" id="preview" hidden>
     <b>ตรวจก่อนนำเข้า</b>
     <table id="stats"></table>
-    <label class="chk"><input type="checkbox" id="indiv" onchange="render()"><span>รวม <b>บุคคลธรรมดา</b> ด้วย (เลขบัตรประชาชน) — ปกติไม่ต้อง: ลูกค้า B2B/B2E/B2S ส่วนใหญ่เป็นนิติบุคคล และไม่ควรคัดลอกเลขบัตรประชาชนของผู้เรียนรายบุคคลไปไว้หลายที่</span></label>
+    <label class="chk"><input type="checkbox" id="indiv" onchange="render()"><span>รวม <b>บุคคลธรรมดา</b> ด้วย (เลขบัตรประชาชน) ปกติไม่ต้องติ๊ก เพราะลูกค้า B2B/B2E/B2S ส่วนใหญ่เป็นนิติบุคคล และไม่ควรเก็บเลขบัตรประชาชนของผู้เรียนซ้ำหลายที่</span></label>
     <details id="dups"></details>
     <p style="margin-top:14px"><button class="btn" id="go" onclick="doImport()" disabled>นำเข้า</button></p>
     <div id="result"></div>

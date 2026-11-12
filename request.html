@@ -958,7 +958,7 @@ function payNoticeLine(v) {
 async function openPayNotice(id) {
   const v = IVS.find((x) => x.ivRequestId === id); if (!v) return;
   const exp = v.ar && v.ar.expected;
-  const ok = await ask({ title: `💰 แจ้งลูกค้าจ่าย ${v.peakIvNo}`, ok: 'แจ้งฝ่ายบัญชี', html: `<p><b>${esc(v.company)}</b>${exp ? `<br><span class="small">ยอดที่ควรได้รับ ${fmt(exp)} บาท (รวม VAT หัก ณ ที่จ่ายแล้ว)</span>` : ''}</p>
+  const ok = await ask({ title: `💰 แจ้งบัญชีว่าลูกค้าจ่าย ${v.peakIvNo} แล้ว`, ok: 'ส่งให้ฝ่ายบัญชี', html: `<p><b>${esc(v.company)}</b>${exp ? `<br><span class="small">ยอดที่ควรได้รับ ${fmt(exp)} บาท (รวม VAT หัก ณ ที่จ่ายแล้ว)</span>` : ''}</p>
     <div class="row"><div class="fg"><label>วันที่ลูกค้าโอน *</label><input id="pn-dt" type="date"></div><div class="fg"><label>ยอดที่โอน *</label><input id="pn-am" type="number" step="0.01" min="0" value="${exp || ''}"></div></div>
     <div class="row"><div class="fg"><label>วิธีชำระ *</label><select id="pn-mt">${PAY_METHODS.map((m) => `<option value="${m}">${PAY_METHOD_TH[m]}</option>`).join('')}</select></div><div class="fg"><label>สลิป / หลักฐาน *</label><input id="pn-file" type="file" accept=".pdf,.jpg,.jpeg,.png"></div></div>
     <div class="row"><div class="fg"><label>ส่งใบเสร็จทาง *</label><select id="pn-ch" onchange="$('pn-em-w').hidden=!/email/.test(this.value);$('pn-ad-w').hidden=!/post/.test(this.value)"><option value="sales">ส่งไฟล์ให้ Sales</option><option value="email">ส่งอีเมลลูกค้า</option><option value="post">ส่งตัวจริงตามที่อยู่</option><option value="email_post">ส่งอีเมลและตัวจริง</option></select></div>
@@ -1018,7 +1018,7 @@ function renderMine() {
       <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
         ${canOrig && v.originalStatus !== 'requested' ? `<button class="btn btn-o btn-sm" onclick="openOrig('${esc(v.ivRequestId)}')">📮 ลูกค้าขอตัวจริง</button>` : ''}
         ${canOrig && v.originalStatus !== 'not_needed' ? `<button class="btn btn-g btn-sm" onclick="setOrig('${esc(v.ivRequestId)}','no')">ไม่ต้องส่งตัวจริง</button>` : ''}
-        ${canPayNotice(v) ? `<button class="btn btn-o btn-sm" onclick="openPayNotice('${esc(v.ivRequestId)}')">💰 แจ้งลูกค้าจ่ายแล้ว</button>` : ''}
+        ${canPayNotice(v) ? `<button class="btn btn-o btn-sm" onclick="openPayNotice('${esc(v.ivRequestId)}')">💰 แจ้งบัญชีว่าลูกค้าจ่ายแล้ว</button>` : ''}
         ${v.peakIvNo && v.status === 'iv_issued' && !(v.ar && (v.ar.rtNo || v.ar.paidDate)) && !RTS.some((r) => String(r.refDoc || '').toUpperCase() === String(v.peakIvNo).toUpperCase() && r.status !== 'rejected') ? `<button class="btn btn-g btn-sm" onclick="askEdit('INV','${esc(v.peakIvNo)}','${esc(v.ivRequestId)}')">✏️ ขอแก้ไข INV</button>` : ''}
       </div>
       <div id="orig-${esc(v.ivRequestId)}"></div>

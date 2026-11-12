@@ -457,7 +457,7 @@ async function arUpdate(req, res, user) {
 
 // ---------------------------------------------------------------- payment notices (เงินเข้า)
 // Two ways accounting learns a customer paid an INV:
-//   1. customer → Sales → "แจ้งลูกค้าจ่ายแล้ว" (slip required) → accounting / collector confirms against the bank
+//   1. customer → Sales → "แจ้งบัญชีว่าลูกค้าจ่ายแล้ว" (slip required) → accounting / collector confirms against the bank
 //   2. customer → accounting directly → "บันทึกรับเงิน" on /ar (slip optional)
 // Both end in Invoices paidDate/paidAmount/paymentMethod, then the RT queue. An INV is paid once (no instalments).
 const canConfirmPay = (u) => can(u, 'approve') || can(u, 'ar');
@@ -500,7 +500,7 @@ async function createPayNotice(req, res, user) {
     note: text(b.note, 500), status: 'new', source: 'sales', accountNote: '', doneBy: '', updatedAt: at }]);
   const exp = ar.enrich(a, ar.todayMs()).expected;
   await Promise.all([hub.log('catalog', 'pay_notice', id, `${user.email} · ${ivNo} · ${amount}`),
-    notify.chat([`💰 แจ้งลูกค้าจ่ายแล้ว ${ivNo} · ${a.company} จาก ${user.name || user.email}`,
+    notify.chat([`💰 ${user.name || user.email} แจ้งว่าลูกค้าจ่าย ${ivNo} แล้ว · ${a.company}`,
       `โอน ${money(amount)} เมื่อ ${paidDate} · ${method}${Math.abs(exp - amount) > 1 ? ` · ⚠️ ที่ควรได้รับ ${money(exp)}` : ''}`,
       'ตรวจเงินเข้าแล้วกดยืนยันที่หน้าติดตามหนี้'].join('\n'))]);
   res.status(200).json({ ok: true, noticeId: id, message: 'แจ้งฝ่ายบัญชีแล้ว รอตรวจเงินเข้า' });

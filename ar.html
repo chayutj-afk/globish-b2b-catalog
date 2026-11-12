@@ -299,16 +299,27 @@ function rejectNotice(id) {
 const readB64 = (file) => new Promise((ok, no) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(',')[1] || ''); fr.onerror = () => no(new Error('อ่านไฟล์ไม่สำเร็จ')); fr.readAsDataURL(file); });
 function openPaid(iv) {
   const r = find(iv), L = D.lists, paid = r.state === 'Paid';
+  const mOpts = L.payMethods.map((m) => `<option value="${esc(m)}"${m === (r.paymentMethod || 'Bank Transfer') ? ' selected' : ''}>${esc(METHOD_TH[m] || m)}</option>`).join('');
+  // Same fields, same order as the Sales form 'แจ้งบัญชีว่าลูกค้าจ่ายแล้ว'; slip optional here, plus the delay reason.
   formModal({ title: paid ? '💰 แก้ไขการรับเงิน' : '💰 บันทึกรับเงิน', ok: '✓ บันทึกรับเงิน', html: head(r) + `
     <div class="row"><div class="fg"><label>วันที่รับเงิน *</label><input type="date" id="pd-dt" value="${iso(r.paidDate)}"></div>
-    <div class="fg"><label>ยอดที่ได้รับ *</label><input type="text" inputmode="decimal" id="pd-am" value="${r.paidAmount ? esc(r.paidAmount) : r.expected}"><div class="sub">ที่ควรได้รับ ${fmt(r.expected)} (รวม VAT หัก WHT)</div></div></div>
-    <div class="row"><div class="fg"><label>วิธีชำระ *</label><select id="pd-mt">${opt(L.payMethods, r.paymentMethod, '— เลือก —')}</select></div>
-    <div class="fg"><label>เหตุผลที่จ่ายช้า (ถ้ามี)</label><select id="pd-dl">${opt(L.delay, r.delayReason, '—')}</select></div></div>
-    ${paid ? '' : '<div class="fg"><label>สลิป / หลักฐาน (ถ้ามี)</label><input type="file" id="pd-file" accept=".pdf,.jpg,.jpeg,.png"></div>'}
+    <div class="fg"><label>ยอดที่ได้รับ *</label><input type="text" inputmode="decimal" id="pd-am" value="${r.paidAmount ? esc(r.paidAmount) : r.expected}"><div class="sub">ที่ควรได้รับ ${fmt(r.expected)} (รวม VAT หัก ณ ที่จ่ายแล้ว)</div></div></div>
+    <div class="row"><div class="fg"><label>วิธีชำระ *</label><select id="pd-mt">${mOpts}</select></div>
+    ${paid ? '' : '<div class="fg"><label>สลิป / หลักฐาน (ถ้ามี)</label><input type="file" id="pd-file" accept=".pdf,.jpg,.jpeg,.png"></div>'}</div>
+    ${paid ? '' : `<div class="row"><div class="fg"><label>ส่งใบเสร็จทาง *</label><select id="pd-ch" onchange="$('pd-em-w').hidden=!/email/.test(this.value);$('pd-ad-w').hidden=!/post/.test(this.value)"><option value="sales">ส่งไฟล์ให้ Sales</option><option value="email">ส่งอีเมลลูกค้า</option><option value="post">ส่งตัวจริงตามที่อยู่</option><option value="email_post">ส่งอีเมลและตัวจริง</option></select></div>
+    <div class="fg" id="pd-em-w" hidden><label>อีเมลลูกค้า *</label><input type="email" id="pd-em" maxlength="120" value="${esc(r.financeEmail || '')}"></div></div>
+    <div class="fg" id="pd-ad-w" hidden><label>ที่อยู่ส่งตัวจริง *</label><input type="text" id="pd-ad" maxlength="600" value="${esc(r.deliveryAddress || '')}"></div>
+    <div class="fg"><label>หมายเหตุ</label><input type="text" id="pd-nt" maxlength="500" placeholder="เช่น ลูกค้าโอนรวมค่าธรรมเนียม"></div>`}
+    <div class="fg"><label>เหตุผลที่จ่ายช้า (ถ้ามี)</label><select id="pd-dl">${opt(L.delay, r.delayReason, '—')}</select></div>
     <p class="small">ใบเสร็จ (RT) ฝ่ายบัญชีออกจาก INV นี้ได้หลังบันทึกรับเงิน ที่หน้า รออนุมัติ › ใบเสร็จ${PN.some((n) => n.status === 'new' && String(n.ivNo).toUpperCase() === String(iv).toUpperCase()) ? ' · <b>เซลแจ้งจ่าย INV นี้ไว้แล้ว</b> ยืนยันจากรายการด้านบนจะได้ข้อมูลและสลิปที่เซลแนบ' : ''}</p>`,
     save: async (err) => {
       const body = { action: 'ar_update', ivNo: iv, paidDate: val('pd-dt'), paidAmount: val('pd-am'), paymentMethod: val('pd-mt'), delayReason: val('pd-dl') };
       if (!body.paidDate || !body.paidAmount || !body.paymentMethod) { err('ใส่วันที่รับเงิน ยอด และวิธีชำระ'); return false; }
+      if (!paid) {
+        Object.assign(body, { deliveryChannel: val('pd-ch'), email: val('pd-em'), deliveryAddress: val('pd-ad'), payNote: val('pd-nt') });
+        if (/email/.test(body.deliveryChannel) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) { err('ใส่อีเมลลูกค้าสำหรับส่งใบเสร็จ'); return false; }
+        if (/post/.test(body.deliveryChannel) && !body.deliveryAddress) { err('ใส่ที่อยู่ส่งใบเสร็จตัวจริง'); return false; }
+      }
       const diff = toNum(body.paidAmount) - r.expected;
       if (Math.abs(diff) > 1 && !confirmDiff) { confirmDiff = true; err(`ยอดต่างจากที่ควรได้รับ ${fmt(r.expected)} อยู่ ${fmt(diff)} บาท กดบันทึกอีกครั้งเพื่อยืนยัน`); return false; }
       confirmDiff = false;

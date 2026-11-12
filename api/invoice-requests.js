@@ -394,13 +394,15 @@ function summarise(all, today) {
 
 async function arList(req, res, user) {
   if (!can(user, 'ar_view')) throw bad('ไม่มีสิทธิ์ดูหน้าติดตามหนี้', 403);
-  const [rows, fus] = await Promise.all([hub.readTable('Invoices'), hub.readTable('FollowUps')]);
+  const [rows, fus, ivreqs] = await Promise.all([hub.readTable('Invoices'), hub.readTable('FollowUps'), hub.readTable('InvoiceRequests').catch(() => [])]);
   const today = ar.todayMs();
+  // Customer contact from the INV request, to prefill where the receipt goes.
+  const contact = new Map(ivreqs.map((v) => [v.ivRequestId, { financeEmail: v.financeEmail || '', deliveryAddress: v.originalAddress || v.deliveryAddress || '' }]));
   const all = rows.filter((r) => r.ivNo).map((r) => ({ ...ar.enrich(r, today), preVatN: ar.num(r.preVat) }));
   const byIv = new Map();
   for (const f of fus) { if (!byIv.has(f.ivNo)) byIv.set(f.ivNo, []); byIv.get(f.ivNo).push(f); }
   const keep = all.filter((r) => r.state === 'Outstanding' || r.state === 'Overdue' || (r.paidMs !== null && r.paidMs >= today - 120 * 86400e3) || (r.issueMs !== null && r.issueMs >= today - 120 * 86400e3));
-  const out = keep.map(({ _row, issueMs, dueMs, paidMs, preVatN, ...r }) => ({ ...r, followUps: (byIv.get(r.ivNo) || []).slice(-20).map(({ _row: x, ...f }) => f) }));
+  const out = keep.map(({ _row, issueMs, dueMs, paidMs, preVatN, ...r }) => ({ ...r, ...(contact.get(r.ivRequestId) || {}), followUps: (byIv.get(r.ivNo) || []).slice(-20).map(({ _row: x, ...f }) => f) }));
   res.status(200).json({ ok: true, summary: summarise(all, today), invoices: out, total: all.length,
     lists: { docStatus: ar.DOC_STATUS, payMethods: ar.PAY_METHODS, channels: ar.CHANNELS, follow: ar.FOLLOW, delay: ar.DELAY } });
 }
@@ -445,11 +447,21 @@ async function arUpdate(req, res, user) {
     if (f.paidDate && !(f.paymentMethod || row.paymentMethod)) throw bad('เลือกวิธีชำระเงิน');
     if (!Object.keys(f).length) throw bad('ไม่มีข้อมูลที่จะบันทึก');
     const newlyPaid = !!f.paidDate && !row.paidDate;
+    // Receipt delivery for a new payment: checked before anything is saved.
+    let delivery = null;
+    if (newlyPaid) {
+      const ch = text(b.deliveryChannel, 20) || 'sales';
+      if (!PAY_CHANNELS.includes(ch)) throw bad('เลือกช่องทางส่งใบเสร็จ');
+      const email = text(b.email, 120), addr = text(b.deliveryAddress, 600);
+      if (needsEmail(ch) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw bad('ใส่อีเมลลูกค้าสำหรับส่งใบเสร็จ');
+      if (needsPost(ch) && !addr) throw bad('ใส่ที่อยู่ส่งใบเสร็จตัวจริง');
+      delivery = { deliveryChannel: ch, email, deliveryAddress: addr, note: text(b.payNote, 500) };
+    }
     // Optional slip when the customer told accounting directly.
     const slip = newlyPaid && b.file ? await drive.upload(b.file, { kind: 'payment', docNo: row.ivNo, company: row.company, ref: row.ivNo }) : '';
     await hub.updateRow('Invoices', row._row, f);
     await hub.log('catalog', 'ar_update', ivNo, `${user.email} · ${Object.keys(f).join(',')}`);
-    if (newlyPaid) await paidDirectly(row, f, slip, user);
+    if (newlyPaid) await paidDirectly(row, f, slip, user, delivery);
     return res.status(200).json({ ok: true });
   }
   throw bad('คำสั่งไม่ถูกต้อง');
@@ -544,7 +556,7 @@ async function updatePayNotice(req, res, user) {
 
 // Accounting recorded the payment on /ar (customer told them directly): close any Sales notice for
 // that INV, keep one PaymentNotices row as the record (with the slip if attached), and tell Sales.
-async function paidDirectly(row, f, slip, user) {
+async function paidDirectly(row, f, slip, user, d = {}) {
   const notices = await hub.readTable('PaymentNotices');
   const ivNo = String(row.ivNo).toUpperCase(), at = hub.sheetDateTime(), who = user.name || user.email;
   for (const n of notices.filter((x) => String(x.ivNo).toUpperCase() === ivNo && x.status === 'new')) {
@@ -552,7 +564,7 @@ async function paidDirectly(row, f, slip, user) {
   }
   await hub.appendRows('PaymentNotices', [{ noticeId: shortId('PAY'), createdAt: at, requestedBy: user.email, salesName: who, ivRequestId: row.ivRequestId || '', ivNo,
     company: row.company, paidDate: f.paidDate, amount: f.paidAmount || row.paidAmount, paymentMethod: f.paymentMethod || row.paymentMethod, slipLink: slip,
-    deliveryChannel: '', email: '', deliveryAddress: '', note: '', status: 'confirmed', source: 'accounting', accountNote: 'ลูกค้าแจ้งฝ่ายบัญชีโดยตรง', doneBy: who, updatedAt: at }]);
+    deliveryChannel: d.deliveryChannel || '', email: d.email || '', deliveryAddress: d.deliveryAddress || '', note: d.note || '', status: 'confirmed', source: 'accounting', accountNote: 'ลูกค้าแจ้งฝ่ายบัญชีโดยตรง', doneBy: who, updatedAt: at }]);
   await notify.chat(`💰 ลูกค้าจ่ายแล้ว ${ivNo} · ${row.company} ${money(f.paidAmount || row.paidAmount)} (บัญชีบันทึก${row.salesName ? ` · แจ้ง ${row.salesName}` : ''}) · รอออกใบเสร็จ`);
 }
 

@@ -137,10 +137,9 @@
 
   <div class="card">
     <h2>4. การวางบิลและผู้ติดต่อฝ่ายการเงินของลูกค้า</h2>
-    <div class="row c3">
+    <div class="row">
       <div class="fg"><label>ลูกค้าต้องใช้ PO ในการวางบิลไหม *</label><select id="i-poneed"><option value="">— เลือก —</option><option value="yes">ใช่ ต้องมี PO</option><option value="no">ไม่ต้องใช้</option><option value="unknown">ยังไม่ทราบ</option></select></div>
       <div class="fg"><label>รอบจ่ายเงินของลูกค้า</label><input id="i-paycycle" type="text" maxlength="120" placeholder="เช่น จ่ายทุกวันที่ 25 / วางบิลทุกวันศุกร์"></div>
-      <div class="fg"><label>หนังสือรับรอง / ภ.พ.20 (ถ้ามี)</label><input id="i-docs" type="file" accept=".pdf,.jpg,.jpeg,.png" multiple><div class="sub">ไม่เกิน 2 ไฟล์ · รวมกับไฟล์หลักฐานไม่เกิน 3 MB</div></div>
     </div>
     <div class="row c3">
       <div class="fg"><label>ชื่อ *</label><input id="i-fin-name" type="text" maxlength="120"></div>
@@ -857,31 +856,27 @@ async function submitINV() {
   }
   if (!body.poNeeded) return msg('i-msg', 'err', 'เลือกว่าลูกค้าต้องใช้ PO ในการวางบิลไหม');
   if (!body.financeContact || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.financeEmail) || !/\d{9,}/.test(body.financePhone.replace(/\D/g, ''))) return msg('i-msg', 'err', 'ใส่ชื่อ อีเมล และเบอร์โทรผู้ติดต่อฝ่ายการเงินของลูกค้าให้ครบ');
-  if ($('i-docs').files.length > 2) return msg('i-msg', 'err', 'แนบหนังสือรับรอง / ภ.พ.20 ได้ไม่เกิน 2 ไฟล์');
   if (!$('i-off-wrap').hidden && !body.offReason) return msg('i-msg', 'err', 'เลือก QT จากระบบ หรือใส่เหตุผลที่ใช้ QT นอกระบบ');
   if (!$('i-over-wrap').hidden && !body.overReason) return msg('i-msg', 'err', 'ยอดรวมเกิน QT ใส่เหตุผลก่อนส่ง');
   if (f.size > 3 * 1024 * 1024) return msg('i-msg', 'err', 'ไฟล์ใหญ่เกิน 3 MB ลองย่อหรือแปลงเป็น PDF ก่อน');
-  const docs = [...$('i-docs').files];
-  if (f.size + docs.reduce((t, x) => t + x.size, 0) > 3 * 1024 * 1024) return msg('i-msg', 'err', 'ไฟล์หลักฐานรวมกับหนังสือรับรอง / ภ.พ.20 ใหญ่เกิน 3 MB ลองย่อไฟล์ก่อน');
   const sum = INVS.reduce((s, x) => s + toNum(x.amountPreVat), 0);
   const ok = await ask({ title: 'ยืนยันส่งคำขอออก INV', ok: '📨 ส่งคำขอ', html: `<table>
     <tr><td>QT</td><td><b>${esc(body.qtNo)}</b> · ${esc(body.company)}</td></tr>
     <tr><td>จำนวน INV</td><td>${INVS.length} ใบ · รวม${invBasis()} <b>${fmt(sum)}</b></td></tr>
     ${INVS.map((x, i) => `<tr><td>ใบที่ ${i + 1}</td><td>${fmt(toNum(x.amountPreVat))} · ${esc(x.students)} ผู้เรียน · วันที่ ${esc(x.wantedIssueDate)} · เครดิต ${esc(x.creditTermDays)} วัน${x.billTo === 'other' ? ' · ออกในนาม ' + esc(x.company) : ''}</td></tr>`).join('')}
     <tr><td>หัก ณ ที่จ่าย</td><td>${whtText(body.whtRate)}</td></tr>
-    <tr><td>หลักฐาน</td><td>${esc(body.evidenceType)} · ${esc(f.name)}${docs.length ? ` + เอกสารบริษัท ${docs.length} ไฟล์` : ''}</td></tr>
+    <tr><td>หลักฐาน</td><td>${esc(body.evidenceType)} · ${esc(f.name)}</td></tr>
     <tr><td>วางบิล</td><td>${{ yes: 'ต้องใช้ PO', no: 'ไม่ต้องใช้ PO', unknown: 'ยังไม่ทราบเรื่อง PO' }[body.poNeeded]}${body.payCycle ? ' · ' + esc(body.payCycle) : ''}</td></tr></table>` });
   if (!ok) return;
   const btn = $('i-submit'); btn.disabled = true; msg('i-msg', '', '');
   try {
     body.file = { name: f.name, type: f.type, data: await readFileB64(f) };
-    if (docs.length) body.docs = await Promise.all(docs.map(async (x) => ({ name: x.name, type: x.type, data: await readFileB64(x) })));
     const d = await withLoading('กำลังส่งคำขอ INV และอัปโหลดไฟล์…', () => postChecked('/api/invoice-requests', body, true), 'อัปโหลดไฟล์อาจใช้เวลา 5–15 วินาที อย่าปิดหน้านี้');
     if (!d) { msg('i-msg', 'info', 'ยังไม่ได้ส่ง ดูคำขอเดิมได้ที่ "คำขอของฉัน"'); return; }
     INV_DIRTY = false;
     $('i-msg').innerHTML = `<div class="done-card"><b>✓ ส่งคำขอ ${esc(d.batchId)} (${d.ivRequestIds.length} ใบ) แล้ว</b><div style="margin:6px 0 10px">${d.remaining !== null && d.remaining !== undefined ? `QT คงเหลือ ${fmt(d.remaining)} · ` : ''}${esc(d.message)}</div><button class="btn btn-o btn-sm" onclick="go('mine');setMine('inv',document.querySelectorAll('#mine-seg button')[1])">ดูสถานะในคำขอของฉัน</button></div>`;
     ['i-req', 'i-qt', 'i-seg', 'i-wht', 'i-opp-y', 'i-opp-n', 'i-company', 'i-tax', 'i-branch', 'i-evother', 'i-fin-name', 'i-fin-email', 'i-fin-phone', 'i-note', 'i-over', 'i-off', 'i-poneed', 'i-paycycle'].forEach((id) => { $(id).value = ''; }); paintOpp('i');
-    $('i-file').value = ''; $('i-docs').value = ''; $('i-qt').readOnly = false; $('i-seg').disabled = false; onInvSeg(); $('i-qt-hint').textContent = ''; INVS = [blankInv()]; renderInvs(); taxHint('i');
+    $('i-file').value = ''; $('i-qt').readOnly = false; $('i-seg').disabled = false; onInvSeg(); $('i-qt-hint').textContent = ''; INVS = [blankInv()]; renderInvs(); taxHint('i');
     loadAll();
   } catch (e) { msg('i-msg', 'err', e.message); }
   finally { btn.disabled = false; }

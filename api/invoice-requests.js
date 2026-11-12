@@ -442,11 +442,122 @@ async function arUpdate(req, res, user) {
     if (f.paidDate && !(f.paidAmount || ar.num(row.paidAmount))) throw bad('ใส่ยอดเงินที่ได้รับ');
     if (f.paidDate && !(f.paymentMethod || row.paymentMethod)) throw bad('เลือกวิธีชำระเงิน');
     if (!Object.keys(f).length) throw bad('ไม่มีข้อมูลที่จะบันทึก');
+    const newlyPaid = !!f.paidDate && !row.paidDate;
+    // Optional slip when the customer told accounting directly.
+    const slip = newlyPaid && b.file ? await drive.upload(b.file, { kind: 'payment', docNo: row.ivNo, company: row.company, ref: row.ivNo }) : '';
     await hub.updateRow('Invoices', row._row, f);
     await hub.log('catalog', 'ar_update', ivNo, `${user.email} · ${Object.keys(f).join(',')}`);
+    if (newlyPaid) await paidDirectly(row, f, slip, user);
     return res.status(200).json({ ok: true });
   }
   throw bad('คำสั่งไม่ถูกต้อง');
+}
+
+// ---------------------------------------------------------------- payment notices (เงินเข้า)
+// Two ways accounting learns a customer paid an INV:
+//   1. customer → Sales → "แจ้งลูกค้าจ่ายแล้ว" (slip required) → accounting / collector confirms against the bank
+//   2. customer → accounting directly → "บันทึกรับเงิน" on /ar (slip optional)
+// Both end in Invoices paidDate/paidAmount/paymentMethod, then the RT queue. An INV is paid once (no instalments).
+const canConfirmPay = (u) => can(u, 'approve') || can(u, 'ar');
+const PAY_CHANNELS = ['sales', 'email', 'post', 'email_post'];
+
+async function createPayNotice(req, res, user) {
+  checkOrigin(req);
+  if (!can(user, 'request')) throw bad('ไม่มีสิทธิ์', 403);
+  const b = req.body || {};
+  const [ivreqs, invs, notices] = await Promise.all([hub.readTable('InvoiceRequests'), hub.readTable('Invoices'), hub.readTable('PaymentNotices')]);
+  const iv = ivreqs.find((x) => x.ivRequestId === text(b.ivRequestId, 60));
+  const sees = await visibility(user);
+  if (!iv || !sees(iv.requestedBy)) throw bad('ไม่พบ INV นี้', 404);
+  if (iv.status !== 'iv_issued' || !iv.peakIvNo) throw bad('INV นี้ยังไม่ได้ออก แจ้งจ่ายได้หลังฝ่ายบัญชีออก INV แล้ว', 409);
+  const ivNo = String(iv.peakIvNo).toUpperCase();
+  const a = invs.find((x) => x.ivRequestId === iv.ivRequestId) || invs.find((x) => String(x.ivNo).toUpperCase() === ivNo);
+  if (!a) throw bad('INV นี้ยังไม่อยู่ในหน้าติดตามหนี้ รอระบบอัปเดตแล้วลองใหม่ หรือแจ้งฝ่ายบัญชี', 409);
+  if (a.docStatus === 'Cancelled' || a.docStatus === 'Replaced') throw bad('INV นี้ถูกยกเลิก / เปลี่ยนเอกสารแล้ว', 409);
+  if (a.paidDate) throw bad(`ฝ่ายบัญชีบันทึกรับเงิน INV นี้แล้ว (${a.paidDate})`, 409);
+  const open = notices.find((x) => String(x.ivNo).toUpperCase() === ivNo && x.status === 'new');
+  if (open) throw bad(`แจ้งจ่าย INV นี้ไปแล้ว รอฝ่ายบัญชีตรวจ (${open.noticeId})`, 409);
+  const paidDate = dmy(text(b.paidDate, 10));
+  if (!paidDate || !ar.parseDate(paidDate)) throw bad('ใส่วันที่ลูกค้าโอน');
+  if (ar.parseDate(paidDate) > ar.todayMs() + 86400e3) throw bad('วันที่โอนอยู่ในอนาคต');
+  const amount = Number(String(b.amount ?? '').replace(/,/g, ''));
+  if (!(amount > 0 && amount < 1e9)) throw bad('ใส่ยอดที่ลูกค้าโอน');
+  const method = text(b.paymentMethod, 40);
+  if (!ar.PAY_METHODS.includes(method)) throw bad('เลือกวิธีชำระเงิน');
+  if (!b.file) throw bad('แนบสลิป / หลักฐานการโอน');
+  const ch = text(b.deliveryChannel, 20);
+  if (!PAY_CHANNELS.includes(ch)) throw bad('เลือกช่องทางส่งใบเสร็จ');
+  const email = text(b.email, 120), addr = text(b.deliveryAddress, 600);
+  if (needsEmail(ch) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw bad('ใส่อีเมลลูกค้าสำหรับส่งใบเสร็จ');
+  if (needsPost(ch) && !addr) throw bad('ใส่ที่อยู่ส่งใบเสร็จตัวจริง');
+  const id = shortId('PAY');
+  const slip = await drive.upload(b.file, { kind: 'payment', docNo: ivNo, company: a.company, ref: id });
+  const at = hub.sheetDateTime();
+  await hub.appendRows('PaymentNotices', [{ noticeId: id, createdAt: at, requestedBy: user.email, salesName: user.name, ivRequestId: iv.ivRequestId, ivNo,
+    company: a.company, paidDate, amount: round2(amount), paymentMethod: method, slipLink: slip, deliveryChannel: ch, email, deliveryAddress: addr,
+    note: text(b.note, 500), status: 'new', source: 'sales', accountNote: '', doneBy: '', updatedAt: at }]);
+  const exp = ar.enrich(a, ar.todayMs()).expected;
+  await Promise.all([hub.log('catalog', 'pay_notice', id, `${user.email} · ${ivNo} · ${amount}`),
+    notify.chat([`💰 แจ้งลูกค้าจ่ายแล้ว ${ivNo} · ${a.company} จาก ${user.name || user.email}`,
+      `โอน ${money(amount)} เมื่อ ${paidDate} · ${method}${Math.abs(exp - amount) > 1 ? ` · ⚠️ ที่ควรได้รับ ${money(exp)}` : ''}`,
+      'ตรวจเงินเข้าแล้วกดยืนยันที่หน้าติดตามหนี้'].join('\n'))]);
+  res.status(200).json({ ok: true, noticeId: id, message: 'แจ้งฝ่ายบัญชีแล้ว รอตรวจเงินเข้า' });
+}
+
+async function updatePayNotice(req, res, user) {
+  checkOrigin(req);
+  if (!canConfirmPay(user)) throw bad('ไม่มีสิทธิ์ยืนยันเงินเข้า', 403);
+  const b = req.body || {};
+  const row = (await hub.readTable('PaymentNotices')).find((x) => x.noticeId === text(b.noticeId, 40));
+  if (!row) throw bad('ไม่พบรายการนี้', 404);
+  if (row.status !== 'new') throw bad(`รายการนี้${row.status === 'confirmed' ? 'ยืนยันแล้ว' : row.status === 'matched' ? 'ปิดแล้ว (บันทึกรับเงินไปแล้ว)' : 'ตีกลับแล้ว'} รีเฟรชหน้า`, 409);
+  const at = hub.sheetDateTime(), who = user.name || user.email, note = text(b.note, 500);
+  if (b.action === 'pay_reject') {
+    if (!note) throw bad('ใส่เหตุผล เช่น ยังไม่เห็นเงินเข้าบัญชี');
+    await hub.updateRow('PaymentNotices', row._row, { status: 'rejected', accountNote: note, doneBy: who, updatedAt: at });
+    await Promise.all([hub.log('catalog', 'pay_reject', row.noticeId, `${user.email} · ${note}`),
+      notify.chat(`↩️ ยังไม่ยืนยันเงินเข้า ${row.ivNo} · ${row.company} (แจ้งโดย ${row.salesName || row.requestedBy})\nเหตุผล: ${note}`)]);
+    return res.status(200).json({ ok: true });
+  }
+  if (b.action !== 'pay_confirm') throw bad('คำสั่งไม่ถูกต้อง');
+  const invs = await hub.readTable('Invoices');
+  const a = invs.find((x) => x.ivRequestId === row.ivRequestId) || invs.find((x) => String(x.ivNo).toUpperCase() === String(row.ivNo).toUpperCase());
+  if (!a) throw bad('ไม่พบ INV นี้ในหน้าติดตามหนี้', 404);
+  if (a.paidDate) {
+    await hub.updateRow('PaymentNotices', row._row, { status: 'matched', accountNote: `บันทึกรับเงินไว้แล้ว ${a.paidDate}`, doneBy: who, updatedAt: at });
+    return res.status(200).json({ ok: true, matched: true });
+  }
+  // Accounting may correct the date / amount after checking the bank statement.
+  const paidDate = b.paidDate ? dmy(text(b.paidDate, 10)) : row.paidDate;
+  if (!ar.parseDate(paidDate)) throw bad('วันที่รับเงินไม่ถูกต้อง');
+  const amount = b.amount !== undefined && b.amount !== '' ? Number(String(b.amount).replace(/,/g, '')) : ar.num(row.amount);
+  if (!(amount > 0)) throw bad('ยอดรับเงินไม่ถูกต้อง');
+  await hub.updateRow('Invoices', a._row, { paidDate, paidAmount: round2(amount), paymentMethod: row.paymentMethod,
+    note: [a.note, `รับเงินตามที่ ${row.salesName || row.requestedBy} แจ้ง (${row.noticeId}) ยืนยันโดย ${who}`].filter(Boolean).join(' · ').slice(0, 500) });
+  await hub.updateRow('PaymentNotices', row._row, { status: 'confirmed', paidDate, amount: round2(amount), accountNote: note, doneBy: who, updatedAt: at });
+  await Promise.all([hub.log('catalog', 'pay_confirm', row.noticeId, `${user.email} · ${row.ivNo} · ${amount}`),
+    notify.chat(`✅ ยืนยันเงินเข้า ${row.ivNo} · ${row.company} ${money(amount)} (แจ้งโดย ${row.salesName || row.requestedBy}) · รอออกใบเสร็จ`)]);
+  res.status(200).json({ ok: true });
+}
+
+// Accounting recorded the payment on /ar (customer told them directly): close any Sales notice for
+// that INV, keep one PaymentNotices row as the record (with the slip if attached), and tell Sales.
+async function paidDirectly(row, f, slip, user) {
+  const notices = await hub.readTable('PaymentNotices');
+  const ivNo = String(row.ivNo).toUpperCase(), at = hub.sheetDateTime(), who = user.name || user.email;
+  for (const n of notices.filter((x) => String(x.ivNo).toUpperCase() === ivNo && x.status === 'new')) {
+    await hub.updateRow('PaymentNotices', n._row, { status: 'matched', accountNote: `บัญชีบันทึกรับเงินจากหน้าติดตามหนี้แล้ว (${f.paidDate})`, doneBy: who, updatedAt: at });
+  }
+  await hub.appendRows('PaymentNotices', [{ noticeId: shortId('PAY'), createdAt: at, requestedBy: user.email, salesName: who, ivRequestId: row.ivRequestId || '', ivNo,
+    company: row.company, paidDate: f.paidDate, amount: f.paidAmount || row.paidAmount, paymentMethod: f.paymentMethod || row.paymentMethod, slipLink: slip,
+    deliveryChannel: '', email: '', deliveryAddress: '', note: '', status: 'confirmed', source: 'accounting', accountNote: 'ลูกค้าแจ้งฝ่ายบัญชีโดยตรง', doneBy: who, updatedAt: at }]);
+  await notify.chat(`💰 ลูกค้าจ่ายแล้ว ${ivNo} · ${row.company} ${money(f.paidAmount || row.paidAmount)} (บัญชีบันทึก${row.salesName ? ` · แจ้ง ${row.salesName}` : ''}) · รอออกใบเสร็จ`);
+}
+
+async function listPayNotices(req, res, user) {
+  if (!canConfirmPay(user)) throw bad('ไม่มีสิทธิ์', 403);
+  const rows = await hub.readTable('PaymentNotices');
+  res.status(200).json({ ok: true, notices: rows.filter((r) => r.source === 'sales').reverse().slice(0, 150).map(({ _row, ...r }) => r) });
 }
 
 // ---------------------------------------------------------------- receipts (ใบเสร็จ / ใบกำกับภาษี)
@@ -733,7 +844,10 @@ async function list(req, res, user) {
   if (req.query && req.query.view === 'ar') return arList(req, res, user);
   if (req.query && req.query.view === 'receipts') return listReceipts(req, res, user);
   if (req.query && req.query.view === 'edits') return listEdits(req, res, user);
-  const [rows, invs] = await Promise.all([hub.readTable('InvoiceRequests'), hub.readTable('Invoices').catch(() => [])]);
+  if (req.query && req.query.view === 'payments') return listPayNotices(req, res, user);
+  const [rows, invs, notices] = await Promise.all([hub.readTable('InvoiceRequests'), hub.readTable('Invoices').catch(() => []), hub.readTable('PaymentNotices').catch(() => [])]);
+  const lastNotice = new Map();
+  for (const n of notices) if (n.ivRequestId) lastNotice.set(n.ivRequestId, n);
   // Payment status from AR, so sales see whether their customer has paid.
   const byReq = new Map(), byNo = new Map();
   for (const x of invs) { if (x.ivRequestId) byReq.set(x.ivRequestId, x); if (x.ivNo) byNo.set(String(x.ivNo).toUpperCase(), x); }
@@ -743,11 +857,13 @@ async function list(req, res, user) {
     .filter((r) => sees(r.requestedBy))
     .reverse()
     .slice(0, 100)
-    .map(({ _row, ...r }) => {
+    .map(({ _row, ...r0 }) => {
+      const n = lastNotice.get(r0.ivRequestId);
+      const r = n ? { ...r0, payNotice: { noticeId: n.noticeId, status: n.status, source: n.source, paidDate: n.paidDate, amount: n.amount, paymentMethod: n.paymentMethod, slipLink: n.slipLink, deliveryChannel: n.deliveryChannel, email: n.email, deliveryAddress: n.deliveryAddress, accountNote: n.accountNote, salesName: n.salesName, updatedAt: n.updatedAt } } : r0;
       const a = byReq.get(r.ivRequestId) || (r.peakIvNo && byNo.get(String(r.peakIvNo).toUpperCase()));
       if (!a) return r;
       const e = ar.enrich(a, today);
-      return { ...r, ar: { state: e.state, dueDate: e.dueDate, paidDate: a.paidDate, paidAmount: a.paidAmount, paymentMethod: a.paymentMethod, rtNo: a.rtNo, daysOverdue: e.daysOverdue, commitDate: a.commitDate, followStatus: a.followStatus } };
+      return { ...r, ar: { state: e.state, dueDate: e.dueDate, expected: e.expected, paidDate: a.paidDate, paidAmount: a.paidAmount, paymentMethod: a.paymentMethod, rtNo: a.rtNo, daysOverdue: e.daysOverdue, commitDate: a.commitDate, followStatus: a.followStatus } };
     });
   res.status(200).json({ ok: true, uploads: drive.enabled(), requests: out });
 }
@@ -757,8 +873,8 @@ module.exports = async function handler(req, res) {
   try {
     const user = await requireUser(req);
     const act = String((req.body || {}).action || '');
-    if (req.method === 'POST') return await ({ legacy_import: importLegacy, receipt: createReceipt, edit: createEdit }[act] || create)(req, res, user);
-    if (req.method === 'PATCH') return await (act.startsWith('ar_') ? arUpdate : act.startsWith('rt_') ? updateReceipt : act.startsWith('edit_') ? updateEdit : update)(req, res, user);
+    if (req.method === 'POST') return await ({ legacy_import: importLegacy, receipt: createReceipt, edit: createEdit, pay_notice: createPayNotice }[act] || create)(req, res, user);
+    if (req.method === 'PATCH') return await (act.startsWith('ar_') ? arUpdate : act.startsWith('rt_') ? updateReceipt : act.startsWith('edit_') ? updateEdit : act.startsWith('pay_') ? updatePayNotice : update)(req, res, user);
     if (req.method === 'GET') return await list(req, res, user);
     res.status(405).json({ ok: false, error: 'Method not allowed' });
   } catch (e) {

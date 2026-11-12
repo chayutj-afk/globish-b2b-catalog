@@ -47,6 +47,9 @@ table.sum tr.tot td{font-weight:500;color:var(--head)}
 .acts{display:flex;gap:8px;flex-wrap:wrap;padding:12px 0}
 #ov-load{z-index:1100}
 .filters select.sel{width:auto;min-width:140px}.filters .search{flex:1;min-width:200px}
+.pn{border:1px solid var(--line2);border-radius:10px;padding:12px 14px;margin-top:10px;background:var(--panel)}
+.pn-top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.pn-amt{text-align:right}.pn-amt b{font-size:18px;color:var(--head)}
+.pn-act{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
 </style>
 </head>
 <body data-page="ar">
@@ -67,6 +70,11 @@ table.sum tr.tot td{font-weight:500;color:var(--head)}
   <div class="seg" id="tabs"><button class="on" data-t="work" type="button">รายการติดตาม</button><button data-t="sum" type="button">สรุป</button></div>
 
   <section class="tab on" id="tab-work">
+    <div class="card" id="pn-card" hidden>
+      <h2>เซลแจ้งลูกค้าจ่ายแล้ว รอตรวจเงินเข้า <span class="small" id="pn-n"></span></h2>
+      <p class="hint">เช็คกับ statement ธนาคาร ถ้าเงินเข้าแล้วกด <b>ยืนยันเงินเข้า</b> ระบบบันทึกรับเงินให้ แล้ว INV ไปรอออกใบเสร็จที่หน้ารออนุมัติ</p>
+      <div id="pn-list"></div>
+    </div>
     <div class="card">
       <div class="filters">
         <div class="seg" id="f-state">
@@ -143,9 +151,11 @@ document.querySelectorAll('#f-state button').forEach((b) => b.onclick = () => { 
 ['f-seg', 'f-sales'].forEach((id) => $(id).onchange = () => { SHOW = 100; render(); });
 $('f-q').oninput = () => { SHOW = 100; render(); };
 
+let PN = [];
 async function load() {
-  try { D = await api('/api/invoice-requests?view=ar'); }
+  try { [D, PN] = await Promise.all([api('/api/invoice-requests?view=ar'), api('/api/invoice-requests?view=payments').then((x) => x.notices).catch(() => [])]); }
   catch (e) { $('msg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; return; }
+  renderNotices();
   const s = D.summary;
   $('s-open').textContent = fmt0(s.open); $('s-open-n').textContent = `${s.openCount} ใบ`;
   $('s-over').textContent = fmt0(s.overdue); $('s-over-n').textContent = `${s.overdueCount} ใบ`;
@@ -252,6 +262,41 @@ function openFollow(iv) {
       await patch(body); await done(`บันทึกการติดตาม ${iv} แล้ว`);
     } });
 }
+const METHOD_TH = { 'Bank Transfer': 'โอนเงิน', Cheque: 'เช็ค', Cash: 'เงินสด', 'Credit/Debit Card': 'บัตรเครดิต / เดบิต', Others: 'อื่นๆ' };
+function renderNotices() {
+  const open = PN.filter((n) => n.status === 'new');
+  $('pn-card').hidden = !open.length; $('pn-n').textContent = open.length ? `(${open.length})` : '';
+  $('pn-list').innerHTML = open.map((n) => {
+    const r = D.invoices.find((x) => String(x.ivNo).toUpperCase() === String(n.ivNo).toUpperCase());
+    const diff = r ? toNum(n.amount) - r.expected : 0;
+    return `<div class="pn"><div class="pn-top"><div><b>${esc(n.company)}</b> · ${esc(n.ivNo)}<div class="small">แจ้งโดย ${esc(n.salesName)} · ${esc(n.createdAt)}${n.note ? ' · 💬 ' + esc(n.note) : ''}</div></div>
+      <div class="pn-amt"><b>${fmt(toNum(n.amount))}</b><div class="small">โอน ${esc(n.paidDate)} · ${esc(METHOD_TH[n.paymentMethod] || n.paymentMethod)}</div>${r && Math.abs(diff) > 1 ? `<div class="small" style="color:var(--bad-ink)">ควรได้รับ ${fmt(r.expected)} (ต่าง ${fmt(diff)})</div>` : ''}</div></div>
+      <div class="pn-act">${/^https:\/\//.test(n.slipLink || '') ? `<a class="btn btn-g btn-sm" href="${esc(n.slipLink)}" target="_blank" rel="noopener">ดูสลิป ↗</a>` : ''}${!r ? '<span class="small" style="color:var(--bad-ink)">ไม่พบ INV นี้ในรายการ</span>' : ''}
+        <span style="flex:1"></span><button class="btn btn-g btn-sm" type="button" onclick="rejectNotice('${esc(n.noticeId)}')">ยังไม่เห็นเงินเข้า</button><button class="btn btn-p btn-sm" type="button" onclick="confirmNotice('${esc(n.noticeId)}')">✓ ยืนยันเงินเข้า</button></div></div>`;
+  }).join('');
+}
+function confirmNotice(id) {
+  const n = PN.find((x) => x.noticeId === id);
+  formModal({ title: '✓ ยืนยันเงินเข้า', ok: '✓ ยืนยันเงินเข้า', html: `<p style="margin:0 0 12px"><b>${esc(n.company)}</b> · ${esc(n.ivNo)}<br><span class="small">แจ้งโดย ${esc(n.salesName)}</span></p>
+    <div class="row"><div class="fg"><label>วันที่เงินเข้า *</label><input type="date" id="cn-dt" value="${iso(n.paidDate)}"></div>
+    <div class="fg"><label>ยอดที่ได้รับ *</label><input type="text" inputmode="decimal" id="cn-am" value="${esc(n.amount)}"></div></div>
+    <p class="small">แก้วันที่หรือยอดได้ถ้า statement ไม่ตรงกับที่เซลแจ้ง</p>
+    <div class="fg"><label>หมายเหตุ</label><input type="text" id="cn-nt" maxlength="500"></div>`,
+    save: async (err) => {
+      if (!val('cn-dt') || !(toNum(val('cn-am')) > 0)) { err('ใส่วันที่และยอดที่ได้รับ'); return false; }
+      await patch({ action: 'pay_confirm', noticeId: id, paidDate: val('cn-dt'), amount: val('cn-am'), note: val('cn-nt') }); await done(`ยืนยันเงินเข้า ${n.ivNo} แล้ว`);
+    } });
+}
+function rejectNotice(id) {
+  const n = PN.find((x) => x.noticeId === id);
+  formModal({ title: 'ยังไม่เห็นเงินเข้า', ok: 'ตีกลับให้เซล', html: `<p style="margin:0 0 12px"><b>${esc(n.company)}</b> · ${esc(n.ivNo)} · ${fmt(toNum(n.amount))} บาท</p>
+    <div class="fg"><label>เหตุผล (เซลจะเห็น) *</label><input type="text" id="rn-nt" maxlength="500" placeholder="เช่น ยังไม่เห็นยอดนี้ใน statement วันที่ที่แจ้ง"></div>`,
+    save: async (err) => {
+      if (!val('rn-nt')) { err('ใส่เหตุผล'); return false; }
+      await patch({ action: 'pay_reject', noticeId: id, note: val('rn-nt') }); await done(`ตีกลับการแจ้งจ่าย ${n.ivNo} แล้ว`);
+    } });
+}
+const readB64 = (file) => new Promise((ok, no) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(',')[1] || ''); fr.onerror = () => no(new Error('อ่านไฟล์ไม่สำเร็จ')); fr.readAsDataURL(file); });
 function openPaid(iv) {
   const r = find(iv), L = D.lists, paid = r.state === 'Paid';
   formModal({ title: paid ? '💰 แก้ไขการรับเงิน' : '💰 บันทึกรับเงิน', ok: '✓ บันทึกรับเงิน', html: head(r) + `
@@ -259,13 +304,16 @@ function openPaid(iv) {
     <div class="fg"><label>ยอดที่ได้รับ *</label><input type="text" inputmode="decimal" id="pd-am" value="${r.paidAmount ? esc(r.paidAmount) : r.expected}"><div class="sub">ที่ควรได้รับ ${fmt(r.expected)} (รวม VAT หัก WHT)</div></div></div>
     <div class="row"><div class="fg"><label>วิธีชำระ *</label><select id="pd-mt">${opt(L.payMethods, r.paymentMethod, '— เลือก —')}</select></div>
     <div class="fg"><label>เหตุผลที่จ่ายช้า (ถ้ามี)</label><select id="pd-dl">${opt(L.delay, r.delayReason, '—')}</select></div></div>
-    <p class="small">ใบเสร็จ (RT) ฝ่ายบัญชีออกจาก INV นี้ได้หลังบันทึกรับเงิน ที่หน้า รออนุมัติ › ใบเสร็จ</p>`,
+    ${paid ? '' : '<div class="fg"><label>สลิป / หลักฐาน (ถ้ามี)</label><input type="file" id="pd-file" accept=".pdf,.jpg,.jpeg,.png"></div>'}
+    <p class="small">ใบเสร็จ (RT) ฝ่ายบัญชีออกจาก INV นี้ได้หลังบันทึกรับเงิน ที่หน้า รออนุมัติ › ใบเสร็จ${PN.some((n) => n.status === 'new' && String(n.ivNo).toUpperCase() === String(iv).toUpperCase()) ? ' · <b>เซลแจ้งจ่าย INV นี้ไว้แล้ว</b> ยืนยันจากรายการด้านบนจะได้ข้อมูลและสลิปที่เซลแนบ' : ''}</p>`,
     save: async (err) => {
       const body = { action: 'ar_update', ivNo: iv, paidDate: val('pd-dt'), paidAmount: val('pd-am'), paymentMethod: val('pd-mt'), delayReason: val('pd-dl') };
       if (!body.paidDate || !body.paidAmount || !body.paymentMethod) { err('ใส่วันที่รับเงิน ยอด และวิธีชำระ'); return false; }
       const diff = toNum(body.paidAmount) - r.expected;
       if (Math.abs(diff) > 1 && !confirmDiff) { confirmDiff = true; err(`ยอดต่างจากที่ควรได้รับ ${fmt(r.expected)} อยู่ ${fmt(diff)} บาท กดบันทึกอีกครั้งเพื่อยืนยัน`); return false; }
       confirmDiff = false;
+      const fl = $('pd-file') && $('pd-file').files[0];
+      if (fl) { if (fl.size > 3 * 1024 * 1024) { err('ไฟล์ใหญ่เกิน 3 MB'); return false; } body.file = { name: fl.name, type: fl.type, data: await readB64(fl) }; }
       await patch(body); OPEN = null; await done(`บันทึกรับเงิน ${iv} แล้ว`);
     } });
   confirmDiff = false;

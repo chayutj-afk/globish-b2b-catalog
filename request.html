@@ -235,6 +235,16 @@
     <button class="btn btn-g btn-sm" onclick="loadAll()">↻ รีเฟรช</button>
   </div>
   <div id="mine-news"></div>
+  <div class="filters" id="mine-qt-f">
+    <input type="search" id="mq-q" class="grow" placeholder="ค้นหา บริษัท / เลข QT / Request ID / Opportunity" oninput="renderMine()" style="flex:1;min-width:220px">
+    <select id="mq-st" class="sel" onchange="renderMine()" style="width:auto;min-width:230px">
+      <option value="">ทุกคำขอ</option>
+      <option value="left">ยังขอ INV ได้ (มียอดคงเหลือ)</option>
+      <option value="full">ขอ INV ครบยอดแล้ว</option>
+      <option value="wait">ยังไม่มี QT / รออนุมัติ</option>
+    </select>
+    <span class="small" id="mq-n"></span>
+  </div>
   <div id="mine-qt"><div class="empty">กำลังโหลด...</div></div>
   <div id="mine-inv" hidden><div class="empty">กำลังโหลด...</div></div>
   <div id="mine-rt" hidden></div>
@@ -783,11 +793,13 @@ function updateSum() {
   } else $('i-balance').innerHTML = '';
 }
 
+// Balance still billable on a QT, in the QT's own basis (incl. VAT for B2C / B2E / MaoMao / Others).
+const qtLeft = (q) => { const a = qtAmt(q); return Math.round((a.total - a.done) * 100) / 100; };
 function fillQTPicker() {
   const sel = $('i-req'); const keep = sel.value;
-  sel.innerHTML = '<option value="">— QT นอกระบบ / กรอกเอง —</option>' + REQS.filter((q) => QT_LIVE.includes(q.status)).map((q) => {
-    const left = toNum(q.totalPreVat) - toNum(q.invoicedPreVat);
-    return `<option value="${esc(q.requestId)}">${esc(q.peakQtNo || q.requestId)} · ${esc(q.company)} · คงเหลือ ${fmt(left)}</option>`;
+  // QTs already invoiced in full are left out: no more INV from them.
+  sel.innerHTML = '<option value="">— QT นอกระบบ / กรอกเอง —</option>' + REQS.filter((q) => QT_LIVE.includes(q.status) && (qtLeft(q) > 0.01 || q.requestId === keep)).map((q) => {
+    return `<option value="${esc(q.requestId)}">${esc(q.peakQtNo || q.requestId)} · ${esc(q.company)} · คงเหลือ ${fmt(qtLeft(q))} (${qtAmt(q).lbl})</option>`;
   }).join('');
   sel.value = keep;
 }
@@ -893,7 +905,7 @@ const IV_ST = { new: ['รอฝ่ายบัญชีออก INV', 'new'], 
 const ORIG_ST = { not_needed: ['ไม่ต้องส่งตัวจริง', ''], pending_decision: ['ยังไม่ทราบเรื่องตัวจริง', 'new'], requested: ['รอส่งตัวจริง', 'blue'], sent: ['ส่งตัวจริงแล้ว', 'green'] };
 const st = (map, k) => { const [t, c] = map[k] || [k || '-', '']; return `<span class="st ${c}">${esc(t)}</span>`; };
 
-function setMine(w, btn) { document.querySelectorAll('#mine-seg button').forEach((b) => b.classList.toggle('on', b === btn)); ['qt', 'inv', 'rt', 'edit'].forEach((k) => { $('mine-' + k).hidden = w !== k; }); if (w === 'edit' || w === 'rt') markSeen(w); }
+function setMine(w, btn) { document.querySelectorAll('#mine-seg button').forEach((b) => b.classList.toggle('on', b === btn)); ['qt', 'inv', 'rt', 'edit'].forEach((k) => { $('mine-' + k).hidden = w !== k; }); $('mine-qt-f').hidden = w !== 'qt'; if (w === 'edit' || w === 'rt') markSeen(w); }
 // Results from accounting the requester hasn't looked at yet: edit requests (done / rejected),
 // receipt requests (issued / rejected — includes receipts issued from a paid INV, which get a row too).
 const SEEN_KEY = 'gc_seen_edits_v1';
@@ -971,7 +983,16 @@ async function openPayNotice(id) {
 function renderMine() {
   const op = canDo('approve') || canDo('team_view');
   const replaced = new Set(REQS.map((q) => q.replaces).filter(Boolean));
-  const shownQ = REQS.filter((q) => !replaced.has(q.requestId));
+  const qq = ($('mq-q').value || '').trim().toLowerCase(), qs = $('mq-st').value;
+  const allQ = REQS.filter((q) => !replaced.has(q.requestId));
+  const shownQ = allQ.filter((q) => {
+    if (qq && ![q.company, q.peakQtNo, q.requestId, q.opportunityId, q.taxId, q.salesName].some((x) => String(x || '').toLowerCase().includes(qq))) return false;
+    if (qs === 'left') return QT_LIVE.includes(q.status) && qtLeft(q) > 0.01;
+    if (qs === 'full') return QT_LIVE.includes(q.status) && qtLeft(q) <= 0.01;
+    if (qs === 'wait') return !QT_LIVE.includes(q.status) && q.status !== 'rejected';
+    return true;
+  });
+  $('mq-n').textContent = qq || qs ? `${shownQ.length} จาก ${allQ.length} รายการ` : '';
   $('mine-qt').innerHTML = shownQ.length ? shownQ.map((q) => {
     const heroes = (q.lines || []).filter((l) => l.role !== 'supplement').map((l) => `${esc(l.packageId === 'CUSTOM' ? 'Customized' : l.packageId === 'SURCHARGE' ? 'ค่าเพิ่ม' : l.packageId)} × ${esc(l.qty)}`).join(', ');
     const { total, done, lbl } = qtAmt(q);
@@ -982,9 +1003,9 @@ function renderMine() {
         ${heroes}<br>ยอด${lbl} <b>${fmt(total)}</b> · ขอ INV แล้ว ${fmt(done)} · คงเหลือ <b>${fmt(total - done)}</b>${q.peakNote ? `<br><span class="small">หมายเหตุ: ${esc(q.peakNote)}</span>` : ''}</div>
       ${mineIvs.length ? `<div class="inv-mini">${mineIvs.map((v) => `<div class="inv-mini-row"><span class="mono">${esc(v.ivRequestId)}</span><span>${esc(v.company)} · ${fmt(ivAmt(v).amt)}</span><span>${st(IV_ST, v.status)} ${st(ORIG_ST, v.originalStatus)}</span></div>`).join('')}</div>` : ''}
       ${q.status === 'rejected' && ME && q.requestedBy === ME.email && !replaced.has(q.requestId) ? `<div style="margin-top:8px"><button class="btn btn-p btn-sm" onclick="rebuildQT('${esc(q.requestId)}')">↻ สร้างคำขอใหม่จากข้อมูลเดิม</button></div>` : ''}
-      ${q.peakQtNo && QT_LIVE.includes(q.status) ? `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-o btn-sm" onclick="startInvFor('${esc(q.requestId)}')">🧾 ขอ INV จาก QT นี้</button>${mineIvs.some((v) => v.status !== 'rejected') ? '' : `<button class="btn btn-g btn-sm" onclick="askEdit('QT','${esc(q.peakQtNo)}','${esc(q.requestId)}')">✏️ ขอแก้ไข QT</button>`}</div><span id="qm-${esc(q.requestId)}"></span>` : ''}
+      ${q.peakQtNo && QT_LIVE.includes(q.status) ? `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${qtLeft(q) > 0.01 ? `<button class="btn btn-o btn-sm" onclick="startInvFor('${esc(q.requestId)}')">🧾 ขอ INV จาก QT นี้</button>` : '<span class="st green">ขอ INV ครบยอดแล้ว</span>'}${mineIvs.some((v) => v.status !== 'rejected') ? '' : `<button class="btn btn-g btn-sm" onclick="askEdit('QT','${esc(q.peakQtNo)}','${esc(q.requestId)}')">✏️ ขอแก้ไข QT</button>`}</div><span id="qm-${esc(q.requestId)}"></span>` : ''}
     </div>`;
-  }).join('') : '<div class="empty">ยังไม่มีคำขอใบเสนอราคา</div>';
+  }).join('') : `<div class="empty">${allQ.length ? 'ไม่พบคำขอที่ตรงกับตัวกรอง' : 'ยังไม่มีคำขอใบเสนอราคา'}</div>`;
 
   $('mine-inv').innerHTML = IVS.length ? IVS.map((v) => {
     const canOrig = v.originalStatus !== 'sent';

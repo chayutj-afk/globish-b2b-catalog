@@ -198,6 +198,8 @@ async function create(req, res, user) {
   const prior = alreadyInvoiced(existing, r, incl);
   const asked = round2(invoices.reduce((s, v) => s + v.amount, 0));
   const qtTotal = !linked ? 0 : incl ? (n0(linked.totalInclVat) || round2(n0(linked.totalPreVat) * 1.07)) : n0(linked.totalPreVat);
+  // A QT invoiced in full takes no more INV (customer buys more → a new QT).
+  if (linked && qtTotal > 0 && prior >= qtTotal - 0.01) throw bad(`QT ${r.qtNo} ขอ INV ครบยอดแล้ว (${money(prior)} จาก ${money(qtTotal)}) ถ้าลูกค้าซื้อเพิ่ม ให้ขอ QT ใบใหม่`, 409);
   const over = linked && qtTotal > 0 && prior + asked > qtTotal + 0.01;
   if (over && !r.overReason) {
     throw bad(`ยอดรวม INV ${basis} (${money(prior + asked)}) เกินยอด QT (${money(qtTotal)}) ใส่เหตุผลก่อนส่ง หรือแก้ยอด`);

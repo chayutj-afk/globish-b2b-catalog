@@ -228,7 +228,7 @@
   <div class="filters">
     <div class="seg" id="mine-seg">
       <button class="on" onclick="setMine('qt',this)">ใบเสนอราคา</button>
-      <button onclick="setMine('inv',this)">ใบแจ้งหนี้</button>
+      <button onclick="setMine('inv',this)">ใบแจ้งหนี้ <span id="mine-inv-n" class="badge" hidden></span></button>
       <button onclick="setMine('rt',this)">ใบเสร็จ <span id="mine-rt-n" class="badge" hidden></span></button>
       <button onclick="setMine('edit',this)">ขอแก้ไข <span id="mine-edit-n" class="badge" hidden></span></button>
     </div>
@@ -319,7 +319,29 @@ function go(tab) {
   history.replaceState(null, '', '#' + tab);
   const T = { qt: 'ขอใบเสนอราคา (QT)', inv: 'ขอใบแจ้งหนี้ (INV)', rt: 'ขอใบเสร็จ / ใบกำกับภาษี', mine: 'คำขอของฉัน', pend: 'รออนุมัติ' };
   if ($('page-title')) $('page-title').textContent = T[tab]; document.title = T[tab] + ' · Globish Sales Desk';
-  if (tab === 'mine' || tab === 'pend') loadAll();
+  if (tab === 'mine' || tab === 'pend') { AUTO_TAB = tab; loadAll(); }
+}
+// Opening รออนุมัติ / คำขอของฉัน: jump to the sub-tab that has something waiting (once per visit).
+let AUTO_TAB = null;
+function autoTab() {
+  const t = AUTO_TAB; AUTO_TAB = null;
+  if (t === 'pend') {
+    const order = ['qt', 'inv', 'orig', 'rt', 'edit'];
+    const cnt = (k) => Number(String(($('pend-' + k + '-n') || {}).textContent || '').replace(/\D/g, '')) || 0;
+    const btns = [...document.querySelectorAll('#pend-seg button')];
+    const cur = order[btns.findIndex((b) => b.classList.contains('on'))];
+    if (cnt(cur)) return;
+    const i = order.findIndex((k) => cnt(k) > 0);
+    if (i >= 0) setPend(order[i], btns[i]);
+  } else if (t === 'mine') {
+    const xs = newsItems(); if (!xs.length) return;
+    const order = ['qt', 'inv', 'rt', 'edit'];
+    const btns = [...document.querySelectorAll('#mine-seg button')];
+    const cur = order[btns.findIndex((b) => b.classList.contains('on'))];
+    if (xs.some((x) => x.tab === cur)) return;
+    const i = order.findIndex((k) => xs.some((x) => x.tab === k));
+    if (i >= 0) setMine(order[i], btns[i]);
+  }
 }
 async function signOut() { try { await fetch('/api/auth/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' } }); } catch {} location.href = '/signin.html'; }
 
@@ -926,19 +948,19 @@ function newsItems() {
 function markSeen(tab) { try { const s = seenMap(); newsItems().filter((x) => !tab || x.tab === tab).forEach((x) => { s[x.k] = x.v; }); localStorage.setItem(SEEN_KEY, JSON.stringify(s)); } catch {} paintNews(); }
 function paintNews() {
   const xs = newsItems(), n = (t) => xs.filter((x) => x.tab === t).length;
-  [['mine-edit-n', n('edit')], ['mine-rt-n', n('rt')]].forEach(([id, c]) => { const b = $(id); if (b) { b.textContent = c; b.hidden = !c; } });
+  [['mine-edit-n', n('edit')], ['mine-rt-n', n('rt')], ['mine-inv-n', n('inv')]].forEach(([id, c]) => { const b = $(id); if (b) { b.textContent = c; b.hidden = !c; } });
   let rb = document.getElementById('mine-count');
   if (!rb && $('nav-mine')) { rb = document.createElement('span'); rb.className = 'badge'; rb.id = 'mine-count'; $('nav-mine').appendChild(rb); }
   if (rb) { rb.textContent = xs.length; rb.hidden = !xs.length; }
   const btn = (t, label, i) => n(t) ? ` <button class="btn btn-o btn-sm" onclick="setMine('${t}',document.querySelectorAll('#mine-seg button')[${i}])">${label}</button>` : '';
-  $('mine-news').innerHTML = xs.length ? `<div class="msg ok" style="margin-bottom:12px">🔔 ${xs.map((x) => x.t).join('<br>')}<div style="margin-top:6px"><button class="btn btn-g btn-sm" onclick="markSeen()">รับทราบ</button>${btn('rt', 'ดูใบเสร็จ', 2)}${btn('edit', 'ดูคำขอแก้ไข', 3)}</div></div>` : '';
+  $('mine-news').innerHTML = xs.length ? `<div class="msg ok" style="margin-bottom:12px">🔔 ${xs.map((x) => x.t).join('<br>')}<div style="margin-top:6px"><button class="btn btn-g btn-sm" onclick="markSeen()">รับทราบ</button>${btn('inv', 'ดูใบแจ้งหนี้', 1)}${btn('rt', 'ดูใบเสร็จ', 2)}${btn('edit', 'ดูคำขอแก้ไข', 3)}</div></div>` : '';
 }
 
 async function loadAll() {
   try {
     const [a, b, c, d] = await Promise.all([api('/api/requests'), api('/api/invoice-requests'), api('/api/invoice-requests?view=receipts'), api('/api/invoice-requests?view=edits')]);
     REQS = a.requests; IVS = b.requests; RTS = c.requests; EDITS = d.requests;
-    fillQTPicker(); renderMine(); renderPending(); updateSum();
+    fillQTPicker(); renderMine(); renderPending(); updateSum(); autoTab();
   } catch (e) {
     $('mine-qt').innerHTML = $('mine-inv').innerHTML = `<div class="empty">${esc(e.message)}</div>`;
   }

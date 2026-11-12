@@ -593,7 +593,9 @@ async function createEdit(req, res, user) {
   if (!can(user, 'request')) throw bad('ไม่มีสิทธิ์ขอเอกสาร', 403);
   const b = req.body || {};
   const r = { docType: text(b.docType, 5), docNo: text(b.docNo, 40).toUpperCase(), refId: text(b.refId, 60), company: text(b.company, 200), detail: text(b.detail, 1500) };
-  if (!['QT', 'INV', 'RT'].includes(r.docType)) throw bad('เลือกประเภทเอกสาร');
+  // Receipts are never edited once issued (accounting rule): only QT and INV can be changed.
+  if (r.docType === 'RT') throw bad('ใบเสร็จออกแล้วแก้ไม่ได้ ถ้าออกผิดให้แจ้งฝ่ายบัญชีโดยตรง');
+  if (!['QT', 'INV'].includes(r.docType)) throw bad('เลือกประเภทเอกสาร');
   if (!/^[A-Z0-9-]{6,40}$/.test(r.docNo)) throw bad('ใส่เลขเอกสารที่ต้องการแก้ เช่น QO-20261100012');
   if (r.detail.length < 5) throw bad('อธิบายว่าต้องการแก้อะไร');
   const rows = await hub.readTable('EditRequests');
@@ -617,6 +619,8 @@ async function updateEdit(req, res, user) {
   if (row.status !== 'new') throw bad(`คำขอนี้ ${row.status === 'done' ? 'แก้แล้ว' : 'ถูกตีกลับ'} รีเฟรชหน้า`, 409);
   const note = text(b.note, 500); const at = hub.sheetDateTime(); const who = user.name || user.email;
   if (b.action === 'edit_reject' && !note) throw bad('ใส่เหตุผลที่ตีกลับ');
+  // Older receipt edit requests can only be closed (rejected), never applied.
+  if (b.action === 'edit_done' && row.docType === 'RT') throw bad('ใบเสร็จแก้ไม่ได้ ตีกลับคำขอนี้แทน', 409);
   const newNo = text(b.newDocNo, 40).toUpperCase();
   const newLink = text(b.newLink, 500);
   const newAmt = b.newAmount === '' || b.newAmount === undefined ? null : Number(String(b.newAmount).replace(/,/g, ''));

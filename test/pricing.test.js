@@ -128,3 +128,30 @@ test('withholding tax: PEAK line gets rate × line amount after discount; none w
   const q0 = peak.buildQuotation({ requestId: 'R', whtRate: '0' }, lines, () => 'C').body.PeakQuotations.quotations[0];
   assert.equal(q0.products[0].withHoldingTaxAmount, undefined);
 });
+
+test('VAT basis: B2B / B2S before VAT, B2C / B2E / MaoMao / Others VAT-inclusive', () => {
+  for (const s of ['B2C', 'B2E', 'MaoMao', 'Others']) assert.equal(p.vatIncluded(s), true, s);
+  for (const s of ['B2B', 'B2S', '']) assert.equal(p.vatIncluded(s), false, s);
+  assert.deepEqual(p.vatSplit(15900, true), { preVat: 14859.81, inclVat: 15900 });
+  assert.deepEqual(p.vatSplit(10000, false), { preVat: 10000, inclVat: 10700 });
+});
+
+test('catalog package for a VAT-inclusive segment: reference, floor and surcharges include VAT', () => {
+  const ex = p.priceItem({ packageId: 'SPD-03-36', students: 10 });
+  const inc = p.priceItem({ packageId: 'SPD-03-36', students: 10, vatIncl: true });
+  assert.equal(inc.lines[0].listPrice, Math.round(ex.lines[0].listPrice * 107) / 100);
+  assert.equal(inc.lines[0].unitPrice, inc.lines[0].listPrice);
+  assert.equal(inc.belowFloor, '');
+  // the before-VAT floor price is below the floor once VAT is included
+  assert.match(p.priceItem({ packageId: 'SPD-03-36', students: 10, unitPrice: p.floorPrice(p.findPackage('SPD-03-36')), vatIncl: true }).belowFloor, /SPD-03-36/);
+});
+
+test('PEAK QT: taxStatus 1 and WHT on the pre-VAT amount for VAT-inclusive requests', () => {
+  const lines = [{ role: 'wh_package', packageId: '3822', description: 'x', qty: 1, unitPrice: 10700, discount: 0 }];
+  const inc = peak.buildQuotation({ requestId: 'R', whtRate: '3', vatMode: 'incl' }, lines, () => '3822').body.PeakQuotations.quotations[0];
+  assert.equal(inc.taxStatus, 1);
+  assert.equal(inc.products[0].withHoldingTaxAmount, '300');
+  const ex = peak.buildQuotation({ requestId: 'R', whtRate: '3', vatMode: 'excl' }, lines, () => '3822').body.PeakQuotations.quotations[0];
+  assert.equal(ex.taxStatus, 0);
+  assert.equal(ex.products[0].withHoldingTaxAmount, '321');
+});

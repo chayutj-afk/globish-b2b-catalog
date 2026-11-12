@@ -17,6 +17,7 @@ const { OPP_RE, normaliseOppId } = require('../lib/crm');
 const { validTaxId, normBranch } = require('../lib/taxid');
 const ar = require('../lib/ar');
 const peakdoc = require('../lib/peakdoc');
+const { vatIncluded, vatSplit } = require('../lib/pricing');
 
 // Every PEAK number / link already recorded in the app, for the reuse check.
 async function docsInUse() {
@@ -112,7 +113,8 @@ function validate(b) {
       branch: same ? r.branch : text(x.branch, 20),
       relation: same ? '' : text(x.relation, 80),
       label: text(x && x.label, 40),
-      amountPreVat: num(x && x.amountPreVat),
+      // In the segment's basis (before VAT, or VAT-inclusive for B2C / B2E / MaoMao / Others). Split in create().
+      amount: num(x && (x.amount !== undefined ? x.amount : x.amountPreVat)),
       students: num(x && x.students),
       wantedIssueDate: text(x && x.wantedIssueDate, 10),
       creditTermDays: num(x && x.creditTermDays),
@@ -124,8 +126,8 @@ function validate(b) {
     };
     if (!same) checkEntity(v, label);
     if (!same && !v.relation) throw bad(`${label}: ระบุความสัมพันธ์กับลูกค้าตาม QT เช่น บริษัทลูก`);
-    if (!(v.amountPreVat > 0 && v.amountPreVat < 1e9)) throw bad(`${label}: ใส่ยอดก่อน VAT`);
-    v.amountPreVat = round2(v.amountPreVat);
+    if (!(v.amount > 0 && v.amount < 1e9)) throw bad(`${label}: ใส่ยอดเงิน`);
+    v.amount = round2(v.amount);
     if (v.students === '') throw bad(`${label}: ใส่จำนวนผู้เรียนในใบนี้`);
     if (!v.wantedIssueDate) throw bad(`${label}: ใส่วันที่ต้องการให้ลงใน INV`);
     if (v.creditTermDays === '') throw bad(`${label}: ใส่เครดิตเทอม (วัน)`);
@@ -139,11 +141,14 @@ function validate(b) {
   return { r, invoices };
 }
 
-// Pre-VAT amount already requested against a QT (rejected requests don't count).
-function alreadyInvoiced(rows, { requestId, qtNo }) {
+const n0 = (x) => Number(String(x ?? '').replace(/,/g, '')) || 0;
+// Amount already requested against a QT (rejected requests don't count), in the QT's basis:
+// VAT-inclusive QTs compare VAT-inclusive amounts, so splitting 15,900 into 7,950 × 2 never
+// trips the balance check on rounded satang.
+function alreadyInvoiced(rows, { requestId, qtNo }, incl = false) {
   return round2(rows
     .filter((x) => x.status !== 'rejected' && ((requestId && x.requestId === requestId) || (!requestId && qtNo && x.qtNo === qtNo)))
-    .reduce((s, x) => s + (Number(String(x.amountPreVat).replace(/,/g, '')) || 0), 0));
+    .reduce((s, x) => s + (incl ? (n0(x.amountInclVat) || round2(n0(x.amountPreVat) * 1.07)) : n0(x.amountPreVat)), 0));
 }
 
 async function create(req, res, user) {
@@ -169,6 +174,9 @@ async function create(req, res, user) {
   }
   // A QT typed by hand (not a request in this app): no balance or approval check is possible, so a reason is required.
   if (!r.requestId && !r.offReason) throw bad('เลือก QT จากระบบ หรือใส่เหตุผลที่ใช้ QT นอกระบบ');
+  const incl = vatIncluded(r.segment);
+  invoices.forEach((v) => { const sp = vatSplit(v.amount, incl); v.amountPreVat = sp.preVat; v.amountInclVat = sp.inclVat; });
+  const basis = incl ? 'รวม VAT' : 'ก่อน VAT';
   // CRM Opportunity ID: required for every segment except B2S.
   if (r.segment === 'B2S') r.opportunityId = '';
   else if (!r.opportunityId) throw bad('ใส่ Opportunity ID จาก CRM (CRM-OPP-YYYY-NNNNN) ยกเว้นลูกค้า B2S');
@@ -186,12 +194,12 @@ async function create(req, res, user) {
   }
 
   // Balance check: never silently bill more than the QT.
-  const prior = alreadyInvoiced(existing, r);
-  const asked = round2(invoices.reduce((s, v) => s + v.amountPreVat, 0));
-  const qtTotal = linked ? Number(String(linked.totalPreVat).replace(/,/g, '')) || 0 : 0;
+  const prior = alreadyInvoiced(existing, r, incl);
+  const asked = round2(invoices.reduce((s, v) => s + v.amount, 0));
+  const qtTotal = !linked ? 0 : incl ? (n0(linked.totalInclVat) || round2(n0(linked.totalPreVat) * 1.07)) : n0(linked.totalPreVat);
   const over = linked && qtTotal > 0 && prior + asked > qtTotal + 0.01;
   if (over && !r.overReason) {
-    throw bad(`ยอดรวม INV (${money(prior + asked)}) เกินยอด QT (${money(qtTotal)}) ใส่เหตุผลก่อนส่ง หรือแก้ยอด`);
+    throw bad(`ยอดรวม INV ${basis} (${money(prior + asked)}) เกินยอด QT (${money(qtTotal)}) ใส่เหตุผลก่อนส่ง หรือแก้ยอด`);
   }
 
   const evidenceLink = await drive.upload(b.file, { kind: 'inv', docNo: r.qtNo, company: r.company, ref: batchId });
@@ -214,7 +222,7 @@ async function create(req, res, user) {
     originalDoc: v.originalDoc, originalStatus: ORIGINAL[v.originalDoc], originalRecipient: v.originalRecipient,
     originalAddress: v.originalAddress, originalRequestedAt: v.originalDoc === 'yes' ? at : '', originalSentAt: '', trackingNo: '',
     overReason: over ? r.overReason : (!r.requestId ? `QT นอกระบบ: ${r.offReason}` : ''), whtRate: r.whtRate,
-    payCycle: r.payCycle, poNeeded: r.poNeeded, companyDocsLink: docLinks.join('\n'),
+    payCycle: r.payCycle, poNeeded: r.poNeeded, companyDocsLink: docLinks.join('\n'), amountInclVat: v.amountInclVat,
   }));
   await hub.appendRows('InvoiceRequests', rows);
 
@@ -232,7 +240,7 @@ async function create(req, res, user) {
   const originals = rows.filter((x) => x.originalDoc === 'yes').length;
   after.push(notify.chat([
     `🧾 ขอออก INV ใหม่ ${batchId} จาก ${user.name || user.email}`,
-    `QT ${r.qtNo} · ${rows.length} ใบ · รวมก่อน VAT ${money(asked)}${remaining !== null ? ` · คงเหลือ ${money(remaining)}` : ''}`,
+    `QT ${r.qtNo} · ${rows.length} ใบ · รวม${basis} ${money(asked)}${remaining !== null ? ` · คงเหลือ ${money(remaining)}` : ''}`,
     `ออกในนาม: ${entities.join(', ')}`,
     originals ? `📮 ต้องส่งตัวจริง ${originals} ใบ` : '',
     over ? `⚠️ เกินยอด QT: ${r.overReason}` : '',
@@ -241,7 +249,7 @@ async function create(req, res, user) {
   await Promise.all(after);
 
   res.status(200).json({
-    ok: true, batchId, ivRequestIds: rows.map((x) => x.ivRequestId), evidenceLink, asked, remaining,
+    ok: true, batchId, ivRequestIds: rows.map((x) => x.ivRequestId), evidenceLink, asked, remaining, vatMode: incl ? 'incl' : 'excl',
     message: `ส่งคำขอออก INV ${rows.length} ใบแล้ว ฝ่ายบัญชีจะตรวจหลักฐานและออกเอกสารใน PEAK`,
   });
 }
@@ -632,7 +640,7 @@ async function updateEdit(req, res, user) {
         const f = { peakNote: mark, updatedAt: at };
         if (newNo && newNo !== q.peakQtNo) { f.peakQtNo = newNo; f.peakQtId = ''; }
         if (newLink) f.peakDocLink = newLink;
-        if (newAmt !== null) f.totalPreVat = newAmt;
+        if (newAmt !== null) { f.totalPreVat = newAmt; f.totalInclVat = vatSplit(newAmt, false).inclVat; }
         await hub.updateRow('Requests', q._row, f);
       }
     } else if (row.docType === 'INV') {
@@ -641,7 +649,7 @@ async function updateEdit(req, res, user) {
         const f = { accountNote: mark, updatedAt: at };
         if (newNo) f.peakIvNo = newNo;
         if (newLink) f.peakDocLink = newLink;
-        if (newAmt !== null) f.amountPreVat = newAmt;
+        if (newAmt !== null) { f.amountPreVat = newAmt; f.amountInclVat = vatSplit(newAmt, false).inclVat; }
         await hub.updateRow('InvoiceRequests', iv._row, f);
         const a = (await hub.readTable('Invoices')).find((x) => x.ivRequestId === iv.ivRequestId || String(x.ivNo).toUpperCase() === String(iv.peakIvNo).toUpperCase());
         if (a) {

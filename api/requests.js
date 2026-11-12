@@ -6,7 +6,7 @@
 const crypto = require('crypto');
 const { checkOrigin, sendError } = require('../lib/session');
 const { requireUser, can, visibility } = require('../lib/users');
-const { priceItem, priceCustomKeyHS, priceService, priceSurcharge } = require('../lib/pricing');
+const { priceItem, priceCustomKeyHS, priceService, priceSurcharge, vatIncluded, vatSplit } = require('../lib/pricing');
 const { validTaxId, normBranch } = require('../lib/taxid');
 const hub = require('../lib/hub');
 const peak = require('../lib/peak');
@@ -136,7 +136,7 @@ async function create(req, res, user) {
     if (kind === 'service') return priceService({ code: it.code, name: it.name, qty: it.qty, unitPrice: it.unitPrice, discount: it.discount, wh: it.wh, lang });
     return priceItem({
       packageId: text(it.packageId, 60), students: it.students, classes: it.classes,
-      unitPrice: it.unitPrice, discount: it.discount, intl: it.intl, loc: it.loc, lang,
+      unitPrice: it.unitPrice, discount: it.discount, intl: it.intl, loc: it.loc, lang, vatIncl: vatIncluded(r.segment),
     });
   });
   // Sales' extra description for a package goes on its first (priced) line. The PEAK sync (Claude)
@@ -147,7 +147,10 @@ async function create(req, res, user) {
     const free = text(items[i].freebie, 300); if (free && p.lines[0]) p.lines[0].freebie = free;
   });
   const lines = priced.flatMap((p) => p.lines);
-  const total = Math.round(priced.reduce((s, p) => s + p.total, 0) * 100) / 100;
+  // Line prices are in the segment's basis: before VAT (B2B / B2S) or VAT-inclusive (B2C / B2E / MaoMao / Others).
+  const incl = vatIncluded(r.segment);
+  const entered = Math.round(priced.reduce((s, p) => s + p.total, 0) * 100) / 100;
+  const { preVat: total, inclVat: totalInclVat } = vatSplit(entered, incl);
   const catalogTotal = priced.reduce((s, p) => s + p.catalogTotal, 0);
   const belowFloor = priced.map((p) => p.belowFloor).filter(Boolean).join('; ');
 
@@ -169,7 +172,7 @@ async function create(req, res, user) {
     requestId: newId(now), createdAt: hub.sheetDateTime(now), requestedBy: user.email, salesName: user.name,
     ...r, wantedQtDate: toYmdDisplay(r.wantedQtDate), status: 'new', peakQtNo: '', peakQtId: '',
     totalPreVat: total, qtApprovedAt: '', ivRequestedAt: '', updatedAt: hub.sheetDateTime(now),
-    catalogTotal, belowFloor,
+    catalogTotal, belowFloor, vatMode: incl ? 'incl' : 'excl', totalInclVat, voidedQts: '',
   };
 
   // PEAK Draft quotation (only when PEAK_MODE is uat/prod and every line has a service code).
@@ -205,9 +208,9 @@ async function create(req, res, user) {
     peakServiceCode: serviceCodeOf(l), description: l.description, qty: l.qty, unitPrice: l.unitPrice,
     discount: l.discount, listPrice: l.listPrice, salesNote: l.salesNote || '', qtDescription: '', freebie: l.freebie || '',
   })));
-  await hub.log('catalog', 'request_created', request.requestId, `${user.email} · ${r.company} · ${total}${belowFloor ? ' · below catalog floor: ' + belowFloor : ''}`);
+  await hub.log('catalog', 'request_created', request.requestId, `${user.email} · ${r.company} · ${total}${incl ? ` (incl. VAT ${totalInclVat})` : ''}${belowFloor ? ' · below catalog floor: ' + belowFloor : ''}`);
 
-  res.status(200).json({ ok: true, requestId: request.requestId, status: request.status, peakQtNo: request.peakQtNo, total, catalogTotal, belowFloor, lines: lines.length, message: peakNote });
+  res.status(200).json({ ok: true, requestId: request.requestId, status: request.status, peakQtNo: request.peakQtNo, total, totalInclVat, vatMode: request.vatMode, catalogTotal, belowFloor, lines: lines.length, message: peakNote });
 }
 
 function parseSheetDate(s) {
@@ -218,8 +221,12 @@ function parseSheetDate(s) {
 
 async function list(req, res, user) {
   const [rows, lines, ivs] = await Promise.all([hub.readTable('Requests'), hub.readTable('RequestLines'), hub.readTable('InvoiceRequests')]);
-  const invoiced = {};
-  ivs.filter((v) => v.requestId && v.status !== 'rejected').forEach((v) => { invoiced[v.requestId] = (invoiced[v.requestId] || 0) + (Number(String(v.amountPreVat).replace(/,/g, '')) || 0); });
+  const invoiced = {}, invoicedIncl = {};
+  const n = (x) => Number(String(x ?? '').replace(/,/g, '')) || 0;
+  ivs.filter((v) => v.requestId && v.status !== 'rejected').forEach((v) => {
+    invoiced[v.requestId] = (invoiced[v.requestId] || 0) + n(v.amountPreVat);
+    invoicedIncl[v.requestId] = (invoicedIncl[v.requestId] || 0) + (n(v.amountInclVat) || Math.round(n(v.amountPreVat) * 107) / 100);
+  });
   const sees = await visibility(user);
   const mine = rows
     .filter((r) => sees(r.requestedBy))
@@ -234,7 +241,11 @@ async function list(req, res, user) {
   lines.filter((l) => ids.has(l.requestId)).forEach((l) => { (byId[l.requestId] = byId[l.requestId] || []).push(l); });
   res.status(200).json({
     ok: true,
-    requests: mine.map(({ _row, _createdMs, _invoicedPreVat, _remainingPreVat, ...r }) => ({ ...r, invoicedPreVat: Math.round((invoiced[r.requestId] || 0) * 100) / 100, lines: (byId[r.requestId] || []).map(({ _row: _, ...l }) => l) })),
+    requests: mine.map(({ _row, _createdMs, _invoicedPreVat, _remainingPreVat, ...r }) => ({ ...r,
+      vatMode: vatIncluded(r.segment) ? 'incl' : 'excl',
+      totalInclVat: n(r.totalInclVat) || Math.round(n(r.totalPreVat) * 107) / 100,
+      invoicedInclVat: Math.round((invoicedIncl[r.requestId] || 0) * 100) / 100,
+      invoicedPreVat: Math.round((invoiced[r.requestId] || 0) * 100) / 100, lines: (byId[r.requestId] || []).map(({ _row: _, ...l }) => l) })),
   });
 }
 
@@ -244,7 +255,10 @@ async function list(req, res, user) {
 //   reject      → rejected, with the reason shown to sales (required)
 //   reopen      → approved again (re-run the sync after fixing a contact / service code)
 //   qt_approved → the Draft was approved in PEAK
-const OP_ACTIONS = { approve: 'approved', reject: 'rejected', reopen: 'approved', qt_approved: 'qt_approved' };
+//   qt_voided   → accounting voided the QT in PEAK by mistake: back to approved with the QT
+//                 number cleared, so the PEAK sync drafts a new QT from the same request and lines.
+//                 The old number goes to voidedQts (AI) so it is never written back.
+const OP_ACTIONS = { approve: 'approved', reject: 'rejected', reopen: 'approved', qt_approved: 'qt_approved', qt_voided: 'approved' };
 async function update(req, res, user) {
   checkOrigin(req);
   if (!can(user, 'approve')) throw bad('ไม่มีสิทธิ์อนุมัติเอกสาร', 403);
@@ -265,16 +279,29 @@ async function update(req, res, user) {
     // needs_review = sales must change the request: accounting rejects it, sales rebuilds it.
     reopen: ['needs_contact', 'needs_service_code', 'qt_error'],
     qt_approved: ['qt_draft'],
+    // qt_error: the sync found the Draft voided in PEAK ("QT ถูก void ใน PEAK").
+    qt_voided: ['qt_draft', 'qt_approved', 'qt_error'],
   };
   if (!FROM[b.action].includes(row.status)) {
-    const done = { approve: 'คำขอนี้อนุมัติไปแล้วหรือไม่ได้รออนุมัติ', reject: 'ตีกลับไม่ได้: คำขอนี้ไม่ได้อยู่ในสถานะที่ตีกลับได้ (อาจสร้าง QT ใน PEAK แล้ว)', reopen: 'คำขอนี้ไม่ได้ติดปัญหาแล้ว', qt_approved: 'QT นี้ไม่ได้อยู่ในสถานะ Draft' };
+    const done = { approve: 'คำขอนี้อนุมัติไปแล้วหรือไม่ได้รออนุมัติ', reject: 'ตีกลับไม่ได้: คำขอนี้ไม่ได้อยู่ในสถานะที่ตีกลับได้ (อาจสร้าง QT ใน PEAK แล้ว)', reopen: 'คำขอนี้ไม่ได้ติดปัญหาแล้ว', qt_approved: 'QT นี้ไม่ได้อยู่ในสถานะ Draft', qt_voided: 'คำขอนี้ไม่มี QT ใน PEAK ที่จะยกเลิก' };
     throw bad(`${done[b.action]} (สถานะตอนนี้: ${row.status}) รีเฟรชหน้าเพื่อดูข้อมูลล่าสุด`, 409);
   }
   hub.checkSeen(row, text(b.seen, 80));
   if (b.action === 'qt_approved') fields.qtApprovedAt = at;
   const who = user.name || user.email;
-  const auto = { approve: `ฝ่ายบัญชีอนุมัติคำขอแล้ว รอระบบสร้าง QT Draft ใน PEAK — ${who}`, reopen: `ให้ระบบสร้าง QT ใหม่ — ${who}`, qt_approved: `อนุมัติ QT ใน PEAK แล้ว — ${who}` };
-  fields.peakNote = note ? `${note} — ${who}` : (auto[b.action] || row.peakNote);
+  if (b.action === 'qt_voided') {
+    if (!row.peakQtNo && !row.peakQtId) throw bad('คำขอนี้ยังไม่มีเลข QT ใน PEAK', 409);
+    // A QT that already has INV requests can't just be redone: the INVs point at the old number.
+    const ivs = (await hub.readTable('InvoiceRequests')).filter((v) => v.requestId === row.requestId && v.status !== 'rejected');
+    if (ivs.length) throw bad(`QT นี้มีคำขอ INV แล้ว ${ivs.length} ใบ ใช้ "ขอแก้เอกสาร" แทน`, 409);
+    const old = `${row.peakQtNo || '?'}|${row.peakQtId || ''}`;
+    Object.assign(fields, {
+      peakQtNo: '', peakQtId: '', peakDocLink: '', qtApprovedAt: '',
+      voidedQts: [row.voidedQts, old].filter(Boolean).join('; '),
+    });
+  }
+  const auto = { approve: `ฝ่ายบัญชีอนุมัติคำขอแล้ว รอระบบสร้าง QT Draft ใน PEAK — ${who}`, reopen: `ให้ระบบสร้าง QT ใหม่ — ${who}`, qt_approved: `อนุมัติ QT ใน PEAK แล้ว — ${who}`, qt_voided: `QT ${row.peakQtNo || ''} ถูกยกเลิกใน PEAK ระบบจะสร้าง QT Draft ใหม่จากข้อมูลเดิม — ${who}` };
+  fields.peakNote = b.action === 'qt_voided' ? `${auto.qt_voided}${note ? ` · ${note}` : ''}` : note ? `${note} — ${who}` : (auto[b.action] || row.peakNote);
   await hub.writeChecked('Requests', 'requestId', row, fields);
   await hub.log('catalog', `qt_${b.action}`, row.requestId, `${user.email}${note ? ' · ' + note : ''}`);
   res.status(200).json({ ok: true, status });

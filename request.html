@@ -131,7 +131,7 @@
     <p class="hint">เพิ่มได้หลายใบ แต่ละใบเลือกได้ว่าออกในนามลูกค้าตาม QT หรือบริษัทอื่น (เช่น บริษัทลูก) และต้องส่งตัวจริงไหม ถ้ายังไม่รู้ เลือก "ยังไม่ทราบ" แล้วค่อยอัปเดตในหน้า "คำขอของฉัน"</p>
     <div id="i-list"></div>
     <button class="btn btn-o" type="button" onclick="addInv()">➕ เพิ่ม INV</button>
-    <div class="total"><span>รวมก่อน VAT ในคำขอนี้</span><strong id="i-sum">0</strong></div>
+    <div class="total"><span id="i-sum-l">รวมก่อน VAT ในคำขอนี้</span><strong id="i-sum">0</strong></div>
     <div class="fg" id="i-over-wrap" hidden style="margin-top:10px"><label style="color:var(--bad-ink)">เหตุผลที่ยอดเกิน QT *</label><input id="i-over" type="text" maxlength="300" placeholder="เช่น ลูกค้าเพิ่มจำนวนผู้เรียน รอออก QT ใหม่"></div>
   </div>
 
@@ -161,7 +161,7 @@
     <p class="hint">ขอใบเสร็จ / ใบกำกับภาษีหลังลูกค้าชำระเงิน สำหรับรายการที่<b>ไม่มี INV</b> (ส่วนใหญ่ B2C / B2E ที่จ่ายผ่าน Whitehouse) เลขเอกสารจะขึ้นในหน้า "คำขอของฉัน"</p>
     <div class="msg info">ลูกค้าที่มี INV แล้ว (เช่น B2B) <b>ไม่ต้องกรอกฟอร์มนี้</b> เมื่อบันทึกรับเงินแล้ว ฝ่ายบัญชีจะออกใบเสร็จจาก INV ให้ และเลขใบเสร็จจะขึ้นในคำขอ INV ของคุณ</div>
     <div class="row c3">
-      <div class="fg"><label>กลุ่มลูกค้า *</label><select id="r-seg"><option>B2C</option><option>B2E</option><option>MaoMao</option><option>B2B</option><option>B2S</option><option>Others</option></select></div>
+      <div class="fg"><label>กลุ่มลูกค้า *</label><select id="r-seg" onchange="onRtSeg()"><option>B2C</option><option>B2E</option><option>MaoMao</option><option>B2B</option><option>B2S</option><option>Others</option></select></div>
       <div class="fg"><label>ประเภทเอกสาร *</label><select id="r-kind" onchange="onRtKind()"><option value="company">ใบเสร็จ/ใบกำกับภาษี ในนามบริษัท</option><option value="person">ใบเสร็จ/ใบกำกับภาษี ในนามบุคคล</option></select></div>
       <div class="fg"><label>ภาษาเอกสาร</label><select id="r-lang"><option value="TH">ภาษาไทย</option><option value="EN">English</option></select></div>
     </div>
@@ -181,7 +181,7 @@
     </div>
     <div class="row c1"><div class="fg"><label>ชื่อคอร์ส / รายละเอียดที่ให้ขึ้นในเอกสาร</label><textarea id="r-desc" rows="2" maxlength="1500"></textarea></div></div>
     <div class="row c4">
-      <div class="fg"><label>ราคาขาย (ก่อนหักส่วนลด) *</label><input id="r-price" type="number" min="0" step="0.01"></div>
+      <div class="fg"><label id="r-price-l">ราคาขาย รวม VAT (ก่อนหักส่วนลด) *</label><input id="r-price" type="number" min="0" step="0.01"></div>
       <div class="fg"><label>ส่วนลด</label><input id="r-disc" type="number" min="0" step="0.01" placeholder="0"></div>
       <div class="fg"><label>หัก ณ ที่จ่าย *</label><select id="r-wht"><option value="">— เลือก —</option><option value="0">ไม่หัก</option><option value="3">หัก 3%</option><option value="1">หัก 1%</option><option value="2">หัก 2%</option><option value="5">หัก 5%</option></select></div>
       <div class="fg"><label>วันที่ลูกค้าชำระ *</label><input id="r-paid" type="date"></div>
@@ -249,6 +249,18 @@ const $ = (id) => document.getElementById(id);
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 const fmt = (n) => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
 const toNum = (v) => Number(String(v ?? '').replace(/,/g, '')) || 0;
+// VAT: B2B / B2S quote prices before VAT; B2C / B2E / MaoMao / Others quote VAT-inclusive prices.
+const VAT_IN = ['B2C', 'B2E', 'MaoMao', 'Others'];
+const vatIn = (seg) => VAT_IN.includes(seg);
+const basisOf = (seg) => (vatIn(seg) ? 'รวม VAT' : 'ก่อน VAT');
+const rnd2 = (n) => Math.round(n * 100) / 100;
+// A QT's total and what was already invoiced, in the QT's own basis.
+const qtAmt = (q) => (vatIn(q.segment)
+  ? { total: toNum(q.totalInclVat) || rnd2(toNum(q.totalPreVat) * 1.07), done: toNum(q.invoicedInclVat), lbl: 'รวม VAT' }
+  : { total: toNum(q.totalPreVat), done: toNum(q.invoicedPreVat), lbl: 'ก่อน VAT' });
+// An INV request's amount: VAT-inclusive (with the pre-VAT part) when its QT is VAT-inclusive.
+const ivAmt = (v) => { const inc = toNum(v.amountInclVat); return inc && toNum(v.amountPreVat) && Math.abs(inc - toNum(v.amountPreVat) * 1.07) < 1 && vatIn(((REQS.find((x) => x.requestId === v.requestId)) || {}).segment)
+  ? { amt: inc, lbl: 'รวม VAT', sub: `ก่อน VAT ${fmt(toNum(v.amountPreVat))}` } : { amt: toNum(v.amountPreVat), lbl: 'ก่อน VAT', sub: '' }; };
 const normOpp = (v) => { const s = String(v || '').trim().toUpperCase(); const m = /CRM-OPP-\d{4}-\d{5}/.exec(s); return m ? m[0] : s.replace(/\s+/g, ''); };
 const OPP_OK = (s) => /^CRM-OPP-\d{4}-\d{5}$/.test(s);
 function digits(el) { const v = el.value.replace(/\D/g, ''); if (v !== el.value) el.value = v; }
@@ -381,8 +393,20 @@ function changeSegment() {
   msg('q-msg', dropped ? 'info' : '', dropped ? `เปลี่ยนเป็น ${seg} แล้ว ระบบลบ ${dropped} รายการที่ ${seg} ใช้ไม่ได้ออก` : '');
   saveDraft();
 }
+// Catalog prices are before VAT. A VAT-inclusive segment (Others) shows them with VAT; switching back removes it.
+function syncCatalogVat(seg) {
+  const want = vatIn(seg);
+  CART.forEach((it) => {
+    if (kindOf(it) !== 'catalog' || !!it.vatIn === want) return;
+    if (it.unitPrice !== '' && it.unitPrice !== undefined && it.unitPrice !== null) it.unitPrice = String(rnd2(toNum(it.unitPrice) * (want ? 1.07 : 1 / 1.07)));
+    it.vatIn = want;
+  });
+  saveCart();
+}
+const catVf = () => (vatIn($('q-segment').value) ? 1.07 : 1);
 function onSegment() {
   const seg = $('q-segment').value;
+  syncCatalogVat(seg);
   $('q-opp-wrap').hidden = seg === 'B2S';
   $('q-opp-label').textContent = 'Opportunity ID ใน CRM *';
   const k = KINDS[seg];
@@ -415,8 +439,8 @@ function setVal(el) {
     const n = Math.floor(Number(v)); if (!(n >= 1)) { recalc(); return; }
     if (f === 'students' && kindOf(it) === 'catalog') {
       const pkg = PKGS.find((p) => p.id === it.packageId);
-      if (pkg && pkg.unit !== 'per class' && Number(it.unitPrice) === getPrice(pkg, it.students)) {
-        it.unitPrice = getPrice(pkg, n); const pe = document.querySelector(`[data-i="${i}"][data-f="unitPrice"]`); if (pe) pe.value = it.unitPrice;
+      if (pkg && pkg.unit !== 'per class' && Number(it.unitPrice) === rnd2(getPrice(pkg, it.students) * catVf())) {
+        it.unitPrice = rnd2(getPrice(pkg, n) * catVf()); const pe = document.querySelector(`[data-i="${i}"][data-f="unitPrice"]`); if (pe) pe.value = it.unitPrice;
       }
     }
     it[f] = n;
@@ -484,8 +508,8 @@ function lineCalc(it) {
     const per = pkg && pkg.unit === 'per class';
     const qty = per ? (Number(it.classes) || 1) : (Number(it.students) || 0);
     const gross = qty * toNum(it.unitPrice); const d = disc(it.discount, gross); lt = gross - (d || 0);
-    const list = pkg ? getPrice(pkg, per ? (pkg.minN || it.students) : it.students) : 0;
-    const floor = pkg ? Math.min(...pkg.p) : 0;
+    const list = pkg ? rnd2(getPrice(pkg, per ? (pkg.minN || it.students) : it.students) * catVf()) : 0;
+    const floor = pkg ? rnd2(Math.min(...pkg.p) * catVf()) : 0;
     ref = `Catalog ${fmt(list)}`;
     if (qty && lt / qty < floor) warn = `<div class="warn">ต่ำกว่าขั้นต่ำ Catalog (${fmt(floor)})</div>`;
   } else {
@@ -505,6 +529,7 @@ function recalc() {
     const r = $('lr-' + i); if (r) r.textContent = c.ref;
   });
   const t = $('q-total'); if (t) t.textContent = fmt(total);
+  const pv = $('q-total-sub'); if (pv) pv.textContent = vatIn($('q-segment').value) && total ? `ก่อน VAT ${fmt(rnd2(total / 1.07))} · VAT ${fmt(rnd2(total - total / 1.07))}` : '';
 }
 
 function renderItems() {
@@ -551,8 +576,8 @@ function renderItems() {
       <td class="num" style="width:110px"><b id="lt-${i}">0</b></td>
       <td style="width:36px"><button class="del" onclick="delItem(${i})" aria-label="ลบ">✕</button></td></tr>`;
   }).join('');
-  el.innerHTML = `<div style="overflow-x:auto"><table class="items"><thead><tr><th>รายการ</th><th class="num">จำนวน</th><th class="num">ราคา/หน่วย</th><th class="num">ส่วนลด</th><th class="num">รวม</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
-    <div class="total"><span>ยอดรวมก่อน VAT</span><strong id="q-total">0</strong></div>`;
+  el.innerHTML = `<div style="overflow-x:auto"><table class="items"><thead><tr><th>รายการ</th><th class="num">จำนวน</th><th class="num">ราคา/หน่วย<br><span class="small">(${basisOf($('q-segment').value)})</span></th><th class="num">ส่วนลด</th><th class="num">รวม</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="total"><span>ยอดรวม${basisOf($('q-segment').value) === 'รวม VAT' ? ' (รวม VAT แล้ว)' : 'ก่อน VAT'}<br><span class="small" id="q-total-sub"></span></span><strong id="q-total">0</strong></div>`;
   CART.forEach((it, i) => { if (kindOf(it) === 'service') { showSvc(i); if (it.code && !it.svc) lookupSvc(i); } });
   recalc();
   CART.forEach((it, i) => { if (kindOf(it) === 'keyhs' && it.keyHS && !it.heading) khsName(i); });
@@ -644,7 +669,7 @@ async function submitQT() {
   const ok = await ask({ title: 'ยืนยันส่งคำขอใบเสนอราคา', ok: '📨 ส่งคำขอ', html: `<table>
     <tr><td>ลูกค้า</td><td><b>${esc(body.company)}</b> (${esc(seg)})</td></tr>
     <tr><td>เลขภาษี / สาขา</td><td>${esc(body.taxId)} / ${esc(body.branch)}${body.clientCode ? ' · ' + esc(body.clientCode) : ''}</td></tr>
-    <tr><td>รายการ</td><td>${CART.length} รายการ · ยอดก่อน VAT <b>${esc($('q-total').textContent)}</b></td></tr>
+    <tr><td>รายการ</td><td>${CART.length} รายการ · ยอด${basisOf(seg)} <b>${esc($('q-total').textContent)}</b>${vatIn(seg) ? ' <span class="small">(QT ใน PEAK เป็นราคารวม VAT)</span>' : ''}</td></tr>
     <tr><td>วันที่ QT / เครดิต</td><td>${esc(body.wantedQtDate)} · ${esc(body.creditTermDays)} วัน</td></tr>
     <tr><td>หัก ณ ที่จ่าย</td><td>${whtText(body.whtRate)}</td></tr></table>
     <p class="small" style="margin-top:8px">ส่งแล้วแก้ไม่ได้ ถ้าต้องแก้ ให้ฝ่ายบัญชีตีกลับแล้วส่งใหม่</p>` });
@@ -653,7 +678,7 @@ async function submitQT() {
   try {
     const d = await withLoading('กำลังส่งคำขอใบเสนอราคา…', () => postChecked('/api/requests', body, false));
     if (!d) { msg('q-msg', 'info', 'ยังไม่ได้ส่ง ดูคำขอเดิมได้ที่ "คำขอของฉัน"'); return; }
-    $('q-msg').innerHTML = `<div class="done-card"><b>✓ ส่งคำขอ ${esc(d.requestId)} แล้ว</b><div style="margin:6px 0 10px">ยอดก่อน VAT ${fmt(d.total)} · ${esc(d.message)}${d.belowFloor ? '<br>มีรายการต่ำกว่าราคาขั้นต่ำ Catalog (บันทึกไว้ให้ผู้อนุมัติเห็น)' : ''}</div><button class="btn btn-o btn-sm" onclick="go('mine')">ดูสถานะในคำขอของฉัน</button></div>`;
+    $('q-msg').innerHTML = `<div class="done-card"><b>✓ ส่งคำขอ ${esc(d.requestId)} แล้ว</b><div style="margin:6px 0 10px">${d.vatMode === 'incl' ? `ยอดรวม VAT ${fmt(d.totalInclVat)} (ก่อน VAT ${fmt(d.total)})` : `ยอดก่อน VAT ${fmt(d.total)}`} · ${esc(d.message)}${d.belowFloor ? '<br>มีรายการต่ำกว่าราคาขั้นต่ำ Catalog (บันทึกไว้ให้ผู้อนุมัติเห็น)' : ''}</div><button class="btn btn-o btn-sm" onclick="go('mine')">ดูสถานะในคำขอของฉัน</button></div>`;
     CART = []; saveCart(); renderItems();
     ['q-opp-y', 'q-opp-n', 'q-tax', 'q-branch', 'q-client', 'q-company', 'q-date', 'q-term', 'q-wht', 'q-note', 'q-email', 'q-replaces'].forEach((id) => { $(id).value = ''; }); paintOpp('q');
     onTaxInput('q');
@@ -680,9 +705,10 @@ function setInv(i, f, v) {
   if (['billTo', 'originalDoc'].includes(f)) renderInvs(); else updateSum();
 }
 function currentQT() { return REQS.find((q) => q.requestId === $('i-req').value) || null; }
+const invBasis = () => basisOf($('i-seg').value);
 function qtBalance() {
   const q = currentQT(); if (!q) return null;
-  const total = toNum(q.totalPreVat), done = toNum(q.invoicedPreVat);
+  const { total, done } = qtAmt(q);
   return { total, done, left: Math.round((total - done) * 100) / 100 };
 }
 // Price per student from the QT (one priced package line only): an INV for fewer students costs less.
@@ -690,7 +716,7 @@ function perStudent() {
   const q = currentQT(); if (!q) return null;
   const priced = (q.lines || []).filter((l) => toNum(l.unitPrice) > 0);
   if (priced.length !== 1 || !(toNum(priced[0].qty) > 0)) return null;
-  return { per: Math.round(toNum(q.totalPreVat) / toNum(priced[0].qty) * 100) / 100, qty: toNum(priced[0].qty) };
+  return { per: Math.round(qtAmt(q).total / toNum(priced[0].qty) * 100) / 100, qty: toNum(priced[0].qty) };
 }
 function prefillAmount() {
   const b = qtBalance(); const x = INVS[0]; if (!b || !x || x.amountPreVat || !(b.left > 0)) return;
@@ -715,7 +741,7 @@ function renderInvs() {
       </div>
       <div class="row c1"><div class="fg"><label>ชื่อบริษัทตามที่จะออก INV *</label><input type="text" maxlength="200" value="${esc(x.company)}" onchange="setInv(${i},'company',this.value)"></div></div>` : ''}
       <div class="row c3">
-        <div class="fg"><label>ยอดก่อน VAT (บาท) *</label><input type="number" min="0" step="0.01" value="${esc(x.amountPreVat)}" oninput="setInv(${i},'amountPreVat',this.value)">${(() => { const ps = perStudent(); if (!ps) return ''; const n = toNum(x.students); const exp = Math.round(ps.per * n * 100) / 100; return `<div class="sub${n && Math.abs(exp - toNum(x.amountPreVat)) > 0.01 ? ' warnbg' : ''}">ราคาต่อผู้เรียนตาม QT ${fmt(ps.per)} บาท${n ? ` × ${n} คน = ${fmt(exp)}` : ''}${n && Math.abs(exp - toNum(x.amountPreVat)) > 0.01 ? ' · ยอดที่ใส่ไม่ตรงกับจำนวนผู้เรียน' : ''}</div>`; })()}</div>
+        <div class="fg"><label>ยอด${invBasis()} (บาท) *</label><input type="number" min="0" step="0.01" value="${esc(x.amountPreVat)}" oninput="setInv(${i},'amountPreVat',this.value)">${(() => { const ps = perStudent(); if (!ps) return ''; const n = toNum(x.students); const exp = Math.round(ps.per * n * 100) / 100; return `<div class="sub${n && Math.abs(exp - toNum(x.amountPreVat)) > 0.01 ? ' warnbg' : ''}">ราคาต่อผู้เรียนตาม QT ${fmt(ps.per)} บาท${n ? ` × ${n} คน = ${fmt(exp)}` : ''}${n && Math.abs(exp - toNum(x.amountPreVat)) > 0.01 ? ' · ยอดที่ใส่ไม่ตรงกับจำนวนผู้เรียน' : ''}</div>`; })()}</div>
         <div class="fg"><label>ชื่องวด / รายละเอียด</label><input type="text" maxlength="40" value="${esc(x.label)}" placeholder="เช่น เครดิตงวด 1, 50%" onchange="setInv(${i},'label',this.value)"></div>
         <div class="fg"><label>จำนวนผู้เรียนในใบนี้ *</label><input type="number" min="1" value="${esc(x.students)}" onchange="setInv(${i},'students',this.value)">${perStudent() ? `<div class="sub">QT นี้ ${perStudent().qty} คน · เปลี่ยนจำนวนแล้วยอดคำนวณให้ใหม่</div>` : ''}</div>
       </div>
@@ -745,13 +771,14 @@ function renderInvs() {
 function updateSum() {
   const sum = INVS.reduce((s, x) => s + toNum(x.amountPreVat), 0);
   $('i-sum').textContent = fmt(sum);
+  $('i-sum-l').textContent = `รวม${invBasis() === 'รวม VAT' ? ' (รวม VAT)' : 'ก่อน VAT'} ในคำขอนี้`;
   const b = qtBalance();
   const over = b && b.total > 0 && b.done + sum > b.total + 0.01;
   $('i-over-wrap').hidden = !over;
   if (b) {
     const after = Math.round((b.left - sum) * 100) / 100;
     $('i-balance').innerHTML = `<div class="balance">
-      <div>ยอด QT ก่อน VAT<b>${fmt(b.total)}</b></div>
+      <div>ยอด QT ${invBasis()}<b>${fmt(b.total)}</b></div>
       <div>ขอ INV ไปแล้ว<b>${fmt(b.done)}</b></div>
       <div class="${after < 0 ? 'neg' : ''}">คงเหลือหลังคำขอนี้<b>${fmt(after)}</b></div></div>`;
   } else $('i-balance').innerHTML = '';
@@ -782,7 +809,7 @@ function onPickQT() {
   $('i-qt-hint').textContent = !q ? '' : q.peakQtNo ? '✓ ดึงจาก Revenue Hub' : 'ฝ่ายบัญชียังไม่ได้ใส่เลข QT ของคำขอนี้ ใส่เลขที่ได้รับเองได้';
   renderInvs();
 }
-function onInvSeg() { $('i-opp-wrap').hidden = $('i-seg').value === 'B2S'; }
+function onInvSeg() { $('i-opp-wrap').hidden = $('i-seg').value === 'B2S'; if (typeof INVS !== 'undefined' && $('i-list')) renderInvs(); }
 function startInvFor(requestId) { go('inv'); $('i-req').value = requestId; INVS = [blankInv()]; onPickQT(); prefillAmount(); renderInvs(); window.scrollTo(0, 0); }
 
 function readFileB64(file) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] || ''); r.onerror = () => rej(new Error('อ่านไฟล์ไม่สำเร็จ')); r.readAsDataURL(file); }); }
@@ -794,7 +821,9 @@ async function submitINV() {
     taxId: v('i-tax'), branch: v('i-branch'),
     evidenceType: v('i-evtype'), evidenceOther: v('i-evother'),
     financeContact: v('i-fin-name'), financeEmail: v('i-fin-email'), financePhone: v('i-fin-phone'), note: v('i-note'),
-    overReason: $('i-over-wrap').hidden ? '' : v('i-over'), offReason: $('i-off-wrap').hidden ? '' : v('i-off'), invoices: INVS, poNeeded: v('i-poneed'), payCycle: v('i-paycycle'),
+    overReason: $('i-over-wrap').hidden ? '' : v('i-over'), offReason: $('i-off-wrap').hidden ? '' : v('i-off'),
+    // amountPreVat in the form holds the amount in the segment's basis (VAT-inclusive for B2C / B2E / MaoMao / Others).
+    invoices: INVS.map((x) => ({ ...x, amount: x.amountPreVat })), poNeeded: v('i-poneed'), payCycle: v('i-paycycle'),
   };
   if (!body.qtNo) return msg('i-msg', 'err', 'ใส่เลขที่ใบเสนอราคา (QT)');
   if (!body.company) return msg('i-msg', 'err', 'ใส่ชื่อลูกค้าตาม QT');
@@ -810,7 +839,7 @@ async function submitINV() {
   if (f && f.size > 3 * 1024 * 1024) return msg('i-msg', 'err', 'ไฟล์ใหญ่เกิน 3 MB');
   for (let i = 0; i < INVS.length; i++) {
     const x = INVS[i];
-    if (!(toNum(x.amountPreVat) > 0)) return msg('i-msg', 'err', `INV ใบที่ ${i + 1}: ใส่ยอดก่อน VAT`);
+    if (!(toNum(x.amountPreVat) > 0)) return msg('i-msg', 'err', `INV ใบที่ ${i + 1}: ใส่ยอด${invBasis()}`);
     if (x.billTo === 'other' && (!x.company || !x.relation)) return msg('i-msg', 'err', `INV ใบที่ ${i + 1}: ใส่ชื่อบริษัทและความสัมพันธ์กับลูกค้าตาม QT`);
     if (x.billTo === 'other' && (x.taxId || '').length !== 13) return msg('i-msg', 'err', `INV ใบที่ ${i + 1}: เลขผู้เสียภาษีต้องมี 13 หลัก`);
     if (!x.originalDoc) return msg('i-msg', 'err', `INV ใบที่ ${i + 1}: เลือกว่าต้องส่งเอกสารตัวจริงไหม`);
@@ -819,7 +848,7 @@ async function submitINV() {
   // Accidental re-send: same QT + same amount already requested (checked here first, so the user sees
   // "already sent" rather than an over-QT error). The server checks again.
   const prev = IVS.filter((x) => x.status !== 'rejected' && (body.requestId ? x.requestId === body.requestId : x.qtNo === body.qtNo)
-    && INVS.some((v) => Math.abs(toNum(x.amountPreVat) - toNum(v.amountPreVat)) < 0.01));
+    && INVS.some((v) => Math.abs(toNum(vatIn(body.segment) ? (x.amountInclVat || toNum(x.amountPreVat) * 1.07) : x.amountPreVat) - toNum(v.amountPreVat)) < 0.01));
   if (prev.length && !body.confirmDuplicate) {
     const again = await ask({ kind: 'warn', title: '⚠️ เหมือนเคยส่งคำขอนี้ไปแล้ว', ok: 'ส่งซ้ำอีกใบ', cancel: 'ไม่ส่ง',
       html: `<p>QT ${esc(body.qtNo)} มีคำขอ INV ยอดเดียวกันอยู่แล้ว ${prev.length} ใบ:</p>${dupTable(prev.slice(-5).map((x) => ({ id: x.ivRequestId, createdAt: x.createdAt, by: x.salesName, status: x.status, amount: x.amountPreVat, ivNo: x.peakIvNo })), true)}<p style="margin-top:10px">ถ้าเผลอกดซ้ำ ให้กด <b>ไม่ส่ง</b> · ถ้าตั้งใจขอเพิ่มจริง (เช่น งวดใหม่ยอดเท่าเดิม) กด <b>ส่งซ้ำอีกใบ</b></p>` });
@@ -837,7 +866,7 @@ async function submitINV() {
   const sum = INVS.reduce((s, x) => s + toNum(x.amountPreVat), 0);
   const ok = await ask({ title: 'ยืนยันส่งคำขอออก INV', ok: '📨 ส่งคำขอ', html: `<table>
     <tr><td>QT</td><td><b>${esc(body.qtNo)}</b> · ${esc(body.company)}</td></tr>
-    <tr><td>จำนวน INV</td><td>${INVS.length} ใบ · รวมก่อน VAT <b>${fmt(sum)}</b></td></tr>
+    <tr><td>จำนวน INV</td><td>${INVS.length} ใบ · รวม${invBasis()} <b>${fmt(sum)}</b></td></tr>
     ${INVS.map((x, i) => `<tr><td>ใบที่ ${i + 1}</td><td>${fmt(toNum(x.amountPreVat))} · ${esc(x.students)} ผู้เรียน · วันที่ ${esc(x.wantedIssueDate)} · เครดิต ${esc(x.creditTermDays)} วัน${x.billTo === 'other' ? ' · ออกในนาม ' + esc(x.company) : ''}</td></tr>`).join('')}
     <tr><td>หัก ณ ที่จ่าย</td><td>${whtText(body.whtRate)}</td></tr>
     <tr><td>หลักฐาน</td><td>${esc(body.evidenceType)} · ${esc(f.name)}${docs.length ? ` + เอกสารบริษัท ${docs.length} ไฟล์` : ''}</td></tr>
@@ -910,15 +939,15 @@ function renderMine() {
   const shownQ = REQS.filter((q) => !replaced.has(q.requestId));
   $('mine-qt').innerHTML = shownQ.length ? shownQ.map((q) => {
     const heroes = (q.lines || []).filter((l) => l.role !== 'supplement').map((l) => `${esc(l.packageId === 'CUSTOM' ? 'Customized' : l.packageId === 'SURCHARGE' ? 'ค่าเพิ่ม' : l.packageId)} × ${esc(l.qty)}`).join(', ');
-    const total = toNum(q.totalPreVat), done = toNum(q.invoicedPreVat);
+    const { total, done, lbl } = qtAmt(q);
     const mineIvs = IVS.filter((v) => v.requestId === q.requestId);
     return `<div class="list-row">
       <div class="list-head"><div>${q.peakQtNo ? `<span class="list-id">QT ${qtLink(q)}</span>` : '<span class="small">ยังไม่มีเลข QT</span>'} · ${esc(q.company)}</div>${st(QT_ST, q.status)}</div>
       <div class="list-sub">${esc(q.requestId)}${q.replaces ? ` <span class="small">(แทนคำขอ ${esc(q.replaces)} ที่ถูกตีกลับ)</span>` : ''} · ${esc(q.createdAt)} · ${esc(q.segment)}${q.opportunityId ? ' · ' + esc(q.opportunityId) : ''}${op ? ' · ' + esc(q.salesName) : ''}<br>
-        ${heroes}<br>ยอดก่อน VAT <b>${fmt(total)}</b> · ขอ INV แล้ว ${fmt(done)} · คงเหลือ <b>${fmt(total - done)}</b>${q.peakNote ? `<br><span class="small">หมายเหตุ: ${esc(q.peakNote)}</span>` : ''}</div>
-      ${mineIvs.length ? `<div class="inv-mini">${mineIvs.map((v) => `<div class="inv-mini-row"><span class="mono">${esc(v.ivRequestId)}</span><span>${esc(v.company)} · ${fmt(toNum(v.amountPreVat))}</span><span>${st(IV_ST, v.status)} ${st(ORIG_ST, v.originalStatus)}</span></div>`).join('')}</div>` : ''}
+        ${heroes}<br>ยอด${lbl} <b>${fmt(total)}</b> · ขอ INV แล้ว ${fmt(done)} · คงเหลือ <b>${fmt(total - done)}</b>${q.peakNote ? `<br><span class="small">หมายเหตุ: ${esc(q.peakNote)}</span>` : ''}</div>
+      ${mineIvs.length ? `<div class="inv-mini">${mineIvs.map((v) => `<div class="inv-mini-row"><span class="mono">${esc(v.ivRequestId)}</span><span>${esc(v.company)} · ${fmt(ivAmt(v).amt)}</span><span>${st(IV_ST, v.status)} ${st(ORIG_ST, v.originalStatus)}</span></div>`).join('')}</div>` : ''}
       ${q.status === 'rejected' && ME && q.requestedBy === ME.email && !replaced.has(q.requestId) ? `<div style="margin-top:8px"><button class="btn btn-p btn-sm" onclick="rebuildQT('${esc(q.requestId)}')">↻ สร้างคำขอใหม่จากข้อมูลเดิม</button></div>` : ''}
-      ${q.peakQtNo && QT_LIVE.includes(q.status) ? `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-o btn-sm" onclick="startInvFor('${esc(q.requestId)}')">🧾 ขอ INV จาก QT นี้</button><button class="btn btn-g btn-sm" onclick="askEdit('QT','${esc(q.peakQtNo)}','${esc(q.requestId)}')">✏️ ขอแก้ไข QT</button></div>` : ''}
+      ${q.peakQtNo && QT_LIVE.includes(q.status) ? `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-o btn-sm" onclick="startInvFor('${esc(q.requestId)}')">🧾 ขอ INV จาก QT นี้</button><button class="btn btn-g btn-sm" onclick="askEdit('QT','${esc(q.peakQtNo)}','${esc(q.requestId)}')">✏️ ขอแก้ไข QT</button>${canDo('approve') && q.status === 'qt_approved' && !mineIvs.some((v) => v.status !== 'rejected') ? `<button class="btn btn-g btn-sm" onclick="qtAction('${esc(q.requestId)}','qt_voided')">QT ถูกยกเลิกใน PEAK</button>` : ''}</div><span id="qm-${esc(q.requestId)}"></span>` : ''}
     </div>`;
   }).join('') : '<div class="empty">ยังไม่มีคำขอใบเสนอราคา</div>';
 
@@ -927,7 +956,7 @@ function renderMine() {
     return `<div class="list-row" id="row-${esc(v.ivRequestId)}">
       <div class="list-head"><div><span class="list-id">${esc(v.ivRequestId)}</span> · ${esc(v.company)}${v.billToRelation ? ` <span class="small">(${esc(v.billToRelation)})</span>` : ''}</div><div>${st(IV_ST, v.status)} ${payChip(v)} ${st(ORIG_ST, v.originalStatus)}</div></div>
       <div class="list-sub">QT ${esc(v.qtNo)}${v.peakIvNo ? ' · INV ' + docLink(v.peakIvNo, v.peakDocLink) : ''} · ${esc(v.createdAt)}${op ? ' · ' + esc(v.salesName) : ''}${v.accountNote ? `<br><span class="small">ฝ่ายบัญชี: ${esc(v.accountNote)}</span>` : ''}<br>
-        ยอดก่อน VAT <b>${fmt(toNum(v.amountPreVat))}</b>${v.installment ? ' · ' + esc(v.installment) : ''} · ${esc(v.evidenceType)}${v.evidenceLink && /^https:\/\//.test(v.evidenceLink) ? ` · <a href="${esc(v.evidenceLink)}" target="_blank" rel="noopener">ดูหลักฐาน</a>` : ''}
+        ยอด${ivAmt(v).lbl} <b>${fmt(ivAmt(v).amt)}</b>${ivAmt(v).sub ? ` <span class="small">(${ivAmt(v).sub})</span>` : ''}${v.installment ? ' · ' + esc(v.installment) : ''} · ${esc(v.evidenceType)}${v.evidenceLink && /^https:\/\//.test(v.evidenceLink) ? ` · <a href="${esc(v.evidenceLink)}" target="_blank" rel="noopener">ดูหลักฐาน</a>` : ''}
         ${v.originalStatus === 'requested' || v.originalStatus === 'sent' ? `<br>ตัวจริงส่งถึง: ${esc(v.originalRecipient)} ${esc(v.originalAddress)}${v.trackingNo ? ' · เลขพัสดุ ' + esc(v.trackingNo) : ''}` : ''}</div>
       <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
         ${canOrig && v.originalStatus !== 'requested' ? `<button class="btn btn-o btn-sm" onclick="openOrig('${esc(v.ivRequestId)}')">📮 ลูกค้าขอตัวจริง</button>` : ''}
@@ -961,7 +990,7 @@ async function rebuildQT(id) {
       const pkg = PKGS.find((p) => p.id === l.packageId); const per = pkg && pkg.unit === 'per class';
       const sur = lines.filter((x) => x.role === 'surcharge' && x.packageId === l.packageId);
       const coach = sur.find((x) => /Native/i.test(x.description || ''));
-      CART.push({ kind: 'catalog', packageId: l.packageId, students: per ? (pkg.minN || '') : n(l.qty), classes: per ? n(l.qty) : '', unitPrice: n(l.unitPrice), discount: n(l.discount) || '',
+      CART.push({ kind: 'catalog', packageId: l.packageId, students: per ? (pkg.minN || '') : n(l.qty), classes: per ? n(l.qty) : '', unitPrice: n(l.unitPrice), vatIn: vatIn(q.segment), discount: n(l.discount) || '',
         intl: coach ? (/Non-Native/i.test(coach.description) ? 'nn' : 'na') : '0', loc: sur.some((x) => /Travel/i.test(x.description || '')) ? 'out' : 'in', extra: l.salesNote || '' });
     } else if (l.role === 'wh_package' || l.role === 'service') CART.push({ kind: 'service', code: l.packageId, name: '', qty: n(l.qty), unitPrice: n(l.unitPrice), discount: n(l.discount) || '', extra: l.salesNote || '', freebie: l.freebie || '', svc: '' });
     else if (l.role === 'surcharge' && l.packageId === 'SURCHARGE') CART.push({ kind: 'surcharge', type: /Travel|เดินทาง/i.test(l.description || '') ? 'travel' : 'coach', note: String(l.description || '').split(' · ')[1] || '', qty: n(l.qty), unitPrice: n(l.unitPrice), discount: n(l.discount) || '' });
@@ -976,6 +1005,7 @@ async function rebuildQT(id) {
 // ─── receipts + edit requests ───────────────────────────────
 const RT_ST = { new: ['รอฝ่ายบัญชีออก', 'new'], issued: ['ออกแล้ว', 'green'], rejected: ['ตีกลับ', 'red'] };
 const ED_ST = { new: ['รอฝ่ายบัญชีแก้', 'new'], done: ['แก้แล้ว', 'green'], rejected: ['ตีกลับ', 'red'] };
+function onRtSeg() { $('r-price-l').textContent = `ราคาขาย ${basisOf($('r-seg').value)} (ก่อนหักส่วนลด) *`; }
 function onRtKind() { const per = $('r-kind').value === 'person'; $('r-branch-wrap').hidden = per; $('r-tax-l').textContent = per ? 'เลขบัตรประชาชน (13 หลัก) *' : 'เลขประจำตัวผู้เสียภาษี (13 หลัก) *'; }
 function onRtCh() { const c = $('r-ch').value; $('r-email-wrap').hidden = !/email/.test(c); $('r-dlv-wrap').hidden = !/post/.test(c); }
 let rtSeq = 0;
@@ -1132,7 +1162,7 @@ function renderPending() {
   const rej = (id, fn, pref) => `<details class="rej"><summary>✕ ตีกลับคำขอนี้…</summary><div class="in"><input id="${pref}-${esc(id)}" class="grow" type="text" maxlength="300" placeholder="เหตุผลที่ตีกลับ (Sales จะเห็น)"><button class="btn btn-danger btn-sm" onclick="${fn}('${esc(id)}','reject')">ตีกลับ</button></div></details>`;
   const qCard = (q, fix) => `<div class="pcard"><div class="pc-body">
     <div class="pc-top"><div class="pc-title">${esc(q.company)}<small>${esc(q.segment)} · ${esc(q.requestId)} · ${esc(q.createdAt)} · โดย ${esc(q.salesName)}</small></div>
-      <div class="pc-amt"><b>${fmt(toNum(q.totalPreVat))}</b><span>ยอดก่อน VAT</span></div></div>
+      <div class="pc-amt"><b>${fmt(qtAmt(q).total)}</b><span>ยอด${qtAmt(q).lbl}</span></div></div>
     <div class="facts">
       ${F('เลขภาษี / สาขา', esc(q.taxId) + ' / ' + esc(q.branch))}
       ${F('รหัส PEAK', esc(q.clientCode || '(ระบบหาให้)'))}
@@ -1149,6 +1179,7 @@ function renderPending() {
     <div class="pc-act">
       ${fix && q.status === 'needs_review'
         ? `<span class="small warn">ตีกลับพร้อมเหตุผล ให้ Sales แก้แล้วส่งคำขอใหม่จากข้อมูลเดิม</span>`
+        : fix && q.status === 'qt_error' && (q.peakQtNo || q.peakQtId) ? `<button class="btn btn-p btn-sm" onclick="qtAction('${esc(q.requestId)}','qt_voided')" title="QT เดิมถูกยกเลิกใน PEAK: ระบบจะสร้าง QT Draft ใหม่จากข้อมูลเดิม">↻ QT ถูกยกเลิกใน PEAK สร้างใหม่</button>`
         : fix ? `<button class="btn btn-p btn-sm" onclick="qtAction('${esc(q.requestId)}','reopen')">↻ แก้แล้ว ให้ระบบสร้าง QT ใหม่</button>` : `<button class="btn btn-p btn-sm" onclick="qtAction('${esc(q.requestId)}','approve')">✓ อนุมัติ</button>`}
       <span id="qm-${esc(q.requestId)}"></span>
       ${fix && q.status === 'needs_review'
@@ -1159,14 +1190,14 @@ function renderPending() {
   $('pend-qt').innerHTML = (waitQ.length ? waitQ.map((q) => qCard(q, false)).join('') : '<div class="empty">ไม่มีคำขอ QT รออนุมัติ</div>')
     + (fixQ.length ? secH('ต้องแก้ใน PEAK ก่อนสร้าง QT', fixQ.length) + fixQ.map((q) => qCard(q, true)).join('') : '')
     + (draftQ.length ? secH('QT Draft รออนุมัติใน PEAK', draftQ.length) + '<p class="hint">อนุมัติใน PEAK แล้วกดปุ่มนี้ (หรือรอระบบอัปเดตรอบ 10:49 / 17:49) จากนั้น Sales จะเปิดลิงก์ QT ส่งลูกค้าได้</p>' + draftQ.map((q) => `<div class="pcard"><div class="pc-body">
-      <div class="pc-top"><div class="pc-title">${esc(q.company)}<small>${esc(q.peakQtNo)} · ${esc(q.requestId)} · โดย ${esc(q.salesName)}</small></div><div class="pc-amt"><b>${fmt(toNum(q.totalPreVat))}</b><span>ยอดก่อน VAT</span></div></div></div>
-      <div class="pc-act">${q.peakDocLink ? `<a class="btn btn-o btn-sm" href="${esc(peakEdit(q.peakDocLink, 'quotation'))}" target="_blank" rel="noopener">แก้ไข / อนุมัติใน PEAK ↗</a>` : ''}<span class="sp"></span><button class="btn btn-p btn-sm" onclick="qtAction('${esc(q.requestId)}','qt_approved')">✓ อนุมัติ QT ใน PEAK แล้ว</button><span id="qm-${esc(q.requestId)}"></span></div></div>`).join('') : '');
+      <div class="pc-top"><div class="pc-title">${esc(q.company)}<small>${esc(q.peakQtNo)} · ${esc(q.requestId)} · โดย ${esc(q.salesName)}</small></div><div class="pc-amt"><b>${fmt(qtAmt(q).total)}</b><span>ยอด${qtAmt(q).lbl}</span></div></div></div>
+      <div class="pc-act">${q.peakDocLink ? `<a class="btn btn-o btn-sm" href="${esc(peakEdit(q.peakDocLink, 'quotation'))}" target="_blank" rel="noopener">แก้ไข / อนุมัติใน PEAK ↗</a>` : ''}<button class="btn btn-g btn-sm" onclick="qtAction('${esc(q.requestId)}','qt_voided')" title="เผลอยกเลิก QT นี้ใน PEAK: ระบบจะสร้าง QT Draft ใหม่จากข้อมูลเดิม">QT ถูกยกเลิกใน PEAK</button><span class="sp"></span><button class="btn btn-p btn-sm" onclick="qtAction('${esc(q.requestId)}','qt_approved')">✓ อนุมัติ QT ใน PEAK แล้ว</button><span id="qm-${esc(q.requestId)}"></span></div></div>`).join('') : '');
   $('pend-inv').innerHTML = waitI.length ? waitI.map((v) => {
     const q = REQS.find((x) => x.requestId === v.requestId);
     const ev = v.evidenceLink && /^https:\/\//.test(v.evidenceLink) ? `<a href="${esc(v.evidenceLink)}" target="_blank" rel="noopener">${esc(v.evidenceType || 'เปิดดู')} ↗</a>` : esc(v.evidenceType);
     return `<div class="pcard"><div class="pc-body">
       <div class="pc-top"><div class="pc-title">${esc(v.company)}${v.billToRelation ? ` <span class="small">(${esc(v.billToRelation)})</span>` : ''}<small>${esc(v.ivRequestId)} · ${esc(v.createdAt)} · โดย ${esc(v.salesName)}</small></div>
-        <div class="pc-amt"><b>${fmt(toNum(v.amountPreVat))}</b><span>ยอดก่อน VAT${v.installment ? ' · ' + esc(v.installment) : ''}</span></div></div>
+        <div class="pc-amt"><b>${fmt(ivAmt(v).amt)}</b><span>ยอด${ivAmt(v).lbl}${ivAmt(v).sub ? ' · ' + ivAmt(v).sub : ''}${v.installment ? ' · ' + esc(v.installment) : ''}</span></div></div>
       <div class="facts">
         ${F('จาก QT', q && q.peakQtNo === v.qtNo ? qtLink(q) : esc(v.qtNo))}
         ${F('หัก ณ ที่จ่าย', whtShort(v.whtRate), 'hl')}
@@ -1212,17 +1243,20 @@ const QT_ASK = {
   reject: { title: 'ตีกลับคำขอนี้?', ok: 'ตีกลับ', kind: 'danger', body: 'Sales จะเห็นเหตุผล และต้องส่งคำขอใหม่' },
   qt_approved: { title: 'อนุมัติ QT ใน PEAK แล้ว?', ok: '✓ อนุมัติแล้ว', body: 'ยืนยันว่าอนุมัติ QT นี้ใน PEAK แล้ว (สถานะรอตอบกลับ) Sales จะเปิดลิงก์ QT ส่งลูกค้าได้' },
   reopen: { title: 'ให้ระบบสร้าง QT ใหม่?', ok: '↻ สร้างใหม่', body: 'ใช้เมื่อแก้ลูกค้า / รหัสบริการใน PEAK แล้ว ระบบจะลองสร้าง QT อีกครั้งในรอบถัดไป' },
+  qt_voided: { title: 'QT นี้ถูกยกเลิกใน PEAK?', ok: 'ยืนยัน ให้สร้าง QT ใหม่', kind: 'warn', note: true, body: 'ใช้เมื่อเผลอกดยกเลิก (Void) QT ใน PEAK ระบบจะล้างเลข QT เดิม แล้วสร้าง QT Draft ใหม่จากข้อมูลและรายการเดิมในรอบถัดไป (10:49 / 17:49) เลขเดิมเก็บไว้ในประวัติ ระบบจะไม่นำกลับมาใช้อีก' },
 };
 async function qtAction(id, action) {
   const q = REQS.find((x) => x.requestId === id) || {};
   const note0 = (($('qn-' + id) || {}).value || '').trim();
   if (action === 'reject' && !note0) { $('qm-' + id).innerHTML = '<span class="err-line">ใส่เหตุผลก่อน</span>'; return; }
   const a = QT_ASK[action];
-  if (a && !(await ask({ title: a.title, ok: a.ok, kind: a.kind, html: `<p><b>${esc(q.company)}</b> · ${esc(q.segment)} · ${esc(id)}<br>ยอดก่อน VAT ${fmt(toNum(q.totalPreVat))}</p>${note0 ? `<p>เหตุผล: ${esc(note0)}</p>` : ''}<p class="small">${a.body}</p>` }))) return;
+  if (a && !(await ask({ title: a.title, ok: a.ok, kind: a.kind, html: `<p><b>${esc(q.company)}</b> · ${esc(q.segment)} · ${esc(id)}${action === 'qt_voided' ? `<br>QT เดิม <b>${esc(q.peakQtNo)}</b>` : ''}<br>ยอด${qtAmt(q).lbl} ${fmt(qtAmt(q).total)}</p>${note0 ? `<p>เหตุผล: ${esc(note0)}</p>` : ''}<p class="small">${a.body}</p>${a.note ? '<input id="ask-note" type="text" maxlength="300" placeholder="หมายเหตุ (ถ้ามี) เช่น เผลอกดยกเลิกตอนแก้เอกสาร" style="width:100%;margin-top:8px">' : ''}` }))) return;
+  ASK_NOTE = a && a.note ? (($('ask-note') || {}).value || '').trim() : '';
   return withLoading('กำลังบันทึก…', () => qtActionDo(id, action));
 }
+let ASK_NOTE = '';
 async function qtActionDo(id, action) {
-  const note = ($('qn-' + id) || {}).value || '';
+  const note = action === 'qt_voided' ? ASK_NOTE : ($('qn-' + id) || {}).value || '';
   if (action === 'reject' && !note.trim()) { $('qm-' + id).innerHTML = '<span class="err-line">ใส่เหตุผลก่อน</span>'; return; }
   try { await api('/api/requests', { method: 'PATCH', body: JSON.stringify({ requestId: id, action, note, seen: seenOf(REQS.find((x) => x.requestId === id)) }) }); await loadAll(); }
   catch (e) { $('qm-' + id).innerHTML = `<span class="err-line">${esc(e.message)}</span>`; }

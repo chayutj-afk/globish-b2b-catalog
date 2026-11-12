@@ -242,8 +242,8 @@ async function list(req, res, user) {
   res.status(200).json({
     ok: true,
     requests: mine.map(({ _row, _createdMs, _invoicedPreVat, _remainingPreVat, ...r }) => ({ ...r,
-      // Rows from before the VAT split (AG empty) were all entered before VAT.
-      vatMode: r.vatMode === 'incl' ? 'incl' : 'excl',
+      // AG empty (rows from before the VAT split): the segment decides.
+      vatMode: r.vatMode || (vatIncluded(r.segment) ? 'incl' : 'excl'),
       totalInclVat: n(r.totalInclVat) || Math.round(n(r.totalPreVat) * 107) / 100,
       invoicedInclVat: Math.round((invoicedIncl[r.requestId] || 0) * 100) / 100,
       invoicedPreVat: Math.round((invoiced[r.requestId] || 0) * 100) / 100, lines: (byId[r.requestId] || []).map(({ _row: _, ...l }) => l) })),

@@ -174,7 +174,8 @@ async function create(req, res, user) {
   }
   // A QT typed by hand (not a request in this app): no balance or approval check is possible, so a reason is required.
   if (!r.requestId && !r.offReason) throw bad('เลือก QT จากระบบ หรือใส่เหตุผลที่ใช้ QT นอกระบบ');
-  const incl = vatIncluded(r.segment);
+  // A QT from this app keeps the basis it was made in (rows before the VAT split: before VAT).
+  const incl = linked ? linked.vatMode === 'incl' : vatIncluded(r.segment);
   invoices.forEach((v) => { const sp = vatSplit(v.amount, incl); v.amountPreVat = sp.preVat; v.amountInclVat = sp.inclVat; });
   const basis = incl ? 'รวม VAT' : 'ก่อน VAT';
   // CRM Opportunity ID: required for every segment except B2S.

@@ -255,11 +255,11 @@ const vatIn = (seg) => VAT_IN.includes(seg);
 const basisOf = (seg) => (vatIn(seg) ? 'รวม VAT' : 'ก่อน VAT');
 const rnd2 = (n) => Math.round(n * 100) / 100;
 // A QT's total and what was already invoiced, in the QT's own basis.
-const qtAmt = (q) => (vatIn(q.segment)
+const qtAmt = (q) => (q.vatMode === 'incl'
   ? { total: toNum(q.totalInclVat) || rnd2(toNum(q.totalPreVat) * 1.07), done: toNum(q.invoicedInclVat), lbl: 'รวม VAT' }
   : { total: toNum(q.totalPreVat), done: toNum(q.invoicedPreVat), lbl: 'ก่อน VAT' });
 // An INV request's amount: VAT-inclusive (with the pre-VAT part) when its QT is VAT-inclusive.
-const ivAmt = (v) => { const inc = toNum(v.amountInclVat); return inc && toNum(v.amountPreVat) && Math.abs(inc - toNum(v.amountPreVat) * 1.07) < 1 && vatIn(((REQS.find((x) => x.requestId === v.requestId)) || {}).segment)
+const ivAmt = (v) => { const inc = toNum(v.amountInclVat); return inc && toNum(v.amountPreVat) && Math.abs(inc - toNum(v.amountPreVat) * 1.07) < 1 && ((REQS.find((x) => x.requestId === v.requestId)) || {}).vatMode === 'incl'
   ? { amt: inc, lbl: 'รวม VAT', sub: `ก่อน VAT ${fmt(toNum(v.amountPreVat))}` } : { amt: toNum(v.amountPreVat), lbl: 'ก่อน VAT', sub: '' }; };
 const normOpp = (v) => { const s = String(v || '').trim().toUpperCase(); const m = /CRM-OPP-\d{4}-\d{5}/.exec(s); return m ? m[0] : s.replace(/\s+/g, ''); };
 const OPP_OK = (s) => /^CRM-OPP-\d{4}-\d{5}$/.test(s);
@@ -705,7 +705,7 @@ function setInv(i, f, v) {
   if (['billTo', 'originalDoc'].includes(f)) renderInvs(); else updateSum();
 }
 function currentQT() { return REQS.find((q) => q.requestId === $('i-req').value) || null; }
-const invBasis = () => basisOf($('i-seg').value);
+const invBasis = () => { const q = currentQT(); return q ? qtAmt(q).lbl : basisOf($('i-seg').value); };
 function qtBalance() {
   const q = currentQT(); if (!q) return null;
   const { total, done } = qtAmt(q);
@@ -848,7 +848,7 @@ async function submitINV() {
   // Accidental re-send: same QT + same amount already requested (checked here first, so the user sees
   // "already sent" rather than an over-QT error). The server checks again.
   const prev = IVS.filter((x) => x.status !== 'rejected' && (body.requestId ? x.requestId === body.requestId : x.qtNo === body.qtNo)
-    && INVS.some((v) => Math.abs(toNum(vatIn(body.segment) ? (x.amountInclVat || toNum(x.amountPreVat) * 1.07) : x.amountPreVat) - toNum(v.amountPreVat)) < 0.01));
+    && INVS.some((v) => Math.abs(toNum(invBasis() === 'รวม VAT' ? (x.amountInclVat || toNum(x.amountPreVat) * 1.07) : x.amountPreVat) - toNum(v.amountPreVat)) < 0.01));
   if (prev.length && !body.confirmDuplicate) {
     const again = await ask({ kind: 'warn', title: '⚠️ เหมือนเคยส่งคำขอนี้ไปแล้ว', ok: 'ส่งซ้ำอีกใบ', cancel: 'ไม่ส่ง',
       html: `<p>QT ${esc(body.qtNo)} มีคำขอ INV ยอดเดียวกันอยู่แล้ว ${prev.length} ใบ:</p>${dupTable(prev.slice(-5).map((x) => ({ id: x.ivRequestId, createdAt: x.createdAt, by: x.salesName, status: x.status, amount: x.amountPreVat, ivNo: x.peakIvNo })), true)}<p style="margin-top:10px">ถ้าเผลอกดซ้ำ ให้กด <b>ไม่ส่ง</b> · ถ้าตั้งใจขอเพิ่มจริง (เช่น งวดใหม่ยอดเท่าเดิม) กด <b>ส่งซ้ำอีกใบ</b></p>` });
@@ -990,7 +990,7 @@ async function rebuildQT(id) {
       const pkg = PKGS.find((p) => p.id === l.packageId); const per = pkg && pkg.unit === 'per class';
       const sur = lines.filter((x) => x.role === 'surcharge' && x.packageId === l.packageId);
       const coach = sur.find((x) => /Native/i.test(x.description || ''));
-      CART.push({ kind: 'catalog', packageId: l.packageId, students: per ? (pkg.minN || '') : n(l.qty), classes: per ? n(l.qty) : '', unitPrice: n(l.unitPrice), vatIn: vatIn(q.segment), discount: n(l.discount) || '',
+      CART.push({ kind: 'catalog', packageId: l.packageId, students: per ? (pkg.minN || '') : n(l.qty), classes: per ? n(l.qty) : '', unitPrice: n(l.unitPrice), vatIn: q.vatMode === 'incl', discount: n(l.discount) || '',
         intl: coach ? (/Non-Native/i.test(coach.description) ? 'nn' : 'na') : '0', loc: sur.some((x) => /Travel/i.test(x.description || '')) ? 'out' : 'in', extra: l.salesNote || '' });
     } else if (l.role === 'wh_package' || l.role === 'service') CART.push({ kind: 'service', code: l.packageId, name: '', qty: n(l.qty), unitPrice: n(l.unitPrice), discount: n(l.discount) || '', extra: l.salesNote || '', freebie: l.freebie || '', svc: '' });
     else if (l.role === 'surcharge' && l.packageId === 'SURCHARGE') CART.push({ kind: 'surcharge', type: /Travel|เดินทาง/i.test(l.description || '') ? 'travel' : 'coach', note: String(l.description || '').split(' · ')[1] || '', qty: n(l.qty), unitPrice: n(l.unitPrice), discount: n(l.discount) || '' });

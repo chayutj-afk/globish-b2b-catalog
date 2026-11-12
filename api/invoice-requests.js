@@ -588,6 +588,24 @@ async function updateReceipt(req, res, user) {
 }
 
 // ---------------------------------------------------------------- edit requests for issued QT / INV
+// A document can't be changed once the next step has started on it:
+//   QT  → locked when any INV request (not rejected) exists for it
+//   INV → locked when a receipt was requested / issued for it or the payment is recorded
+async function assertEditable(r) {
+  const n = (x) => String(x || '').toUpperCase();
+  if (r.docType === 'QT') {
+    const ivs = (await hub.readTable('InvoiceRequests')).filter((v) => v.status !== 'rejected'
+      && ((r.refId && v.requestId === r.refId) || n(v.qtNo) === r.docNo));
+    if (ivs.length) throw bad(`QT ${r.docNo} ขอ INV ไปแล้ว ${ivs.length} ใบ แก้ QT ไม่ได้ ถ้าต้องเปลี่ยนให้ขอแก้ที่ INV หรือแจ้งฝ่ายบัญชี`, 409);
+  }
+  if (r.docType === 'INV') {
+    const [ars, rts] = await Promise.all([hub.readTable('Invoices'), hub.readTable('ReceiptRequests')]);
+    const a = ars.find((x) => n(x.ivNo) === r.docNo && x.docStatus !== 'Cancelled');
+    if (a && (a.rtNo || a.paidDate)) throw bad(`INV ${r.docNo} ${a.rtNo ? `ออกใบเสร็จแล้ว (${a.rtNo})` : 'บันทึกรับเงินแล้ว'} แก้ INV ไม่ได้`, 409);
+    if (rts.some((x) => n(x.refDoc) === r.docNo && x.status !== 'rejected')) throw bad(`INV ${r.docNo} มีคำขอใบเสร็จแล้ว แก้ INV ไม่ได้`, 409);
+  }
+}
+
 async function createEdit(req, res, user) {
   checkOrigin(req);
   if (!can(user, 'request')) throw bad('ไม่มีสิทธิ์ขอเอกสาร', 403);
@@ -598,6 +616,7 @@ async function createEdit(req, res, user) {
   if (!['QT', 'INV'].includes(r.docType)) throw bad('เลือกประเภทเอกสาร');
   if (!/^[A-Z0-9-]{6,40}$/.test(r.docNo)) throw bad('ใส่เลขเอกสารที่ต้องการแก้ เช่น QO-20261100012');
   if (r.detail.length < 5) throw bad('อธิบายว่าต้องการแก้อะไร');
+  await assertEditable(r);
   const rows = await hub.readTable('EditRequests');
   if (rows.some((x) => x.docNo === r.docNo && x.status === 'new')) throw bad(`มีคำขอแก้ ${r.docNo} ที่ยังรอฝ่ายบัญชีอยู่แล้ว`, 409);
   const id = shortId('EDIT'); const at = hub.sheetDateTime();

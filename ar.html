@@ -155,7 +155,7 @@ let PN = [];
 async function load() {
   try { [D, PN] = await Promise.all([api('/api/invoice-requests?view=ar'), api('/api/invoice-requests?view=payments').then((x) => x.notices).catch(() => [])]); }
   catch (e) { $('msg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; return; }
-  renderNotices();
+  renderNotices(); if (window.refreshPayBadge) window.refreshPayBadge();
   const s = D.summary;
   $('s-open').textContent = fmt0(s.open); $('s-open-n').textContent = `${s.openCount} ใบ`;
   $('s-over').textContent = fmt0(s.overdue); $('s-over-n').textContent = `${s.overdueCount} ใบ`;

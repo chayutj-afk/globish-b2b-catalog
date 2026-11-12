@@ -32,7 +32,7 @@
     { k: 'rt', href: '/request#rt', label: 'ขอใบเสร็จ', id: 'nav-rt', gate: 'request' },
     { k: 'mine', href: '/request#mine', label: 'คำขอของฉัน', id: 'nav-mine', gate: 'mine' },
     { k: 'pend', href: '/request#pend', label: 'รออนุมัติ', id: 'nav-pend', gate: 'approve', badge: 'pend-count' },
-    { k: 'ar', href: '/ar', label: 'ติดตามหนี้', gate: 'ar_view' },
+    { k: 'ar', href: '/ar', label: 'ติดตามหนี้', gate: 'ar_view', badge: 'ar-pay-n' },
     { sep: 1, gate: 'tools' },
     { k: 'users', href: '/users', label: 'ผู้ใช้', gate: 'users' },
     { k: 'contacts', href: '/import-contacts', label: 'ลูกค้า PEAK', gate: 'import' },
@@ -61,6 +61,10 @@
     document.getElementById('out-btn').onclick = async () => { try { await fetch('/api/auth/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' } }); } catch (e) {} location.href = '/signin.html'; };
     paintToggle();
   }
+  window.refreshPayBadge = () => fetch('/api/invoice-requests?view=payments&count=1', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((d) => {
+    const b = document.getElementById('ar-pay-n'); if (!b || !d) return;
+    b.textContent = d.open || ''; b.hidden = !d.open; b.title = d.open ? `เซลแจ้งว่าลูกค้าจ่ายแล้ว รอตรวจ ${d.open} รายการ` : '';
+  }).catch(() => {});
   // who is signed in → show gated items
   window.SHELL_ME = fetch('/api/auth/me', { cache: 'no-store' }).then((r) => {
     if (r.status === 401) { location.href = '/signin.html?next=' + encodeURIComponent(location.pathname + location.hash); return null; }
@@ -73,6 +77,8 @@
     const P = new Set(u.perms || []);
     const extra = { op: P.has('approve'), admin: P.has('users'), mine: P.has('request') || P.has('team_view'), tools: P.has('users') || P.has('import'), tools2: P.has('users') || P.has('import') || P.has('approve') || P.has('ar_view') };
     document.querySelectorAll('[data-gate]').forEach((el) => { const g = el.dataset.gate; el.hidden = !(g in extra ? extra[g] : P.has(g)); });
+    // Payment notices from Sales waiting for accounting / collector: count on the "ติดตามหนี้" menu.
+    if (P.has('ar') || P.has('approve')) window.refreshPayBadge();
     return u;
   }).catch(() => null);
 })();

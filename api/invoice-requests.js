@@ -559,6 +559,7 @@ async function paidDirectly(row, f, slip, user) {
 async function listPayNotices(req, res, user) {
   if (!canConfirmPay(user)) throw bad('ไม่มีสิทธิ์', 403);
   const rows = await hub.readTable('PaymentNotices');
+  if (req.query && req.query.count) return res.status(200).json({ ok: true, open: rows.filter((r) => r.status === 'new').length });
   res.status(200).json({ ok: true, notices: rows.filter((r) => r.source === 'sales').reverse().slice(0, 150).map(({ _row, ...r }) => r) });
 }
 

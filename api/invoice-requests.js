@@ -450,6 +450,7 @@ async function arUpdate(req, res, user) {
     // Receipt delivery for a new payment: checked before anything is saved.
     let delivery = null;
     if (newlyPaid) {
+      if (!b.file) throw bad('แนบสลิป / หลักฐานการรับเงิน');
       const ch = text(b.deliveryChannel, 20) || 'sales';
       if (!PAY_CHANNELS.includes(ch)) throw bad('เลือกช่องทางส่งใบเสร็จ');
       const email = text(b.email, 120), addr = text(b.deliveryAddress, 600);
@@ -457,7 +458,7 @@ async function arUpdate(req, res, user) {
       if (needsPost(ch) && !addr) throw bad('ใส่ที่อยู่ส่งใบเสร็จตัวจริง');
       delivery = { deliveryChannel: ch, email, deliveryAddress: addr, note: text(b.payNote, 500) };
     }
-    // Optional slip when the customer told accounting directly.
+    // Slip is required for a new payment, the same as a Sales notice.
     const slip = newlyPaid && b.file ? await drive.upload(b.file, { kind: 'payment', docNo: row.ivNo, company: row.company, ref: row.ivNo }) : '';
     await hub.updateRow('Invoices', row._row, f);
     await hub.log('catalog', 'ar_update', ivNo, `${user.email} · ${Object.keys(f).join(',')}`);
@@ -470,7 +471,7 @@ async function arUpdate(req, res, user) {
 // ---------------------------------------------------------------- payment notices (เงินเข้า)
 // Two ways accounting learns a customer paid an INV:
 //   1. customer → Sales → "แจ้งบัญชีว่าลูกค้าจ่ายแล้ว" (slip required) → accounting / collector confirms against the bank
-//   2. customer → accounting directly → "บันทึกรับเงิน" on /ar (slip optional)
+//   2. customer → accounting directly → "บันทึกรับเงิน" on /ar (slip required too)
 // Both end in Invoices paidDate/paidAmount/paymentMethod, then the RT queue. An INV is paid once (no instalments).
 const canConfirmPay = (u) => can(u, 'approve') || can(u, 'ar');
 const PAY_CHANNELS = ['sales', 'email', 'post', 'email_post'];

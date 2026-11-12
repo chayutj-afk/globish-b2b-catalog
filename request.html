@@ -1179,7 +1179,7 @@ function renderPending() {
     <div class="pc-act">
       ${fix && q.status === 'needs_review'
         ? `<span class="small warn">ตีกลับพร้อมเหตุผล ให้ Sales แก้แล้วส่งคำขอใหม่จากข้อมูลเดิม</span>`
-        : fix && q.status === 'qt_error' && (q.peakQtNo || q.peakQtId) ? `<button class="btn btn-p btn-sm" onclick="qtAction('${esc(q.requestId)}','qt_voided')" title="QT เดิมถูกยกเลิกใน PEAK: ระบบจะสร้าง QT Draft ใหม่จากข้อมูลเดิม">↻ QT ถูกยกเลิกใน PEAK สร้างใหม่</button>`
+        : fix && q.status === 'qt_error' && (q.peakQtNo || q.peakQtId) ? `${q.peakDocLink ? `<a class="btn btn-o btn-sm" href="${esc(peakEdit(q.peakDocLink, 'quotation'))}" target="_blank" rel="noopener">เปิด ${esc(q.peakQtNo)} ใน PEAK ↗</a>` : ''}${/void/i.test(q.peakNote || '') ? '' : `<button class="btn btn-p btn-sm" onclick="qtAction('${esc(q.requestId)}','qt_fixed')">✓ แก้ใน PEAK แล้ว</button>`}<button class="btn ${/void/i.test(q.peakNote || '') ? 'btn-p' : 'btn-g'} btn-sm" onclick="qtAction('${esc(q.requestId)}','qt_voided')" title="QT เดิมถูกยกเลิกใน PEAK: ระบบจะสร้าง QT Draft ใหม่จากข้อมูลเดิม">↻ QT ถูกยกเลิกใน PEAK สร้างใหม่</button>`
         : fix ? `<button class="btn btn-p btn-sm" onclick="qtAction('${esc(q.requestId)}','reopen')">↻ แก้แล้ว ให้ระบบสร้าง QT ใหม่</button>` : `<button class="btn btn-p btn-sm" onclick="qtAction('${esc(q.requestId)}','approve')">✓ อนุมัติ</button>`}
       <span id="qm-${esc(q.requestId)}"></span>
       ${fix && q.status === 'needs_review'
@@ -1243,6 +1243,7 @@ const QT_ASK = {
   reject: { title: 'ตีกลับคำขอนี้?', ok: 'ตีกลับ', kind: 'danger', body: 'Sales จะเห็นเหตุผล และต้องส่งคำขอใหม่' },
   qt_approved: { title: 'อนุมัติ QT ใน PEAK แล้ว?', ok: '✓ อนุมัติแล้ว', body: 'ยืนยันว่าอนุมัติ QT นี้ใน PEAK แล้ว (สถานะรอตอบกลับ) Sales จะเปิดลิงก์ QT ส่งลูกค้าได้' },
   reopen: { title: 'ให้ระบบสร้าง QT ใหม่?', ok: '↻ สร้างใหม่', body: 'ใช้เมื่อแก้ลูกค้า / รหัสบริการใน PEAK แล้ว ระบบจะลองสร้าง QT อีกครั้งในรอบถัดไป' },
+  qt_fixed: { title: 'แก้ QT ใน PEAK แล้ว?', ok: '✓ แก้แล้ว', body: 'QT กลับไปเป็น Draft ระบบจะตรวจยอดและรหัสบัญชีใหม่ในรอบถัดไป (10:49 / 17:49)' },
   qt_voided: { title: 'QT นี้ถูกยกเลิกใน PEAK?', ok: 'ยืนยัน ให้สร้าง QT ใหม่', kind: 'warn', note: true, body: 'ใช้เมื่อเผลอกดยกเลิก (Void) QT ใน PEAK ระบบจะล้างเลข QT เดิม แล้วสร้าง QT Draft ใหม่จากข้อมูลและรายการเดิมในรอบถัดไป (10:49 / 17:49) เลขเดิมเก็บไว้ในประวัติ ระบบจะไม่นำกลับมาใช้อีก' },
 };
 async function qtAction(id, action) {

@@ -259,7 +259,7 @@ async function list(req, res, user) {
 //   qt_voided   → accounting voided the QT in PEAK by mistake: back to approved with the QT
 //                 number cleared, so the PEAK sync drafts a new QT from the same request and lines.
 //                 The old number goes to voidedQts (AI) so it is never written back.
-const OP_ACTIONS = { approve: 'approved', reject: 'rejected', reopen: 'approved', qt_approved: 'qt_approved', qt_voided: 'approved' };
+const OP_ACTIONS = { approve: 'approved', reject: 'rejected', reopen: 'approved', qt_approved: 'qt_approved', qt_voided: 'approved', qt_fixed: 'qt_draft' };
 async function update(req, res, user) {
   checkOrigin(req);
   if (!can(user, 'approve')) throw bad('ไม่มีสิทธิ์อนุมัติเอกสาร', 403);
@@ -282,14 +282,18 @@ async function update(req, res, user) {
     qt_approved: ['qt_draft'],
     // qt_error: the sync found the Draft voided in PEAK ("QT ถูก void ใน PEAK").
     qt_voided: ['qt_draft', 'qt_approved', 'qt_error'],
+    // qt_fixed: the sync flagged the Draft (e.g. account code differs from the service); accounting
+    // fixed it in PEAK, so it goes back to qt_draft and the sync re-checks it on the next run.
+    qt_fixed: ['qt_error'],
   };
   if (!FROM[b.action].includes(row.status)) {
-    const done = { approve: 'คำขอนี้อนุมัติไปแล้วหรือไม่ได้รออนุมัติ', reject: 'ตีกลับไม่ได้: คำขอนี้ไม่ได้อยู่ในสถานะที่ตีกลับได้ (อาจสร้าง QT ใน PEAK แล้ว)', reopen: 'คำขอนี้ไม่ได้ติดปัญหาแล้ว', qt_approved: 'QT นี้ไม่ได้อยู่ในสถานะ Draft', qt_voided: 'คำขอนี้ไม่มี QT ใน PEAK ที่จะยกเลิก' };
+    const done = { approve: 'คำขอนี้อนุมัติไปแล้วหรือไม่ได้รออนุมัติ', reject: 'ตีกลับไม่ได้: คำขอนี้ไม่ได้อยู่ในสถานะที่ตีกลับได้ (อาจสร้าง QT ใน PEAK แล้ว)', reopen: 'คำขอนี้ไม่ได้ติดปัญหาแล้ว', qt_approved: 'QT นี้ไม่ได้อยู่ในสถานะ Draft', qt_voided: 'คำขอนี้ไม่มี QT ใน PEAK ที่จะยกเลิก', qt_fixed: 'คำขอนี้ไม่ได้ติดปัญหาแล้ว' };
     throw bad(`${done[b.action]} (สถานะตอนนี้: ${row.status}) รีเฟรชหน้าเพื่อดูข้อมูลล่าสุด`, 409);
   }
   hub.checkSeen(row, text(b.seen, 80));
   if (b.action === 'qt_approved') fields.qtApprovedAt = at;
   const who = user.name || user.email;
+  if (b.action === 'qt_fixed' && !row.peakQtId) throw bad('ยังไม่มี QT ใน PEAK ให้ตรวจใหม่ ใช้ "แก้แล้ว ให้ระบบสร้าง QT ใหม่"', 409);
   if (b.action === 'qt_voided') {
     if (!row.peakQtNo && !row.peakQtId) throw bad('คำขอนี้ยังไม่มีเลข QT ใน PEAK', 409);
     // A QT that already has INV requests can't just be redone: the INVs point at the old number.
@@ -301,7 +305,7 @@ async function update(req, res, user) {
       voidedQts: [row.voidedQts, old].filter(Boolean).join('; '),
     });
   }
-  const auto = { approve: `ฝ่ายบัญชีอนุมัติคำขอแล้ว รอระบบสร้าง QT Draft ใน PEAK — ${who}`, reopen: `ให้ระบบสร้าง QT ใหม่ — ${who}`, qt_approved: `อนุมัติ QT ใน PEAK แล้ว — ${who}`, qt_voided: `QT ${row.peakQtNo || ''} ถูกยกเลิกใน PEAK ระบบจะสร้าง QT Draft ใหม่จากข้อมูลเดิม — ${who}` };
+  const auto = { approve: `ฝ่ายบัญชีอนุมัติคำขอแล้ว รอระบบสร้าง QT Draft ใน PEAK — ${who}`, reopen: `ให้ระบบสร้าง QT ใหม่ — ${who}`, qt_approved: `อนุมัติ QT ใน PEAK แล้ว — ${who}`, qt_fixed: `แก้ QT ${row.peakQtNo || ''} ใน PEAK แล้ว รอระบบตรวจใหม่รอบถัดไป — ${who}`, qt_voided: `QT ${row.peakQtNo || ''} ถูกยกเลิกใน PEAK ระบบจะสร้าง QT Draft ใหม่จากข้อมูลเดิม — ${who}` };
   fields.peakNote = b.action === 'qt_voided' ? `${auto.qt_voided}${note ? ` · ${note}` : ''}` : note ? `${note} — ${who}` : (auto[b.action] || row.peakNote);
   await hub.writeChecked('Requests', 'requestId', row, fields);
   await hub.log('catalog', `qt_${b.action}`, row.requestId, `${user.email}${note ? ' · ' + note : ''}`);

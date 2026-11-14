@@ -35,10 +35,11 @@ td.who{white-space:normal}
   <div class="card tbl" id="matrix"></div>
   <div class="card" style="padding:12px 16px;margin:12px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>แจ้งเตือน Google Chat:</b> <span id="chat-st">…</span><button class="btn btn-g btn-sm" type="button" onclick="testChat()">ส่งข้อความทดสอบ</button><span id="chat-msg" class="small"></span></div>
   <div class="card" style="padding:12px 16px;margin:12px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>เชื่อมต่อ PEAK API:</b> <input id="peak-tax" placeholder="เลขภาษีลูกค้าที่ใช้ทดสอบ (ไม่บังคับ)" inputmode="numeric" maxlength="17" style="width:240px"><button class="btn btn-g btn-sm" type="button" onclick="testPeak()">ทดสอบเชื่อมต่อ (อ่านอย่างเดียว)</button><span id="peak-msg" class="small" style="white-space:pre-line"></span></div>
-  <div class="card" id="cls-card" style="padding:12px 16px;margin:12px 0"><b>กลุ่มจัดประเภทใน PEAK</b> <span class="small">ระบบติดให้อัตโนมัติบน QT / INV / ใบเสร็จที่สร้างจากแอป · กลุ่มและรายการดึงจาก PEAK ถ้าบัญชีเพิ่มหรือแก้ใน PEAK จะขึ้นที่นี่เอง</span><div id="cls"></div></div>
+  <div class="card" id="cls-card" style="padding:12px 16px;margin:12px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>กลุ่มจัดประเภทใน PEAK:</b> <span class="small" id="cls-sum">…</span><span class="sp" style="flex:1"></span><button class="btn btn-g btn-sm" type="button" onclick="openClasses()">⚙ ตั้งค่า</button></div>
   <div class="filters" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><input type="search" id="q" placeholder="ค้นหาชื่อหรืออีเมล" oninput="render()" style="flex:1;min-width:200px"><select id="fr" class="sel" onchange="render()" style="width:auto"><option value="">ทุก role</option></select></div>
   <div class="card tbl"><table><thead><tr><th>ผู้ใช้</th><th>เข้าใช้ล่าสุด</th><th>Role</th><th>ทีม</th><th>สิทธิ์เพิ่ม</th><th>กลุ่มจัดประเภท (รายเซล)</th><th></th></tr></thead><tbody id="rows"><tr><td colspan="7" class="small">กำลังโหลด…</td></tr></tbody></table></div>
 </main></div></div>
+<div class="ov" id="ov-cls" hidden onclick="if(event.target===this)closeClasses()"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="cls-title" style="max-width:1100px;max-height:90vh;display:flex;flex-direction:column"><div style="display:flex;align-items:center;gap:8px"><h3 id="cls-title" style="flex:1">กลุ่มจัดประเภทใน PEAK</h3><button class="btn btn-g btn-sm" type="button" onclick="closeClasses()">ปิด</button></div><p class="small" style="margin:0 0 8px">ระบบติดให้อัตโนมัติบน QT / INV / ใบเสร็จที่สร้างจากแอป · กลุ่มและรายการดึงจาก PEAK ถ้าบัญชีเพิ่มหรือแก้ใน PEAK จะขึ้นที่นี่เอง</p><div id="cls" style="overflow:auto"></div></div></div>
 <div class="ov" id="ov-modal" hidden><div class="modal" role="dialog" aria-modal="true" aria-labelledby="m-title" style="max-width:520px"><h3 id="m-title"></h3><div class="mb" id="m-body"></div><div class="mf"><button class="btn btn-g" id="m-cancel" type="button">ยกเลิก</button><button class="btn btn-p" id="m-ok" type="button">บันทึก</button></div></div></div>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -132,8 +133,15 @@ async function openUser(email) {
   };
 }
 const MODE_TH = { segment: 'เซลเลือกในฟอร์มขอ QT', seller: 'ตามเซล (รายคน)', off: 'ไม่ติด' };
+function openClasses() { $('ov-cls').hidden = false; }
+function closeClasses() { $('ov-cls').hidden = true; }
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('ov-cls').hidden) closeClasses(); });
 function renderClasses() {
   const C = CLASSES;
+  // One-line summary on the page; the editor opens from "⚙ ตั้งค่า".
+  const ready = (C.types || []).filter((t) => t.ready).map((t) => t.name), notReady = (C.types || []).filter((t) => !t.ready).length;
+  const others = (C.groups || []).filter((g) => g.code !== 'G012' && g.mode !== 'off').map((g) => g.name);
+  $('cls-sum').innerHTML = `ประเภทลูกค้า ${esc(ready.join(' / ') || '—')}${notReady ? ` · <span class="warn">${notReady} ประเภทยังไม่ได้ตั้ง</span>` : ''} · ติดอัตโนมัติ: ${esc(others.join(', ') || '—')}${C.live ? '' : ' · <span class="warn">ยังอ่านจาก PEAK ไม่ได้</span>'}`;
   $('cls').innerHTML = (C.live ? '' : `<p class="small warn">ยังอ่านจาก PEAK ไม่ได้ (${esc(C.error || 'PEAK_MODE = off')}) แสดงกติกาเดิมไว้ก่อน แก้ได้เมื่อเปิด PEAK API</p>`)
     + renderTypes()
     + `<div style="margin-top:14px"><b>กลุ่มอื่น</b></div><table style="margin-top:6px"><thead><tr><th>กลุ่ม</th><th>ติดยังไง</th><th>ค่าที่ระบบเติมให้ก่อน ตามประเภทลูกค้า (เซลเปลี่ยนได้)</th><th></th></tr></thead><tbody>${C.groups.filter((g) => g.code !== 'G012').map((g) => `<tr>

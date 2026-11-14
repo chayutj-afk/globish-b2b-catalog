@@ -157,10 +157,6 @@ async function load() {
   catch (e) { $('msg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; return; }
   renderNotices(); if (window.refreshPayBadge) window.refreshPayBadge();
   const s = D.summary;
-  $('s-open').textContent = fmt0(s.open); $('s-open-n').textContent = `${s.openCount} ใบ`;
-  $('s-over').textContent = fmt0(s.overdue); $('s-over-n').textContent = `${s.overdueCount} ใบ`;
-  const w = s.forecast.weeks[0] || {}; $('s-week').textContent = fmt0(w.expected); $('s-week-n').textContent = `${w.count || 0} ใบ · สัปดาห์ถึง ${w.weekEnd || ''}`;
-  $('s-avg').textContent = s.avgDaysToPay ? s.avgDaysToPay + ' วัน' : '–';
   $('b-check').hidden = !s.legacyCheckCount;
   if (s.legacyCheckCount) $('f-hint').innerHTML = `"ต้องตาม" = เกินกำหนด หรือครบกำหนดใน 7 วัน หรือถึงวันนัดติดตาม · <b>ข้อมูลเก่ารอตรวจ ${s.legacyCheckCount} ใบ (${fmt0(s.legacyCheck)} บาท)</b> คือ INV ปี 2023–2025 ที่ชีท Debt ยังเป็น "รอชำระ" ไม่นับในยอดค้างรับจนกว่าจะตรวจกับ PEAK`;
   const segs = [...new Set(D.invoices.map((r) => r.segment).filter(Boolean))].sort();
@@ -169,6 +165,27 @@ async function load() {
   $('f-seg').innerHTML = '<option value="">ทุกกลุ่ม</option>' + segs.map((x) => `<option>${esc(x)}</option>`).join(''); $('f-seg').value = keepS;
   $('f-sales').innerHTML = '<option value="">ทุกเซล</option>' + sales.map((x) => `<option>${esc(x)}</option>`).join(''); $('f-sales').value = keepP;
   render(); renderSum();
+}
+
+// Top cards follow the group / sales / search filters (not the state tabs). No filter → the server totals.
+function renderKpi() {
+  const seg = $('f-seg').value, sal = $('f-sales').value, q = $('f-q').value.trim();
+  let k = D.summary;
+  if (seg || sal || q) {
+    const base = rowsFor('all'), open = base.filter((r) => (r.state === 'Outstanding' || r.state === 'Overdue') && !r.legacyCheck);
+    const sum = (xs) => xs.reduce((t, r) => t + (Number(r.expected) || 0), 0);
+    const over = open.filter((r) => r.state === 'Overdue');
+    const wk = D.summary.forecast.weeks[0] || {}, inWk = open.filter((r) => r.forecastWeek === wk.weekEnd);
+    const paid = base.filter((r) => { const d = pd(r.paidDate); return d !== null && d >= TODAY - 90 * 864e5 && r.cycleDays !== ''; });
+    k = { open: sum(open), openCount: open.length, overdue: sum(over), overdueCount: over.length,
+      forecast: { weeks: [{ weekEnd: wk.weekEnd, expected: sum(inWk), count: inWk.length }] },
+      avgDaysToPay: paid.length ? Math.round(paid.reduce((t, r) => t + Number(r.cycleDays), 0) / paid.length) : 0 };
+  }
+  const tag = seg || sal || q ? ' · ตามตัวกรอง' : '';
+  $('s-open').textContent = fmt0(k.open); $('s-open-n').textContent = `${k.openCount} ใบ${tag}`;
+  $('s-over').textContent = fmt0(k.overdue); $('s-over-n').textContent = `${k.overdueCount} ใบ${tag}`;
+  const w = k.forecast.weeks[0] || {}; $('s-week').textContent = fmt0(w.expected); $('s-week-n').textContent = `${w.count || 0} ใบ · สัปดาห์ถึง ${w.weekEnd || ''}${tag}`;
+  $('s-avg').textContent = k.avgDaysToPay ? k.avgDaysToPay + ' วัน' : '–';
 }
 
 function rowsFor(only) {
@@ -201,7 +218,7 @@ function countTabs() {
   });
 }
 function render() {
-  countTabs();
+  countTabs(); renderKpi();
   const xs = rowsFor();
   $('wl').innerHTML = xs.slice(0, SHOW).map((r) => {
     const d = r.daysOverdue;

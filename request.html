@@ -1075,7 +1075,7 @@ function newsItems() {
   const s = seenMap(), mine = (x) => x.requestedBy === ME.email, out = [];
   EDITS.filter((e) => mine(e) && e.status !== 'new' && s[e.editId] !== e.status).forEach((e) => out.push({ k: e.editId, v: e.status, tab: 'edit',
     t: `${e.status === 'done' ? '✓ ฝ่ายบัญชีแก้' : '✕ ฝ่ายบัญชีตีกลับคำขอแก้'} ${esc(e.docType)} ${esc(e.docNo)}${e.newDocNo ? ' → ' + esc(e.newDocNo) : ''}${e.accountNote ? ' (' + esc(e.accountNote) + ')' : ''}` }));
-  RTS.filter((r) => mine(r) && (r.status === 'issued' || r.status === 'rejected') && s['rt:' + r.rtRequestId] !== r.status).forEach((r) => out.push({ k: 'rt:' + r.rtRequestId, v: r.status, tab: 'rt',
+  RTS.filter((r) => mine(r) && (r.status === 'issued' || r.status === 'rejected') && s['rt:' + r.rtRequestId] !== r.status).forEach((r) => out.push({ k: 'rt:' + r.rtRequestId, v: r.status, tab: 'rt', ref: 'row-' + r.rtRequestId,
     t: r.status === 'issued' ? `✓ ออกใบเสร็จแล้ว ${docLink(r.peakRtNo, r.peakDocLink)} · ${esc(r.billName)}${r.sentStatus === 'waiting' ? ' · รอส่งตัวจริง' : ''}` : `✕ ฝ่ายบัญชีตีกลับคำขอใบเสร็จ ${esc(r.rtRequestId)} · ${esc(r.billName)}${r.accountNote ? ' (' + esc(r.accountNote) + ')' : ''}` }));
   IVS.filter((v) => mine(v) && v.ar && v.ar.paidDate && s['pay:' + v.ivRequestId] !== v.ar.paidDate).forEach((v) => out.push({ k: 'pay:' + v.ivRequestId, v: v.ar.paidDate, tab: 'inv', ref: 'row-' + v.ivRequestId,
     t: `💰 ${v.payNotice && v.payNotice.source === 'sales' && v.payNotice.status === 'confirmed' ? 'บัญชียืนยันเงินเข้า' : 'ลูกค้าจ่ายแล้ว'} ${esc(v.peakIvNo)} · ${esc(v.company)} ${fmt(toNum(v.ar.paidAmount))} บาท (${esc(v.ar.paidDate)})` }));
@@ -1205,19 +1205,26 @@ function renderMine() {
 
   $('mine-inv').innerHTML = IVS.length ? IVS.map((v) => {
     const canOrig = v.originalStatus !== 'sent';
+    const nx = nextIv(v);
+    const origBtns = (canOrig && v.originalStatus !== 'requested' ? `<button class="btn btn-g btn-sm" onclick="openOrig('${esc(v.ivRequestId)}')">📮 ลูกค้าขอตัวจริง</button>` : '')
+      + (canOrig && v.originalStatus !== 'not_needed' ? `<button class="btn btn-g btn-sm" onclick="setOrig('${esc(v.ivRequestId)}','no')">ไม่ต้องส่งตัวจริง</button>` : '');
+    const acts = (canPayNotice(v) ? `<button class="btn btn-o btn-sm" onclick="openPayNotice('${esc(v.ivRequestId)}')">💰 แจ้งบัญชีว่าลูกค้าจ่ายแล้ว</button>` : '')
+      + (v.originalStatus === 'pending_decision' ? origBtns : '')
+      + (v.peakIvNo && !pendEdit('INV', v.peakIvNo) && v.status === 'iv_issued' && !(v.ar && (v.ar.rtNo || v.ar.paidDate)) && !RTS.some((r) => String(r.refDoc || '').toUpperCase() === String(v.peakIvNo).toUpperCase() && r.status !== 'rejected') ? `<button class="btn btn-g btn-sm" onclick="askEdit('INV','${esc(v.peakIvNo)}','${esc(v.ivRequestId)}')">✏️ ขอแก้ไข INV</button>` : '');
     return `<div class="list-row" id="row-${esc(v.ivRequestId)}">
-      <div class="list-head"><div><span class="list-id">${esc(v.ivRequestId)}</span> · ${esc(v.company)}${v.billToRelation ? ` <span class="small">(${esc(v.billToRelation)})</span>` : ''}</div><div>${st(IV_ST, v.status)} ${payChip(v)} ${st(ORIG_ST, v.originalStatus)}</div></div>
-      <div class="list-sub">QT ${esc(v.qtNo)}${v.peakIvNo ? ' · INV ' + docLink(v.peakIvNo, v.peakDocLink) : ''} · ${esc(v.createdAt)}${op ? ' · ' + esc(v.salesName) : ''}${v.accountNote ? `<br><span class="small">ฝ่ายบัญชี: ${esc(v.accountNote)}</span>` : ''}<br>
-        ยอด${ivAmt(v).lbl} <b>${fmt(ivAmt(v).amt)}</b>${ivAmt(v).sub ? ` <span class="small">(${ivAmt(v).sub})</span>` : ''}${v.installment ? ' · ' + esc(v.installment) : ''} · ${esc(v.evidenceType)}${v.evidenceLink && /^https:\/\//.test(v.evidenceLink) ? ` · <a href="${esc(v.evidenceLink)}" target="_blank" rel="noopener">ดูหลักฐาน</a>` : ''}
-        ${payNoticeLine(v)}
-        ${v.originalStatus === 'requested' || v.originalStatus === 'sent' ? `<br>ตัวจริงส่งถึง: ${esc(v.originalRecipient)} ${esc(v.originalAddress)}${v.trackingNo ? ' · เลขพัสดุ ' + esc(v.trackingNo) : ''}` : ''}</div>
-      <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
-        ${canOrig && v.originalStatus !== 'requested' ? `<button class="btn btn-o btn-sm" onclick="openOrig('${esc(v.ivRequestId)}')">📮 ลูกค้าขอตัวจริง</button>` : ''}
-        ${canOrig && v.originalStatus !== 'not_needed' ? `<button class="btn btn-g btn-sm" onclick="setOrig('${esc(v.ivRequestId)}','no')">ไม่ต้องส่งตัวจริง</button>` : ''}
-        ${canPayNotice(v) ? `<button class="btn btn-o btn-sm" onclick="openPayNotice('${esc(v.ivRequestId)}')">💰 แจ้งบัญชีว่าลูกค้าจ่ายแล้ว</button>` : ''}
-        ${v.peakIvNo && pendEdit('INV', v.peakIvNo) ? editNote(pendEdit('INV', v.peakIvNo)) : v.peakIvNo && v.status === 'iv_issued' && !(v.ar && (v.ar.rtNo || v.ar.paidDate)) && !RTS.some((r) => String(r.refDoc || '').toUpperCase() === String(v.peakIvNo).toUpperCase() && r.status !== 'rejected') ? `<button class="btn btn-g btn-sm" onclick="askEdit('INV','${esc(v.peakIvNo)}','${esc(v.ivRequestId)}')">✏️ ขอแก้ไข INV</button>` : ''}
-      </div>
+      <div class="list-head"><div>${v.peakIvNo ? `<span class="list-id">INV ${docLink(v.peakIvNo, v.peakDocLink)}</span>` : '<span class="small">ยังไม่มีเลข INV</span>'} · ${esc(v.company)}${v.billToRelation ? ` <span class="small">(${esc(v.billToRelation)})</span>` : ''}</div><div>${st(IV_ST, v.status)} ${payChip(v)}</div></div>
+      <div class="next ${nx.you ? 'you' : 'wait'}"><b>${nx.you ? 'ถัดไป (คุณ):' : 'ถัดไป:'}</b> ${nx.t}</div>
+      <div class="list-sub">ยอด${ivAmt(v).lbl} <b>${fmt(ivAmt(v).amt)}</b>${ivAmt(v).sub ? ` <span class="small">(${ivAmt(v).sub})</span>` : ''}${v.installment ? ' · ' + esc(v.installment) : ''} · จาก QT ${esc(v.qtNo)}</div>
+      ${v.status === 'rejected' && v.accountNote ? `<div class="pc-note err" style="margin-top:8px">เหตุผล: ${esc(v.accountNote)}</div>` : ''}
+      ${v.peakIvNo && pendEdit('INV', v.peakIvNo) ? editNote(pendEdit('INV', v.peakIvNo)) : ''}
+      ${acts ? `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${acts}</div>` : ''}
       <div id="orig-${esc(v.ivRequestId)}"></div>
+      <details class="more"><summary>รายละเอียด</summary>
+        <div class="list-sub">${esc(v.ivRequestId)} · ${esc(v.createdAt)}${op ? ' · ' + esc(v.salesName) : ''} · ${esc(v.evidenceType)}${v.evidenceLink && /^https:\/\//.test(v.evidenceLink) ? ` · <a href="${esc(v.evidenceLink)}" target="_blank" rel="noopener">ดูหลักฐาน</a>` : ''}
+          ${v.originalStatus ? `<br>เอกสารตัวจริง: ${st(ORIG_ST, v.originalStatus)}` : ''}${v.originalStatus === 'requested' || v.originalStatus === 'sent' ? ` ส่งถึง ${esc(v.originalRecipient)} ${esc(v.originalAddress)}${v.trackingNo ? ' · เลขพัสดุ ' + esc(v.trackingNo) : ''}` : ''}
+          ${payNoticeLine(v)}${v.accountNote && v.status !== 'rejected' ? `<br><span class="small">ฝ่ายบัญชี: ${esc(v.accountNote)}</span>` : ''}</div>
+        ${v.originalStatus !== 'pending_decision' && origBtns ? `<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><span class="small" style="align-self:center">เอกสารตัวจริง:</span>${origBtns}</div>` : ''}
+      </details>
     </div>`;
   }).join('') : '<div class="empty">ยังไม่มีคำขอออก INV</div>';
   renderMineMore();
@@ -1311,11 +1318,47 @@ async function askEdit(docType, docNo, refId) {
 function alertMsg(t, ok) { ask({ title: ok ? 'เรียบร้อย' : 'ทำรายการไม่สำเร็จ', html: `<p>${esc(t)}</p>`, ok: 'ตกลง', cancel: null }); }
 function renderMineMore() {
   const op = canDo('approve') || canDo('team_view');
-  $('mine-rt').innerHTML = RTS.length ? RTS.map((r) => `<div class="list-row"><div class="list-head"><div><span class="list-id">${r.peakRtNo ? docLink(r.peakRtNo, r.peakDocLink) : esc(r.rtRequestId)}</span> · ${esc(r.billName)}</div><div>${st(RT_ST, r.status)}${r.sentStatus === 'waiting' && r.status === 'issued' ? ' <span class="st blue">รอส่งตัวจริง</span>' : r.sentStatus === 'sent' ? ' <span class="st green">ส่งแล้ว</span>' : ''}</div></div>
-    <div class="list-sub">${esc(r.rtRequestId)} · ${esc(r.createdAt)} · ${esc(r.segment)}${op ? ' · ' + esc(r.salesName) : ''}<br>${esc(r.packages)} ${esc(r.whStudent)} · ${fmt(toNum(r.price) - toNum(r.discount))} บาท · ${esc(r.deliveryChannel)}${r.trackingNo ? ' · เลขพัสดุ ' + esc(r.trackingNo) : ''}${r.accountNote ? `<br><span class="small">ฝ่ายบัญชี: ${esc(r.accountNote)}</span>` : ''}</div>
-</div>`).join('') : '<div class="empty">ยังไม่มีคำขอใบเสร็จ</div>';
-  $('mine-edit').innerHTML = EDITS.length ? EDITS.map((e) => `<div class="list-row"><div class="list-head"><div><span class="list-id">${esc(e.docType)} ${esc(e.docNo)}</span> · ${esc(e.company)}</div>${st(ED_ST, e.status)}</div>
-    <div class="list-sub">${esc(e.editId)} · ${esc(e.createdAt)}${op ? ' · ' + esc(e.salesName) : ''}<br>${esc(e.detail).replace(/\n/g, '<br>')}${e.accountNote || e.newDocNo ? `<br><span class="small">ฝ่ายบัญชี: ${esc(e.accountNote)}${e.newDocNo ? ' · เอกสารใหม่ ' + esc(e.newDocNo) : ''}</span>` : ''}</div></div>`).join('') : '<div class="empty">ยังไม่มีคำขอแก้ไข</div>';
+  $('mine-rt').innerHTML = RTS.length ? RTS.map((r) => { const nx = nextRt(r); return `<div class="list-row" id="row-${esc(r.rtRequestId)}"><div class="list-head"><div>${r.peakRtNo ? `<span class="list-id">ใบเสร็จ ${docLink(r.peakRtNo, r.peakDocLink)}</span>` : '<span class="small">ยังไม่มีเลขใบเสร็จ</span>'} · ${esc(r.billName)}</div><div>${st(RT_ST, r.status)}${r.sentStatus === 'waiting' && r.status === 'issued' ? ' <span class="st blue">รอส่งตัวจริง</span>' : r.sentStatus === 'sent' ? ' <span class="st green">ส่งแล้ว</span>' : ''}</div></div>
+    <div class="next ${nx.you ? 'you' : 'wait'}"><b>${nx.you ? 'ถัดไป (คุณ):' : 'ถัดไป:'}</b> ${nx.t}</div>
+    <div class="list-sub">${fmt(toNum(r.price) - toNum(r.discount))} บาท · ${esc(r.packages)} ${esc(r.whStudent)}</div>
+    ${r.status === 'rejected' && r.accountNote ? `<div class="pc-note err" style="margin-top:8px">เหตุผล: ${esc(r.accountNote)}</div>` : ''}
+    <details class="more"><summary>รายละเอียด</summary><div class="list-sub">${esc(r.rtRequestId)} · ${esc(r.createdAt)} · ${esc(r.segment)}${op ? ' · ' + esc(r.salesName) : ''} · ส่งทาง ${esc(r.deliveryChannel)}${r.trackingNo ? ' · เลขพัสดุ ' + esc(r.trackingNo) : ''}${r.accountNote && r.status !== 'rejected' ? `<br><span class="small">ฝ่ายบัญชี: ${esc(r.accountNote)}</span>` : ''}</div></details>
+</div>`; }).join('') : '<div class="empty">ยังไม่มีคำขอใบเสร็จ</div>';
+  $('mine-edit').innerHTML = EDITS.length ? EDITS.map((e) => { const nx = nextEdit(e); return `<div class="list-row"><div class="list-head"><div><span class="list-id">ขอแก้ ${esc(e.docType)} ${esc(e.docNo)}</span> · ${esc(e.company)}</div>${st(ED_ST, e.status)}</div>
+    <div class="next ${nx.you ? 'you' : 'wait'}"><b>${nx.you ? 'ถัดไป (คุณ):' : 'ถัดไป:'}</b> ${nx.t}</div>
+    <div class="list-sub">ขอแก้: ${esc(e.detail).replace(/\n/g, '<br>')}</div>
+    ${e.status === 'rejected' && e.accountNote ? `<div class="pc-note err" style="margin-top:8px">เหตุผล: ${esc(e.accountNote)}</div>` : ''}
+    <details class="more"><summary>รายละเอียด</summary><div class="list-sub">${esc(e.editId)} · ${esc(e.createdAt)}${op ? ' · ' + esc(e.salesName) : ''}${e.accountNote && e.status !== 'rejected' ? `<br><span class="small">ฝ่ายบัญชี: ${esc(e.accountNote)}</span>` : ''}</div></details></div>`; }).join('') : '<div class="empty">ยังไม่มีคำขอแก้ไข</div>';
+}
+// "Next step" for the INV / receipt / edit cards, same idea as nextStep() for QT.
+function nextIv(v) {
+  const W = (t) => ({ t, you: false }), Y = (t) => ({ t, you: true }), a = v.ar || {}, n = v.payNotice;
+  if (v.status === 'rejected') return Y('ดูเหตุผล แล้วส่งคำขอ INV ใหม่จากการ์ด QT');
+  if (v.status === 'new' || v.status === 'iv_creating') return W('ฝ่ายบัญชีตรวจหลักฐานและสร้าง INV');
+  if (v.status === 'iv_draft') return W('ฝ่ายบัญชีอนุมัติ INV ใน PEAK');
+  if (v.peakIvNo && pendEdit('INV', v.peakIvNo)) return W('ฝ่ายบัญชีแก้ INV ตามที่ขอ');
+  if (a.state === 'Closed') return W('INV นี้ปิดแล้ว (ยกเลิก / ออกใบใหม่แทน)');
+  if (a.paidDate) return a.rtNo ? W(`เสร็จแล้ว · ลูกค้าจ่าย ${esc(a.paidDate)} · ใบเสร็จ ${esc(a.rtNo)}`) : W('ฝ่ายบัญชีออกใบเสร็จ');
+  if (n && n.source === 'sales' && n.status === 'new') return W('ฝ่ายบัญชีตรวจเงินเข้าตามที่คุณแจ้ง');
+  if (n && n.source === 'sales' && n.status === 'rejected') return Y('บัญชียังไม่เห็นเงินเข้า เช็กกับลูกค้าแล้วแจ้งใหม่');
+  if (v.originalStatus === 'pending_decision') return Y('บอกฝ่ายบัญชีว่าลูกค้าต้องการเอกสารตัวจริงไหม');
+  if (a.state === 'Overdue') return Y(`เกินกำหนด ${a.daysOverdue} วัน ติดตามลูกค้า จ่ายแล้วกด "แจ้งบัญชีว่าลูกค้าจ่ายแล้ว"`);
+  return Y(`ส่ง INV ให้ลูกค้า${a.dueDate ? ` (ครบกำหนด ${esc(a.dueDate)})` : ''} ลูกค้าจ่ายแล้วกด "แจ้งบัญชีว่าลูกค้าจ่ายแล้ว"`);
+}
+function nextRt(r) {
+  const W = (t) => ({ t, you: false }), Y = (t) => ({ t, you: true });
+  if (r.status === 'rejected') return Y('ดูเหตุผล แล้วส่งคำขอใบเสร็จใหม่');
+  if (r.status === 'new') return W('ฝ่ายบัญชีออกใบเสร็จใน PEAK');
+  if (r.status === 'rt_draft') return W('ฝ่ายบัญชีอนุมัติใบเสร็จใน PEAK');
+  if (r.sentStatus === 'waiting') return W('ฝ่ายบัญชีส่งใบเสร็จตัวจริง');
+  if (/Sales/i.test(r.deliveryChannel || '') || r.deliveryChannel === 'sales') return Y('กดเลขใบเสร็จเพื่อเปิดไฟล์ แล้วส่งให้ลูกค้า');
+  return W('เสร็จแล้ว');
+}
+function nextEdit(e) {
+  const W = (t) => ({ t, you: false }), Y = (t) => ({ t, you: true });
+  if (e.status === 'new') return W('ฝ่ายบัญชีแก้เอกสารใน PEAK');
+  if (e.status === 'rejected') return Y('ดูเหตุผลจากฝ่ายบัญชี ถ้ายังต้องแก้ส่งคำขอใหม่');
+  return e.newDocNo && e.newDocNo !== e.docNo ? Y(`ใช้ ${esc(e.newDocNo)} แทน ${esc(e.docNo)} ส่งลูกค้าใบใหม่`) : Y(`แก้ในเลขเดิมแล้ว เปิด ${esc(e.docNo)} จากการ์ดแล้วส่งลูกค้าอีกครั้ง`);
 }
 function renderPendingMore() {
   const waitR = RTS.filter((r) => r.status === 'new'), postR = RTS.filter((r) => r.status === 'issued' && r.sentStatus === 'waiting');

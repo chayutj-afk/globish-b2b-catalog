@@ -35,7 +35,6 @@
     { k: 'ar', href: '/ar', label: 'ติดตามหนี้', gate: 'ar_view', badge: 'ar-pay-n' },
     { sep: 1, gate: 'tools' },
     { k: 'users', href: '/users', label: 'ผู้ใช้', gate: 'users' },
-    { k: 'contacts', href: '/import-contacts', label: 'ลูกค้า PEAK', gate: 'import' },
     { k: 'wh', href: '/import-wh', label: 'แพ็กเกจ WH', gate: 'import' },
   ];
   const rail = document.getElementById('rail');

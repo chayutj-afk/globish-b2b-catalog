@@ -644,7 +644,7 @@ function taxHint(p) {
   h.className = 'sub ' + (ok ? 'ok' : 'warn');
 }
 // Customer = 13-digit tax ID + branch. After 13 digits, list the branches PEAK has for that tax ID
-// (from the PeakContacts tab); picking one fills the PEAK code and name. Not in PEAK → type the branch.
+// (live from PEAK); picking one fills the PEAK code and name. Not in PEAK → type the branch + new-customer details.
 let lookupSeq = 0, TAX_HITS = [];
 async function onTaxInput(p) {
   const tax = $(p + '-tax').value;
@@ -656,10 +656,17 @@ async function onTaxInput(p) {
   }
   const seq = ++lookupSeq;
   pick.innerHTML = '<option value="">กำลังค้นใน PEAK…</option>';
-  let hits = [];
-  try { const r = await fetch(`/api/contacts?taxId=${tax}`, { cache: 'no-store' }); const d = await r.json(); if (r.ok) hits = d.matches || []; } catch {}
+  let hits = [], lookupErr = '';
+  try { const r = await fetch(`/api/contacts?taxId=${tax}`, { cache: 'no-store' }); const d = await r.json(); if (r.ok) hits = [...(d.matches || []), ...(d.otherBranches || [])]; else lookupErr = d.error || 'ค้นหาลูกค้าใน PEAK ไม่ได้'; } catch { lookupErr = 'ค้นหาลูกค้าใน PEAK ไม่ได้ ลองใหม่อีกครั้ง'; }
   if (seq !== lookupSeq) return;
   TAX_HITS = hits;
+  // PEAK not reachable: Sales types the branch; accounting checks the customer when approving.
+  if (lookupErr) {
+    pick.hidden = true; typed.hidden = false; if (!typed.value) typed.value = '00000';
+    $(p + '-client').value = ''; showNewC(p, false);
+    $(p + '-branch-hint').textContent = `${lookupErr} · กรอกรหัสสาขาเอง ฝ่ายบัญชีจะตรวจลูกค้าตอนอนุมัติ`; $(p + '-branch-hint').className = 'sub warn';
+    return;
+  }
   const byBranch = {};
   hits.forEach((h) => { (byBranch[h.branch] = byBranch[h.branch] || []).push(h); });
   const branches = Object.keys(byBranch).sort();

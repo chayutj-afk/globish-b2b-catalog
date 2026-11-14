@@ -41,7 +41,7 @@ http.createServer(async (req, res) => {
     delete require.cache[file];
     return require(file)(req, res);
   }
-  const REWRITES = { '/': '/home.html', '/request': '/request.html', '/import-contacts': '/import-contacts.html', '/import-wh': '/import-wh.html', '/users': '/users.html', '/ar': '/ar.html' };
+  const REWRITES = { '/': '/home.html', '/request': '/request.html', '/import-wh': '/import-wh.html', '/users': '/users.html', '/ar': '/ar.html' };
   let p = REWRITES[url.pathname] || url.pathname;
   const file = path.join(root, p);
   if (!file.startsWith(root) || !fs.existsSync(file)) { res.statusCode = 404; return res.end('not found'); }

@@ -13,10 +13,6 @@
       "destination": "/request.html"
     },
     {
-      "source": "/import-contacts",
-      "destination": "/import-contacts.html"
-    },
-    {
       "source": "/users",
       "destination": "/users.html"
     },

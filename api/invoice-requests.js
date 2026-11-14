@@ -11,6 +11,8 @@ const crypto = require('crypto');
 const { checkOrigin, sendError } = require('../lib/session');
 const { requireUser, can, visibility } = require('../lib/users');
 const users = require('../lib/users');
+// Requests that no longer count (turned down, or their INV / receipt voided in PEAK).
+const DEAD = new Set(['rejected', 'iv_void', 'rt_void']);
 const hub = require('../lib/hub');
 const drive = require('../lib/drive');
 const notify = require('../lib/notify');
@@ -25,8 +27,8 @@ async function docsInUse() {
   const [reqs, ivs, rts, invs] = await Promise.all([hub.readTable('Requests'), hub.readTable('InvoiceRequests'), hub.readTable('ReceiptRequests'), hub.readTable('Invoices')]);
   const out = [];
   reqs.forEach((x) => out.push({ no: x.peakQtNo, link: x.peakDocLink, ref: x.requestId, taxId: x.taxId, label: `QT ของคำขอ ${x.requestId}` }));
-  ivs.filter((x) => x.status !== 'rejected').forEach((x) => out.push({ no: x.peakIvNo, link: x.peakDocLink, ref: x.ivRequestId, taxId: x.taxId, label: `INV ของคำขอ ${x.ivRequestId}` }));
-  rts.filter((x) => x.status !== 'rejected').forEach((x) => out.push({ no: x.peakRtNo, link: x.peakDocLink, ref: x.rtRequestId, taxId: x.taxId, label: `ใบเสร็จของคำขอ ${x.rtRequestId}` }));
+  ivs.filter((x) => !DEAD.has(x.status)).forEach((x) => out.push({ no: x.peakIvNo, link: x.peakDocLink, ref: x.ivRequestId, taxId: x.taxId, label: `INV ของคำขอ ${x.ivRequestId}` }));
+  rts.filter((x) => !DEAD.has(x.status)).forEach((x) => out.push({ no: x.peakRtNo, link: x.peakDocLink, ref: x.rtRequestId, taxId: x.taxId, label: `ใบเสร็จของคำขอ ${x.rtRequestId}` }));
   invs.filter((x) => x.ivRequestId).forEach((x) => out.push({ no: x.ivNo, link: x.peakDocLink, ref: x.ivRequestId, taxId: x.taxId, label: `INV ${x.ivNo} ในหน้าติดตามหนี้` }));
   invs.filter((x) => x.rtNo).forEach((x) => out.push({ no: x.rtNo, ref: 'paid:' + x.ivNo, taxId: x.taxId, label: `ใบเสร็จของ ${x.ivNo} ในหน้าติดตามหนี้` }));
   return out;
@@ -148,7 +150,7 @@ const n0 = (x) => Number(String(x ?? '').replace(/,/g, '')) || 0;
 // trips the balance check on rounded satang.
 function alreadyInvoiced(rows, { requestId, qtNo }, incl = false) {
   return round2(rows
-    .filter((x) => x.status !== 'rejected' && ((requestId && x.requestId === requestId) || (!requestId && qtNo && x.qtNo === qtNo)))
+    .filter((x) => !DEAD.has(x.status) && ((requestId && x.requestId === requestId) || (!requestId && qtNo && x.qtNo === qtNo)))
     .reduce((s, x) => s + (incl ? (n0(x.amountInclVat) || round2(n0(x.amountPreVat) * 1.07)) : n0(x.amountPreVat)), 0));
 }
 
@@ -199,7 +201,7 @@ async function create(req, res, user) {
   // Same QT + same billed tax ID + same amount already requested (not rejected) → probably sent twice.
   if (b.confirmDuplicate !== true) {
     const ref = (x) => (r.requestId ? x.requestId === r.requestId : x.qtNo === r.qtNo);
-    const same = existing.filter((x) => x.status !== 'rejected' && ref(x)
+    const same = existing.filter((x) => !DEAD.has(x.status) && ref(x)
       && invoices.some((v) => x.taxId === v.taxId && Math.abs((Number(String(x.amountPreVat).replace(/,/g, '')) || 0) - v.amountPreVat) < 0.01));
     if (same.length) {
       const e = bad(`QT ${r.qtNo} มีคำขอ INV ยอดเดียวกันอยู่แล้ว ${same.length} ใบ`, 409);
@@ -513,9 +515,33 @@ async function arOwner(req, res, user) {
   res.status(200).json({ ok: true, salesEmail: email, salesName: name });
 }
 
+// "↻ อัปเดตจาก PEAK" on an AR row: read the INV (and its receipt) as they now are in PEAK and apply
+// edits / voids / classification, the same as the webhook does. For when the webhook missed something.
+async function arRefresh(req, res, user) {
+  if (!isOp(user) && !can(user, 'approve')) throw bad('ไม่มีสิทธิ์', 403);
+  const peak = require('../lib/peak');
+  if (peak.mode() === 'off') throw bad('ยังไม่ได้เปิดการเชื่อมต่อ PEAK API', 503);
+  const ivNo = text((req.body || {}).ivNo, 40);
+  const row = (await hub.readTable('Invoices')).find((x) => x.ivNo === ivNo);
+  if (!row) throw bad('ไม่พบ INV นี้ใน AR', 404);
+  const ps = require('../lib/peaksync');
+  const iv = row.peakIvId ? await peak.getInvoice(row.peakIvId) : await peak.findInvoiceByCode(row.ivNo);
+  if (!iv) throw bad(`ไม่พบ ${row.ivNo} ใน PEAK`, 404);
+  const a = await ps.syncInvoice(iv, { classes: true });
+  const changes = [...((a && a.changes) || [])];
+  if (a && a.classError) changes.push('อ่านกลุ่มจัดประเภทจาก PEAK ไม่ได้ (ลองใหม่ภายหลัง)');
+  if (row.rtNo) {
+    const rt = await peak.findReceiptByCode(row.rtNo).catch(() => null);
+    if (rt) changes.push(...(((await ps.syncReceipt(rt, { classes: true })) || {}).changes || []));
+  }
+  await hub.log('catalog', 'ar_refresh', ivNo, `${user.email} · ${changes.join(', ') || 'no change'}`);
+  res.status(200).json({ ok: true, changes, status: iv.status || '' });
+}
+
 async function arUpdate(req, res, user) {
   checkOrigin(req);
   if ((req.body || {}).action === 'ar_owner') return arOwner(req, res, user);
+  if ((req.body || {}).action === 'ar_refresh') return arRefresh(req, res, user);
   if (!isOp(user)) throw bad('ไม่มีสิทธิ์บันทึกติดตามหนี้', 403);
   const b = req.body || {};
   const ivNo = text(b.ivNo, 40);
@@ -737,7 +763,7 @@ async function createReceipt(req, res, user) {
   const rows = await hub.readTable('ReceiptRequests');
   if (b.confirmDuplicate !== true) {
     const since = Date.now() - 14 * 86400e3;
-    const same = rows.filter((x) => x.taxId === r.taxId && Math.abs(ar.num(x.price) - r.price) < 0.01 && x.status !== 'rejected'
+    const same = rows.filter((x) => x.taxId === r.taxId && Math.abs(ar.num(x.price) - r.price) < 0.01 && !DEAD.has(x.status)
       && (ar.parseDate(x.createdAt) || 0) > since - 86400e3);
     if (same.length) {
       const e = bad(`มีคำขอใบเสร็จของ ${r.billName} ยอดเดียวกันอยู่แล้ว ${same.length} ใบ`, 409);
@@ -772,7 +798,7 @@ async function rtFromInv(req, res, user) {
   const a = invs.find((x) => String(x.ivNo).toUpperCase() === ivNo);
   if (!a) throw bad('ไม่พบ INV นี้ในหน้าติดตามหนี้', 404);
   if (!a.paidDate) throw bad('ยังไม่ได้บันทึกรับเงินของ INV นี้ (บันทึกที่หน้าติดตามหนี้ก่อน)', 409);
-  if (a.rtNo || rts.some((x) => x.refDoc === ivNo && x.status !== 'rejected')) throw bad(`INV นี้ออกใบเสร็จแล้ว${a.rtNo ? ' (' + a.rtNo + ')' : ''}`, 409);
+  if (a.rtNo || rts.some((x) => x.refDoc === ivNo && !DEAD.has(x.status))) throw bad(`INV นี้ออกใบเสร็จแล้ว${a.rtNo ? ' (' + a.rtNo + ')' : ''}`, 409);
   const no = text(b.peakRtNo, 40).toUpperCase();
   if (!/^[A-Z0-9-]{6,40}$/.test(no)) throw bad('ใส่เลขใบเสร็จจาก PEAK เช่น RT-20261100001');
   const link = text(b.peakDocLink, 500);
@@ -808,7 +834,7 @@ async function rtMake(req, res, user) {
   const a = invs.find((x) => String(x.ivNo).toUpperCase() === ivNo);
   if (!a) throw bad('ไม่พบ INV นี้ในหน้าติดตามหนี้', 404);
   if (!a.paidDate) throw bad('ยังไม่ได้บันทึกรับเงินของ INV นี้', 409);
-  if (a.rtNo || rts.some((x) => x.refDoc === ivNo && x.status !== 'rejected')) throw bad(`INV นี้มีใบเสร็จแล้ว${a.rtNo ? ' (' + a.rtNo + ')' : ''} รีเฟรชหน้า`, 409);
+  if (a.rtNo || rts.some((x) => x.refDoc === ivNo && !DEAD.has(x.status))) throw bad(`INV นี้มีใบเสร็จแล้ว${a.rtNo ? ' (' + a.rtNo + ')' : ''} รีเฟรชหน้า`, 409);
   const iv = ivreqs.find((x) => x.ivRequestId === a.ivRequestId) || {};
   const ivId = a.peakIvId || iv.peakIvId;
   if (!ivId) throw bad('INV นี้ไม่มีรหัสใน PEAK (ออกก่อนเชื่อม API) ออกใบเสร็จใน PEAK เอง แล้วใส่เลข', 409);
@@ -923,7 +949,7 @@ async function updateReceipt(req, res, user) {
 async function assertEditable(r) {
   const n = (x) => String(x || '').toUpperCase();
   if (r.docType === 'QT') {
-    const ivs = (await hub.readTable('InvoiceRequests')).filter((v) => v.status !== 'rejected'
+    const ivs = (await hub.readTable('InvoiceRequests')).filter((v) => !DEAD.has(v.status)
       && ((r.refId && v.requestId === r.refId) || n(v.qtNo) === r.docNo));
     if (ivs.length) throw bad(`QT ${r.docNo} ขอ INV ไปแล้ว ${ivs.length} ใบ แก้ QT ไม่ได้ ถ้าต้องเปลี่ยนให้ขอแก้ที่ INV หรือแจ้งฝ่ายบัญชี`, 409);
   }
@@ -931,7 +957,7 @@ async function assertEditable(r) {
     const [ars, rts] = await Promise.all([hub.readTable('Invoices'), hub.readTable('ReceiptRequests')]);
     const a = ars.find((x) => n(x.ivNo) === r.docNo && x.docStatus !== 'Cancelled');
     if (a && (a.rtNo || a.paidDate)) throw bad(`INV ${r.docNo} ${a.rtNo ? `ออกใบเสร็จแล้ว (${a.rtNo})` : 'บันทึกรับเงินแล้ว'} แก้ INV ไม่ได้`, 409);
-    if (rts.some((x) => n(x.refDoc) === r.docNo && x.status !== 'rejected')) throw bad(`INV ${r.docNo} มีคำขอใบเสร็จแล้ว แก้ INV ไม่ได้`, 409);
+    if (rts.some((x) => n(x.refDoc) === r.docNo && !DEAD.has(x.status))) throw bad(`INV ${r.docNo} มีคำขอใบเสร็จแล้ว แก้ INV ไม่ได้`, 409);
   }
 }
 

@@ -1019,7 +1019,7 @@ async function submitINV() {
   }
   // Accidental re-send: same QT + same amount already requested (checked here first, so the user sees
   // "already sent" rather than an over-QT error). The server checks again.
-  const prev = IVS.filter((x) => x.status !== 'rejected' && (body.requestId ? x.requestId === body.requestId : x.qtNo === body.qtNo)
+  const prev = IVS.filter((x) => !['rejected', 'iv_void'].includes(x.status) && (body.requestId ? x.requestId === body.requestId : x.qtNo === body.qtNo)
     && INVS.some((v) => Math.abs(toNum(invBasis() === 'รวม VAT' ? (x.amountInclVat || toNum(x.amountPreVat) * 1.07) : x.amountPreVat) - toNum(v.amountPreVat)) < 0.01));
   if (prev.length && !body.confirmDuplicate) {
     const again = await ask({ kind: 'warn', title: '⚠️ เหมือนเคยส่งคำขอนี้ไปแล้ว', ok: 'ส่งซ้ำอีกใบ', cancel: 'ไม่ส่ง',
@@ -1062,7 +1062,7 @@ const QT_ST = { new: ['รอฝ่ายบัญชีอนุมัติ', 
   accepted: ['ลูกค้าตอบรับ', 'green'], iv_requested: ['ขอ INV แล้ว', 'green'], iv_issued: ['ออก INV แล้ว', 'green'], cancelled: ['ยกเลิก', 'red'] };
 // Payment status from AR (Invoices tab) once the INV is issued.
 const payChip = (v) => { const a = v.ar; if (!a) return ''; const m = { Paid: ['green', 'ลูกค้าจ่ายแล้ว' + (a.paidDate ? ' ' + a.paidDate : '') + (a.rtNo ? ' · ใบเสร็จ ' + a.rtNo : ' · รอออกใบเสร็จ')], Overdue: ['red', `เกินกำหนด ${a.daysOverdue} วัน`], Outstanding: ['blue', 'ครบกำหนด ' + a.dueDate], Closed: ['', 'INV ปิดแล้ว'] }[a.state]; return m ? `<span class="st ${m[0]}" title="${esc(a.followStatus || '')}${a.commitDate ? ' · นัดจ่าย ' + esc(a.commitDate) : ''}">${esc(m[1])}</span>` : ''; };
-const IV_ST = { new: ['รอฝ่ายบัญชีออก INV', 'new'], iv_creating: ['กำลังสร้าง INV ใน PEAK', 'blue'], iv_draft: ['INV Draft · รอบัญชีอนุมัติ', 'blue'], iv_issued: ['ออก INV แล้ว', 'green'], rejected: ['ตีกลับ', 'red'] };
+const IV_ST = { new: ['รอฝ่ายบัญชีออก INV', 'new'], iv_creating: ['กำลังสร้าง INV ใน PEAK', 'blue'], iv_draft: ['INV Draft · รอบัญชีอนุมัติ', 'blue'], iv_issued: ['ออก INV แล้ว', 'green'], rejected: ['ตีกลับ', 'red'], iv_void: ['INV ถูกยกเลิกใน PEAK', 'red'] };
 const ORIG_ST = { not_needed: ['ไม่ต้องส่งตัวจริง', ''], pending_decision: ['ยังไม่ทราบเรื่องตัวจริง', 'new'], requested: ['รอส่งตัวจริง', 'blue'], sent: ['ส่งตัวจริงแล้ว', 'green'] };
 const st = (map, k) => { if (!k) return ''; const [t, c] = map[k] || [k, '']; return `<span class="st ${c}">${esc(t)}</span>`; };
 
@@ -1163,7 +1163,7 @@ function nextStep(q, ivs, replaced) {
   }
   if (!QT_LIVE.includes(q.status)) return W(QT_ST[q.status] ? QT_ST[q.status][0] : q.status);
   if (q.peakQtNo && pendEdit('QT', q.peakQtNo)) return W('ฝ่ายบัญชีแก้ QT ตามที่ขอ');
-  const live = ivs.filter((v) => v.status !== 'rejected');
+  const live = ivs.filter((v) => !['rejected', 'iv_void'].includes(v.status));
   if (qtLeft(q) <= 0.01) return W('ขอ INV ครบยอดแล้ว ติดตามต่อที่แท็บ "ใบแจ้งหนี้"');
   if (!live.length) return Y('ส่ง QT ให้ลูกค้า พอลูกค้ายอมรับแล้วกด "ขอ INV จาก QT นี้"');
   return Y(`ขอ INV งวดถัดไปได้ (คงเหลือ ${fmt(qtLeft(q))})`);
@@ -1209,7 +1209,7 @@ function renderMine() {
     const mineIvs = IVS.filter((v) => v.requestId === q.requestId);
     const nx = nextStep(q, mineIvs, replaced);
     const actions = (q.status === 'rejected' && ME && q.requestedBy === ME.email && !replaced.has(q.requestId) ? `<button class="btn btn-p btn-sm" onclick="rebuildQT('${esc(q.requestId)}')">↻ สร้างคำขอใหม่จากข้อมูลเดิม</button>` : '')
-      + (q.peakQtNo && QT_LIVE.includes(q.status) && !pendEdit('QT', q.peakQtNo) ? `${qtLeft(q) > 0.01 ? `<button class="btn btn-o btn-sm" onclick="startInvFor('${esc(q.requestId)}')">🧾 ขอ INV จาก QT นี้</button>` : ''}${mineIvs.some((v) => v.status !== 'rejected') ? '' : `<button class="btn btn-g btn-sm" onclick="askEdit('QT','${esc(q.peakQtNo)}','${esc(q.requestId)}')">✏️ ขอแก้ไข QT</button>`}` : '');
+      + (q.peakQtNo && QT_LIVE.includes(q.status) && !pendEdit('QT', q.peakQtNo) ? `${qtLeft(q) > 0.01 ? `<button class="btn btn-o btn-sm" onclick="startInvFor('${esc(q.requestId)}')">🧾 ขอ INV จาก QT นี้</button>` : ''}${mineIvs.some((v) => !['rejected', 'iv_void'].includes(v.status)) ? '' : `<button class="btn btn-g btn-sm" onclick="askEdit('QT','${esc(q.peakQtNo)}','${esc(q.requestId)}')">✏️ ขอแก้ไข QT</button>`}` : '');
     return `<div class="list-row">
       <div class="list-head"><div>${q.peakQtNo ? `<span class="list-id">QT ${qtLink(q)}</span>` : '<span class="small">ยังไม่มีเลข QT</span>'} · ${esc(q.company)}${ownerTag(q)}</div>${st(QT_ST, q.status)}</div>
       <div class="next ${nx.you ? 'you' : 'wait'}"><b>${nx.you ? 'ถัดไป (คุณ):' : 'ถัดไป:'}</b> ${nx.t}</div>
@@ -1234,7 +1234,7 @@ function renderMine() {
       + (canOrig && v.originalStatus !== 'not_needed' ? `<button class="btn btn-g btn-sm" onclick="setOrig('${esc(v.ivRequestId)}','no')">ไม่ต้องส่งตัวจริง</button>` : '');
     const acts = (canPayNotice(v) ? `<button class="btn btn-o btn-sm" onclick="openPayNotice('${esc(v.ivRequestId)}')">💰 แจ้งบัญชีว่าลูกค้าจ่ายแล้ว</button>` : '')
       + (v.originalStatus === 'pending_decision' ? origBtns : '')
-      + (v.peakIvNo && !pendEdit('INV', v.peakIvNo) && v.status === 'iv_issued' && !(v.ar && (v.ar.rtNo || v.ar.paidDate)) && !RTS.some((r) => String(r.refDoc || '').toUpperCase() === String(v.peakIvNo).toUpperCase() && r.status !== 'rejected') ? `<button class="btn btn-g btn-sm" onclick="askEdit('INV','${esc(v.peakIvNo)}','${esc(v.ivRequestId)}')">✏️ ขอแก้ไข INV</button>` : '');
+      + (v.peakIvNo && !pendEdit('INV', v.peakIvNo) && v.status === 'iv_issued' && !(v.ar && (v.ar.rtNo || v.ar.paidDate)) && !RTS.some((r) => String(r.refDoc || '').toUpperCase() === String(v.peakIvNo).toUpperCase() && !['rejected', 'rt_void'].includes(r.status)) ? `<button class="btn btn-g btn-sm" onclick="askEdit('INV','${esc(v.peakIvNo)}','${esc(v.ivRequestId)}')">✏️ ขอแก้ไข INV</button>` : '');
     return `<div class="list-row" id="row-${esc(v.ivRequestId)}">
       <div class="list-head"><div>${v.peakIvNo ? `<span class="list-id">INV ${docLink(v.peakIvNo, v.peakDocLink)}</span>` : '<span class="small">ยังไม่มีเลข INV</span>'} · ${esc(v.company)}${v.billToRelation ? ` <span class="small">(${esc(v.billToRelation)})</span>` : ''}${ownerTag(v)}</div><div>${st(IV_ST, v.status)} ${payChip(v)}</div></div>
       <div class="next ${nx.you ? 'you' : 'wait'}"><b>${nx.you ? 'ถัดไป (คุณ):' : 'ถัดไป:'}</b> ${nx.t}</div>
@@ -1289,7 +1289,7 @@ async function rebuildQT(id) {
 }
 
 // ─── receipts + edit requests ───────────────────────────────
-const RT_ST = { new: ['รอฝ่ายบัญชีออก', 'new'], rt_draft: ['Draft · รอบัญชีอนุมัติใน PEAK', 'blue'], issued: ['ออกแล้ว', 'green'], rejected: ['ตีกลับ', 'red'] };
+const RT_ST = { new: ['รอฝ่ายบัญชีออก', 'new'], rt_draft: ['Draft · รอบัญชีอนุมัติใน PEAK', 'blue'], issued: ['ออกแล้ว', 'green'], rejected: ['ตีกลับ', 'red'], rt_void: ['ใบเสร็จถูกยกเลิกใน PEAK', 'red'] };
 const ED_ST = { new: ['รอฝ่ายบัญชีแก้', 'new'], done: ['แก้แล้ว', 'green'], rejected: ['ตีกลับ', 'red'] };
 function onRtSeg() { $('r-price-l').textContent = `ราคาขาย ${basisOf($('r-seg').value)} (ก่อนหักส่วนลด) *`; }
 function onRtKind() { const per = $('r-kind').value === 'person'; $('r-branch-wrap').hidden = per; $('r-tax-l').textContent = per ? 'เลขบัตรประชาชน (13 หลัก) *' : 'เลขประจำตัวผู้เสียภาษี (13 หลัก) *'; }
@@ -1359,6 +1359,7 @@ function renderMineMore() {
 function nextIv(v) {
   const W = (t) => ({ t, you: false }), Y = (t) => ({ t, you: true }), a = v.ar || {}, n = v.payNotice;
   if (v.status === 'rejected') return Y('ดูเหตุผล แล้วส่งคำขอ INV ใหม่จากการ์ด QT');
+  if (v.status === 'iv_void') return Y('ฝ่ายบัญชียกเลิก INV นี้ใน PEAK ยอดกลับไปเป็นยอดคงเหลือของ QT ถ้ายังต้องเก็บเงิน ขอ INV ใหม่จากการ์ด QT');
   if (v.status === 'new' || v.status === 'iv_creating') return W('ฝ่ายบัญชีตรวจหลักฐานและสร้าง INV');
   if (v.status === 'iv_draft') return W('ฝ่ายบัญชีอนุมัติ INV ใน PEAK');
   if (v.peakIvNo && pendEdit('INV', v.peakIvNo)) return W('ฝ่ายบัญชีแก้ INV ตามที่ขอ');
@@ -1373,6 +1374,7 @@ function nextIv(v) {
 function nextRt(r) {
   const W = (t) => ({ t, you: false }), Y = (t) => ({ t, you: true });
   if (r.status === 'rejected') return Y('ดูเหตุผล แล้วส่งคำขอใบเสร็จใหม่');
+  if (r.status === 'rt_void') return W('ฝ่ายบัญชียกเลิกใบเสร็จนี้ใน PEAK และจะออกใบใหม่');
   if (r.status === 'new') return W('ฝ่ายบัญชีออกใบเสร็จใน PEAK');
   if (r.status === 'rt_draft') return W('ฝ่ายบัญชีอนุมัติใบเสร็จใน PEAK');
   if (r.sentStatus === 'waiting') return W('ฝ่ายบัญชีส่งใบเสร็จตัวจริง');

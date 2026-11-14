@@ -274,6 +274,7 @@ async function qtLive(req, res, user) {
   // Edited in PEAK without the app knowing: bring the request (totals, lines) up to date now.
   const sigBefore = row.qtSig;
   await require('../lib/qtlines').refreshRequest(row, raw).catch(() => null);
+  await require('../lib/peaksync').syncQuotationClasses(row, raw).catch(() => false);
   res.status(200).json({ ok: true, qt: q, editedAt: row.qtEditedAt || '', changed: !!sigBefore && row.qtSig !== sigBefore });
 }
 

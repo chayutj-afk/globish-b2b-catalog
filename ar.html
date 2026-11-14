@@ -247,6 +247,7 @@ function detail(r) {
       ${closed ? '' : `<button class="btn btn-p btn-sm" onclick="openFollow('${id}')">📞 บันทึกการติดตาม</button>`}
       ${closed ? '' : `<button class="btn ${paid ? 'btn-g' : 'btn-p'} btn-sm" onclick="openPaid('${id}')">💰 ${paid ? 'แก้ไขการรับเงิน' : 'บันทึกรับเงิน'}</button>`}
       <button class="btn btn-g btn-sm" onclick="openDoc('${id}')">📄 สถานะเอกสาร / หมายเหตุ</button>
+      ${D.peakLive ? `<button class="btn btn-g btn-sm" onclick="refreshPeak('${id}')" title="อ่าน INV และใบเสร็จจาก PEAK แล้วอัปเดตยอด วันที่ หัก ณ ที่จ่าย สถานะ และกลุ่มจัดประเภท">↻ อัปเดตจาก PEAK</button>` : ''}
       ${paid && !r.rtNo ? `<a class="btn btn-o btn-sm" href="/request#pend">🧾 ออกใบเสร็จ (รออนุมัติ › ใบเสร็จ)</a>` : ''}`}
     </div>
     <div class="kv">${kv('วันที่ออก', esc(r.issueDate))}${kv('เครดิต', esc(r.creditTermDays) + ' วัน')}${kv('ก่อน VAT', fmt(toNum(r.preVat)))}${kv('หัก ณ ที่จ่าย', whtPct(r.whtRate))}${kv('QT', esc(r.qtNo))}${kv('เลขภาษี', esc(r.taxId) + (r.branch ? ' / ' + esc(r.branch) : ''))}${kv('PO', esc(r.poNo))}${kv('งวด', esc(r.installment))}${kv('ลูกค้านัดจ่าย', esc(r.commitDate))}${kv('RT', esc(r.rtNo))}${kv('วันที่รับเงิน', esc(r.paidDate))}${kv('ยอดที่รับ', r.paidAmount ? fmt(toNum(r.paidAmount)) : '')}${kv('วิธีจ่าย', esc(r.paymentMethod))}${kv('เหตุผลจ่ายช้า', esc(r.delayReason))}${kv('หมายเหตุ', esc(r.note))}${kv('ที่มา', esc(r.source))}</div>
@@ -395,6 +396,12 @@ function openOwner(iv) {
       const d = await patch({ action: 'ar_owner', ivNo: iv, salesEmail: email });
       await done(`ย้าย ${iv} ไปที่ ${d.salesName} แล้ว`);
     } });
+}
+async function refreshPeak(iv) {
+  try {
+    const d = await patch({ action: 'ar_refresh', ivNo: iv });
+    await done(d.changes && d.changes.length ? `อัปเดต ${iv} จาก PEAK แล้ว: ${d.changes.join(' · ')}` : `${iv} ตรงกับ PEAK อยู่แล้ว`);
+  } catch (e) { $('msg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
 }
 function openDoc(iv) {
   const r = find(iv), L = D.lists;

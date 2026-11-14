@@ -41,6 +41,14 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
   { const tok = require('./lib.cjs').sign({ email: BEE, exp: Date.now() + 1e6 }); const forged = Buffer.from(JSON.stringify({ email: ADMIN, exp: Date.now() + 1e6 })).toString('base64url') + '.' + tok.split('.')[1];
     const r = await fetch('http://localhost:3950/api/users', { headers: { Cookie: 'gc_session=' + forged } }); ok(r.status === 401, 'forged session refused ' + r.status); }
 
+  { const iv = async (w) => (await call(w, 'GET', '/api/invoice-requests?view=ar'))[1];
+    const b = await iv(LEAD), c = await iv('leadc@globish.co.th'), a = await iv('leadall@globish.co.th'), f = await iv(COL);
+    const nos = (x) => x.invoices.map((r) => r.ivNo).sort().join(',');
+    ok(b.invoices.every((r) => r.segment === 'B2B') && b.invoices.length === 4, 'B2B lead sees only B2B debts: ' + nos(b));
+    ok(nos(c) === 'IV-20260800009', 'B2C lead sees only B2C debts: ' + nos(c));
+    ok(a.invoices.length === 5 && f.invoices.length === 5, 'lead of both units and collectors see every unit');
+    ok(b.summary.openCount + c.summary.openCount === f.summary.openCount && Math.abs(b.summary.open + c.summary.open - f.summary.open) < 0.01, `top cards follow the unit: ${b.summary.open} + ${c.summary.open} = ${f.summary.open}`);
+    const [s1] = await call('leadc@globish.co.th', 'PATCH', '/api/invoice-requests', { action: 'ar_owner', ivNo: 'IV-20261100001', salesEmail: BENZ }); ok(s1 === 403, 'B2C lead cannot take a B2B INV ' + s1); }
   console.log('── 2. QT (B2C service, VAT incl) → Draft in PEAK → approved by webhook');
   let [s, j] = await call(BENZ, 'POST', '/api/requests', qtBody({ taxId: '123' })); ok(s === 400, 'bad tax id → 400');
   [s, j] = await call(BENZ, 'POST', '/api/requests', qtBody({ items: [{ kind: 'service', code: 'NOPE', qty: 1, unitPrice: 100 }] })); ok(s === 400 && /ไม่พบรหัส/.test(j.error), 'unknown service code refused: ' + j.error);

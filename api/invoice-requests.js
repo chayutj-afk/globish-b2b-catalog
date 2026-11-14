@@ -433,6 +433,17 @@ async function issueInv(row, { ivNo, link, issueDate, note, peakIvId }, opts = {
 
 // ---------------------------------------------------------------- AR (debt follow-up)
 const isOp = (u) => can(u, 'ar');
+// Which AR rows a user sees. Accounting / collectors / admins: all. A sales lead (ar_view only): the lead's
+// unit: team b2b → B2B, team b2c → B2C, team both → every unit. An INV belongs to its owner's team; when the
+// owner is unknown, has left, or works both units, the INV's customer type decides (B2B → b2b, the rest → b2c).
+async function arSees(user) {
+  if (isOp(user) || can(user, 'approve') || user.admin || user.team === 'both' || !['b2b', 'b2c'].includes(user.team)) return () => true;
+  const teams = new Map((await users.list()).map((u) => [u.email.toLowerCase(), u.team]));
+  return (row) => {
+    const t = teams.get(String(row.salesEmail || '').toLowerCase());
+    return (['b2b', 'b2c'].includes(t) ? t : row.segment === 'B2B' ? 'b2b' : 'b2c') === user.team;
+  };
+}
 function summarise(all, today) {
   // Old rows the Debt sheet still showed as unpaid are kept apart until someone checks them in PEAK.
   const check = all.filter((r) => r.legacyCheck);
@@ -482,7 +493,8 @@ async function arList(req, res, user) {
   const today = ar.todayMs();
   // Customer contact from the INV request, to prefill where the receipt goes.
   const contact = new Map(ivreqs.map((v) => [v.ivRequestId, { financeEmail: v.financeEmail || '', deliveryAddress: v.originalAddress || v.deliveryAddress || '' }]));
-  const all = rows.filter((r) => r.ivNo).map((r) => ({ ...ar.enrich(r, today), preVatN: ar.num(r.preVat) }));
+  const sees = await arSees(user);
+  const all = rows.filter((r) => r.ivNo && sees(r)).map((r) => ({ ...ar.enrich(r, today), preVatN: ar.num(r.preVat) }));
   const byIv = new Map();
   for (const f of fus) { if (!byIv.has(f.ivNo)) byIv.set(f.ivNo, []); byIv.get(f.ivNo).push(f); }
   const keep = all.filter((r) => r.state === 'Outstanding' || r.state === 'Overdue' || (r.paidMs !== null && r.paidMs >= today - 120 * 86400e3) || (r.issueMs !== null && r.issueMs >= today - 120 * 86400e3));
@@ -504,7 +516,7 @@ async function arOwner(req, res, user) {
   const [rows, ivreqs, people] = await Promise.all([hub.readTable('Invoices'), hub.readTable('InvoiceRequests'), users.list()]);
   const row = rows.find((x) => x.ivNo === ivNo);
   if (!row) throw bad('ไม่พบ INV นี้ใน AR', 404);
-  if (!isOp(user) && !(await visibility(user))(row.salesEmail)) throw bad('INV นี้ไม่อยู่ในทีมของคุณ', 403);
+  if (!(await arSees(user))(row)) throw bad('INV นี้ไม่อยู่ในทีมของคุณ', 403);
   const p = people.find((u) => u.email.toLowerCase() === email);
   const name = (p && p.name) || text(b.salesName, 80) || email.split('@')[0];
   const at = hub.sheetDateTime();

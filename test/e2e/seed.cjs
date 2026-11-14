@@ -8,6 +8,8 @@ const hub = require('../../lib/hub');
     { email: 'kook@globish.co.th', name: 'Kawinthida (Kookkai)', role: 'sales', team: 'b2b', salesPerf: 'B2B-S002' },
     { email: 'benz@globish.co.th', name: 'Chattraya (Benz)', role: 'sales', team: 'b2c', salesPerf: 'B2C-S003' },
     { email: 'lead@globish.co.th', name: 'Lead B2B', role: 'lead', team: 'b2b' },
+    { email: 'leadc@globish.co.th', name: 'Lead B2C', role: 'lead', team: 'b2c' },
+    { email: 'leadall@globish.co.th', name: 'Lead All', role: 'lead', team: 'both' },
     { email: 'acct@globish.co.th', name: 'Acct', role: 'op', team: 'both' },
     { email: 'col@globish.co.th', name: 'Collector', role: 'collector', team: 'both' },
     { email: 'oper@globish.co.th', name: 'Operation', role: 'operation', team: 'both' },

@@ -24,6 +24,41 @@ td.who{white-space:normal}
 .u-sum{background:var(--panel2,var(--panel));border:1px solid var(--line);border-radius:6px;padding:10px 12px;font-size:13px;line-height:1.7;margin-top:4px}
 .u-conf{padding:10px 12px;border:1px solid var(--primary);border-radius:6px;color:var(--ink);font-size:13px;line-height:1.7}
 .sub{color:var(--muted);font-size:13px;line-height:1.7;margin:0 0 6px}
+/* classification settings modal */
+.cls-modal{max-width:880px;width:100%;height:min(90vh,900px);display:flex;flex-direction:column;padding:0;overflow:hidden}
+.cls-head{padding:18px 22px 10px;border-bottom:1px solid var(--line)}
+.cls-head h3{margin:0;font-size:17px}
+.cls-body{overflow:auto;overscroll-behavior:contain;padding:14px 22px 22px}
+.cls-tabs{display:flex;gap:4px;margin-top:12px}
+.cls-tabs button{border:0;background:none;padding:8px 12px;font:inherit;font-size:13.5px;color:var(--muted);border-bottom:2px solid transparent;cursor:pointer}
+.cls-tabs button[aria-selected=true]{color:var(--head);border-bottom-color:var(--primary);font-weight:500}
+.tcard{border:1px solid var(--line);border-radius:10px;margin-bottom:12px;background:var(--panel)}
+.tcard.dirty{border-color:var(--primary-line)}
+.tcard-h{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.tcard-h .nm{font-weight:600;font-size:15px;color:var(--head)}.tcard-h .cd{font-size:12px;color:var(--muted)}
+.tcard-b{padding:14px 16px;display:grid;gap:14px}
+.tcard-f{display:flex;align-items:center;gap:10px;justify-content:flex-end;padding:10px 16px;border-top:1px solid var(--line);background:var(--panel-2);border-radius:0 0 10px 10px}
+.fld>.lb{font-size:12.5px;color:var(--muted);margin-bottom:6px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:640px){.two{grid-template-columns:1fr}}
+.opts{display:flex;flex-wrap:wrap;gap:6px}
+.opt{position:relative}
+.opt input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.opt span{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border:1px solid var(--line2);border-radius:9999px;font-size:13px;color:var(--ink);background:var(--panel);min-height:34px}
+.opt input:checked+span{border-color:var(--primary);background:var(--primary-soft);color:var(--head)}
+.opt input:checked+span::before{content:'✓';font-size:12px;color:var(--primary)}
+.opt input:focus-visible+span{outline:2px solid var(--primary);outline-offset:2px}
+.opt input:disabled+span{opacity:.55}
+.svc-box{border:1px dashed var(--line2);border-radius:8px;padding:10px 12px}
+.svc-grid{display:grid;grid-template-columns:1.3fr 1fr 1fr 34px;gap:6px;align-items:center}
+.svc-grid .h{font-size:11.5px;color:var(--muted)}
+.svc-grid input{width:100%;min-width:0}
+.svc-row{display:contents}
+.svc-grid:not(:has(.svc-row)) .h{display:none}
+@media(max-width:640px){.svc-grid{grid-template-columns:1fr 1fr}.svc-grid .h{display:none}}
+.unsaved{font-size:12px;color:var(--warn-ink)}
+.seg-map{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.seg-map label{font-size:12.5px;color:var(--muted)}.seg-map select{display:block;width:100%;margin-top:4px}
 </style>
 </head>
 <body data-page="users" data-need="users">
@@ -39,7 +74,12 @@ td.who{white-space:normal}
   <div class="filters" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><input type="search" id="q" placeholder="ค้นหาชื่อหรืออีเมล" oninput="render()" style="flex:1;min-width:200px"><select id="fr" class="sel" onchange="render()" style="width:auto"><option value="">ทุก role</option></select></div>
   <div class="card tbl"><table><thead><tr><th>ผู้ใช้</th><th>เข้าใช้ล่าสุด</th><th>Role</th><th>ทีม</th><th>สิทธิ์เพิ่ม</th><th>กลุ่มจัดประเภท (รายเซล)</th><th></th></tr></thead><tbody id="rows"><tr><td colspan="7" class="small">กำลังโหลด…</td></tr></tbody></table></div>
 </main></div></div>
-<div class="ov" id="ov-cls" hidden onclick="if(event.target===this)closeClasses()"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="cls-title" style="max-width:1100px;max-height:90vh;display:flex;flex-direction:column"><div style="display:flex;align-items:center;gap:8px"><h3 id="cls-title" style="flex:1">กลุ่มจัดประเภทใน PEAK</h3><button class="btn btn-g btn-sm" type="button" onclick="closeClasses()">ปิด</button></div><p class="small" style="margin:0 0 8px">ระบบติดให้อัตโนมัติบน QT / INV / ใบเสร็จที่สร้างจากแอป · กลุ่มและรายการดึงจาก PEAK ถ้าบัญชีเพิ่มหรือแก้ใน PEAK จะขึ้นที่นี่เอง</p><div id="cls" style="overflow:auto"></div></div></div>
+<div class="ov" id="ov-cls" hidden onclick="if(event.target===this)closeClasses()"><div class="modal cls-modal" role="dialog" aria-modal="true" aria-labelledby="cls-title">
+  <div class="cls-head"><div style="display:flex;align-items:center;gap:8px"><h3 id="cls-title" style="flex:1">กลุ่มจัดประเภทใน PEAK</h3><button class="btn btn-g btn-sm" type="button" onclick="closeClasses()">ปิด</button></div>
+    <p class="small" style="margin:4px 0 0">ระบบติดกลุ่มเหล่านี้ให้เองบน QT / INV / ใบเสร็จที่สร้างจากแอป · รายการดึงจาก PEAK ถ้าบัญชีเพิ่มหรือแก้ใน PEAK จะขึ้นที่นี่เอง</p>
+    <div class="cls-tabs" role="tablist"><button type="button" role="tab" id="clt-types" aria-selected="true" onclick="clsTab('types')">ประเภทลูกค้า</button><button type="button" role="tab" id="clt-groups" aria-selected="false" onclick="clsTab('groups')">กลุ่มอื่น</button></div></div>
+  <div class="cls-body"><div id="cls-warn"></div><div id="cls" role="tabpanel"></div><div id="cls-g" role="tabpanel" hidden></div></div>
+</div></div>
 <div class="ov" id="ov-modal" hidden><div class="modal" role="dialog" aria-modal="true" aria-labelledby="m-title" style="max-width:520px"><h3 id="m-title"></h3><div class="mb" id="m-body"></div><div class="mf"><button class="btn btn-g" id="m-cancel" type="button">ยกเลิก</button><button class="btn btn-p" id="m-ok" type="button">บันทึก</button></div></div></div>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -134,58 +174,84 @@ async function openUser(email) {
 }
 const MODE_TH = { segment: 'เซลเลือกในฟอร์มขอ QT', seller: 'ตามเซล (รายคน)', off: 'ไม่ติด' };
 function openClasses() { $('ov-cls').hidden = false; }
-function closeClasses() { $('ov-cls').hidden = true; }
+function closeClasses() {
+  if (document.querySelector('#ov-cls .tcard.dirty') && !confirm('มีการแก้ไขที่ยังไม่ได้บันทึก ปิดโดยไม่บันทึก?')) return;
+  $('ov-cls').hidden = true;
+}
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('ov-cls').hidden) closeClasses(); });
+function clsTab(t) { $('cls').hidden = t !== 'types'; $('cls-g').hidden = t !== 'groups'; $('clt-types').setAttribute('aria-selected', String(t === 'types')); $('clt-groups').setAttribute('aria-selected', String(t === 'groups')); }
+// Any change in a card marks it unsaved and turns its save button on.
+function clsDirty(el) { const c = el.closest('.tcard'); if (!c) return; c.classList.add('dirty'); c.querySelector('.unsaved').hidden = false; c.querySelector('.save').disabled = false; const svc = c.querySelector('[data-k=service]'); const box = c.querySelector('.svc-box'); if (svc && box) box.hidden = !svc.checked; }
 function renderClasses() {
   const C = CLASSES;
   // One-line summary on the page; the editor opens from "⚙ ตั้งค่า".
   const ready = (C.types || []).filter((t) => t.ready).map((t) => t.name), notReady = (C.types || []).filter((t) => !t.ready).length;
   const others = (C.groups || []).filter((g) => g.code !== 'G012' && g.mode !== 'off').map((g) => g.name);
   $('cls-sum').innerHTML = `ประเภทลูกค้า ${esc(ready.join(' / ') || '—')}${notReady ? ` · <span class="warn">${notReady} ประเภทยังไม่ได้ตั้ง</span>` : ''} · ติดอัตโนมัติ: ${esc(others.join(', ') || '—')}${C.live ? '' : ' · <span class="warn">ยังอ่านจาก PEAK ไม่ได้</span>'}`;
-  $('cls').innerHTML = (C.live ? '' : `<p class="small warn">ยังอ่านจาก PEAK ไม่ได้ (${esc(C.error || 'PEAK_MODE = off')}) แสดงกติกาเดิมไว้ก่อน แก้ได้เมื่อเปิด PEAK API</p>`)
-    + renderTypes()
-    + `<div style="margin-top:14px"><b>กลุ่มอื่น</b></div><table style="margin-top:6px"><thead><tr><th>กลุ่ม</th><th>ติดยังไง</th><th>ค่าที่ระบบเติมให้ก่อน ตามประเภทลูกค้า (เซลเปลี่ยนได้)</th><th></th></tr></thead><tbody>${C.groups.filter((g) => g.code !== 'G012').map((g) => `<tr>
-      <td class="who"><b>${esc(g.name)}</b><br><span class="small">${esc(g.code)}${g.description ? ' · ' + esc(g.description) : ''}</span></td>
-      <td><select class="sel" id="cm-${esc(g.code)}" onchange="clsPaint('${esc(g.code)}')" ${C.live ? '' : 'disabled'}>${Object.entries(MODE_TH).map(([m, t]) => `<option value="${m}"${g.mode === m ? ' selected' : ''}>${t}</option>`).join('')}</select></td>
-      <td><div id="cs-${esc(g.code)}" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;min-width:420px">${C.segments.map((sg) => { const cur = g.segments[sg] || ''; return `<label class="small">${esc(sg)}<select class="sel" data-s="${esc(sg)}" ${C.live ? '' : 'disabled'}><option value="">— ไม่ติด —</option>${(g.items || []).map((i) => `<option value="${esc(i.code)}"${cur === i.code ? ' selected' : ''}>${esc(i.name)} · ${esc(i.code)}</option>`).join('')}${cur && !(g.items || []).some((i) => i.code === cur) ? `<option value="${esc(cur)}" selected>${esc(cur)} (ไม่มีใน PEAK แล้ว)</option>` : ''}</select></label>`; }).join('')}</div></td>
-      <td style="text-align:right">${C.live ? `<button class="btn btn-o btn-sm" type="button" onclick="clsSave('${esc(g.code)}')">บันทึก</button>` : ''}<div class="small" id="cmsg-${esc(g.code)}"></div></td></tr>`).join('')}</tbody></table>`;
+  $('cls-warn').innerHTML = C.live ? '' : `<div class="pc-note warn" style="margin-bottom:12px">ยังอ่านจาก PEAK ไม่ได้ (${esc(C.error || 'PEAK_MODE = off')}) แสดงกติกาเดิมไว้ให้ดู แก้ได้เมื่อเปิด PEAK API</div>`;
+  $('cls').innerHTML = renderTypes();
+  const d = C.live ? '' : 'disabled';
+  $('cls-g').innerHTML = `<p class="small" style="margin:0 0 10px">กลุ่มที่ติดบนเอกสารนอกจากประเภทลูกค้า เลือกว่าจะให้ระบบติดแบบไหน</p>` + C.groups.filter((g) => g.code !== 'G012').map((g) => `<div class="tcard" id="cg-${esc(g.code)}" oninput="clsDirty(event.target)" onchange="clsDirty(event.target)">
+    <div class="tcard-h"><div style="flex:1"><div class="nm">${esc(g.name)}</div><div class="cd">${esc(g.code)}${g.description ? ' · ' + esc(g.description) : ''}</div></div></div>
+    <div class="tcard-b">
+      <div class="fld"><div class="lb">ระบบติดยังไง</div><div class="opts" role="radiogroup">${Object.entries(MODE_TH).map(([m, t]) => `<label class="opt"><input type="radio" name="cm-${esc(g.code)}" value="${m}"${g.mode === m ? ' checked' : ''} ${d} onchange="clsPaint('${esc(g.code)}')"><span>${t}</span></label>`).join('')}</div>
+        <div class="small" style="margin-top:6px">${{ segment: 'เซลเลือกเองในฟอร์ม ระบบเติมค่าให้ก่อนตามประเภทลูกค้าด้านล่าง', seller: 'ใช้ค่าที่ตั้งให้เซลแต่ละคน (ตั้งที่ปุ่ม ⚙ ของผู้ใช้)', off: 'ไม่ติดกลุ่มนี้บนเอกสาร' }[g.mode] || ''}</div></div>
+      <div class="fld" id="cs-${esc(g.code)}"><div class="lb">ค่าที่ระบบเติมให้ก่อน ตามประเภทลูกค้า (เซลเปลี่ยนได้)</div><div class="seg-map">${C.segments.map((sg) => { const cur = g.segments[sg] || ''; return `<label>${esc(sg)}<select class="sel" data-s="${esc(sg)}" ${d}><option value="">— ไม่ติด —</option>${(g.items || []).map((i) => `<option value="${esc(i.code)}"${cur === i.code ? ' selected' : ''}>${esc(i.name)}</option>`).join('')}${cur && !(g.items || []).some((i) => i.code === cur) ? `<option value="${esc(cur)}" selected>${esc(cur)} (ไม่มีใน PEAK แล้ว)</option>` : ''}</select></label>`; }).join('')}</div></div>
+    </div>
+    ${C.live ? `<div class="tcard-f"><span class="unsaved" hidden>ยังไม่ได้บันทึก</span><span class="small" id="cmsg-${esc(g.code)}" aria-live="polite"></span><button class="btn btn-p btn-sm save" type="button" disabled onclick="clsSave('${esc(g.code)}')">บันทึก ${esc(g.name)}</button></div>` : ''}
+  </div>`).join('');
   C.groups.filter((g) => g.code !== 'G012').forEach((g) => clsPaint(g.code));
 }
 // Customer types (PEAK G012): what each type decides in the request forms.
 const KIND_TH = { catalog: 'B2B Catalog', keyhs: 'Key H.S. (Customized)', surcharge: 'ค่าเพิ่ม', service: 'แพ็กเกจ WH / บริการ PEAK' };
 function renderTypes() {
-  const T = CLASSES.types || [], live = CLASSES.live;
-  return `<div style="margin-top:14px"><b>ประเภทลูกค้า (PEAK G012)</b> <span class="small">เซลเลือกในฟอร์มขอ QT / INV / ใบเสร็จ แต่ละประเภทกำหนด VAT, สินค้าที่เลือกได้ และ Opportunity ID · ประเภทที่บัญชีเพิ่มใน PEAK ต้องตั้งกติกาก่อนจึงจะเลือกได้</span>
-    <table style="margin-top:6px"><thead><tr><th>ประเภท</th><th>VAT</th><th>สินค้าที่เลือกได้</th><th>Opportunity ID</th><th></th></tr></thead><tbody>${T.map((t) => `<tr id="ty-${esc(t.code)}">
-      <td class="who"><b>${esc(t.name)}</b><br><span class="small">${esc(t.code)}${t.ready ? '' : ' · <span class="warn">ยังไม่ได้ตั้ง (เซลยังเลือกไม่ได้)</span>'}</span></td>
-      <td><select class="sel" data-f="vat" ${live ? '' : 'disabled'}><option value="incl"${t.vat === 'incl' ? ' selected' : ''}>ราคารวม VAT</option><option value="excl"${t.vat === 'excl' ? ' selected' : ''}>ราคาก่อน VAT</option></select></td>
-      <td>${Object.entries(KIND_TH).map(([k, l]) => `<label class="ck"><input type="checkbox" data-k="${k}"${t.kinds.includes(k) ? ' checked' : ''} ${live ? '' : 'disabled'}> ${l}</label>`).join('')}
-        <div class="small" style="margin-top:6px">กลุ่มบริการที่เลือกจาก PEAK <span class="small">(ว่าง = เซลกรอก Package ID เอง)</span></div>
-        <div class="svg-list">${(t.svcGroups || []).map((g) => svgRow(g, live)).join('')}</div>
-        ${live ? `<button class="btn btn-g btn-sm" type="button" style="margin-top:4px" onclick="this.previousElementSibling.insertAdjacentHTML('beforeend', svgRow({}, true))">➕ เพิ่มกลุ่ม</button>` : ''}</td>
-      <td><label class="ck"><input type="checkbox" data-f="opp"${t.opp ? ' checked' : ''} ${live ? '' : 'disabled'}> ต้องใส่</label></td>
-      <td style="text-align:right">${live ? `<button class="btn btn-o btn-sm" type="button" onclick="typeSave('${esc(t.code)}')">บันทึก</button>` : ''}<div class="small" id="tymsg-${esc(t.code)}"></div></td></tr>`).join('')}</tbody></table></div>`;
+  const T = CLASSES.types || [], live = CLASSES.live, d = live ? '' : 'disabled';
+  return `<p class="small" style="margin:0 0 10px">เซลเลือกประเภทลูกค้าในฟอร์มขอ QT / INV / ใบเสร็จ แต่ละประเภทกำหนดว่าราคาในฟอร์มรวม VAT ไหม เลือกสินค้าอะไรได้ และต้องใส่ Opportunity ID ไหม · ประเภทที่บัญชีเพิ่มใน PEAK ต้องตั้งก่อนเซลจึงจะเลือกได้</p>`
+    + T.map((t) => `<div class="tcard" id="ty-${esc(t.code)}" oninput="clsDirty(event.target)" onchange="clsDirty(event.target)">
+    <div class="tcard-h"><div style="flex:1"><span class="nm">${esc(t.name)}</span> <span class="cd">${esc(t.code)}</span></div>${t.ready ? '<span class="st green">พร้อมใช้</span>' : '<span class="st red">ยังไม่ได้ตั้ง · เซลยังเลือกไม่ได้</span>'}</div>
+    <div class="tcard-b">
+      <div class="two">
+        <div class="fld"><div class="lb">ราคาที่เซลกรอกในฟอร์ม</div><div class="opts" role="radiogroup"><label class="opt"><input type="radio" name="vat-${esc(t.code)}" value="incl"${t.vat === 'incl' ? ' checked' : ''} ${d}><span>รวม VAT แล้ว</span></label><label class="opt"><input type="radio" name="vat-${esc(t.code)}" value="excl"${t.vat !== 'incl' ? ' checked' : ''} ${d}><span>ก่อน VAT</span></label></div></div>
+        <div class="fld"><div class="lb">Opportunity ID จาก CRM</div><div class="opts" role="radiogroup"><label class="opt"><input type="radio" name="opp-${esc(t.code)}" value="1"${t.opp ? ' checked' : ''} ${d}><span>บังคับกรอก</span></label><label class="opt"><input type="radio" name="opp-${esc(t.code)}" value="0"${t.opp ? '' : ' checked'} ${d}><span>ไม่ต้องกรอก</span></label></div></div>
+      </div>
+      <div class="fld"><div class="lb">สินค้าที่เซลเลือกได้ (เลือกได้หลายอย่าง)</div><div class="opts">${Object.entries(KIND_TH).map(([k, l]) => `<label class="opt"><input type="checkbox" data-k="${k}"${t.kinds.includes(k) ? ' checked' : ''} ${d}><span>${l}</span></label>`).join('')}</div></div>
+      <div class="svc-box"${t.kinds.includes('service') ? '' : ' hidden'}>
+        <div class="lb" style="font-size:12.5px;color:var(--head);margin-bottom:2px">ให้เซลเลือกบริการจาก PEAK เป็นกลุ่ม</div>
+        <div class="small" style="margin:0 0 8px">ไม่ใส่กลุ่ม = เซลพิมพ์ Package ID เอง (แบบ B2C) · ใส่กลุ่ม = เซลเลือกจากรายการบริการใน PEAK ที่รหัสขึ้นต้นตามที่ตั้ง หรือมีคำนั้นในชื่อ</div>
+        <div class="svc-grid"><span class="h">ชื่อกลุ่มที่เซลเห็น</span><span class="h">รหัสขึ้นต้น (คั่นด้วย ,)</span><span class="h">หรือคำในชื่อบริการ</span><span class="h"></span>${(t.svcGroups || []).map((g) => svgRow(g, live)).join('')}</div>
+        ${live ? `<button class="btn btn-g btn-sm" type="button" style="margin-top:8px" onclick="const gr=this.previousElementSibling; gr.insertAdjacentHTML('beforeend', svgRow({}, true)); clsDirty(gr); gr.querySelector('.svc-row:last-child input')?.focus()">＋ เพิ่มกลุ่มบริการ</button>` : ''}
+      </div>
+    </div>
+    ${live ? `<div class="tcard-f"><span class="unsaved" hidden>ยังไม่ได้บันทึก</span><span class="small" id="tymsg-${esc(t.code)}" aria-live="polite"></span><button class="btn btn-p btn-sm save" type="button" disabled onclick="typeSave('${esc(t.code)}')">บันทึก ${esc(t.name)}</button></div>` : ''}
+  </div>`).join('');
 }
 // One service group: shown name, code prefixes (comma) and/or a word in the service name.
 function svgRow(g, live) {
   const d = live ? '' : 'disabled';
-  return `<div class="svg-row" style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap"><input data-g="label" value="${esc(g.label || '')}" placeholder="ชื่อกลุ่ม เช่น Assessment" style="width:130px" ${d}><input data-g="prefixes" value="${esc((g.prefixes || []).join(', '))}" placeholder="รหัสขึ้นต้น เช่น B2S" style="width:120px" ${d}><input data-g="keyword" value="${esc(g.keyword || '')}" placeholder="หรือคำในชื่อ" style="width:110px" ${d}>${live ? '<button class="btn btn-g btn-sm" type="button" onclick="this.parentElement.remove()" title="ลบกลุ่ม">✕</button>' : ''}</div>`;
+  return `<div class="svc-row"><input data-g="label" aria-label="ชื่อกลุ่ม" value="${esc(g.label || '')}" placeholder="เช่น Assessment…" autocomplete="off" ${d}><input data-g="prefixes" aria-label="รหัสขึ้นต้น" value="${esc((g.prefixes || []).join(', '))}" placeholder="เช่น GECB…" autocomplete="off" spellcheck="false" ${d}><input data-g="keyword" aria-label="คำในชื่อบริการ" value="${esc(g.keyword || '')}" placeholder="ไม่บังคับ" autocomplete="off" ${d}>${live ? '<button class="btn btn-g btn-sm" type="button" aria-label="ลบกลุ่มนี้" title="ลบกลุ่มนี้" onclick="const c=this.closest(\'.tcard\'); this.parentElement.remove(); clsDirty(c.querySelector(\'.svc-grid\'))">✕</button>' : ''}</div>`;
 }
 async function typeSave(code) {
   const row = $('ty-' + code), q = (sel) => row.querySelector(sel);
-  const svcGroups = [...row.querySelectorAll('.svg-row')].map((r) => ({ label: r.querySelector('[data-g=label]').value.trim(), prefixes: r.querySelector('[data-g=prefixes]').value, keyword: r.querySelector('[data-g=keyword]').value.trim() })).filter((g) => g.label || g.prefixes.trim() || g.keyword);
-  const body = { action: 'type', code, vat: q('[data-f=vat]').value, opp: q('[data-f=opp]').checked, svcGroups, kinds: [...row.querySelectorAll('[data-k]')].filter((x) => x.checked).map((x) => x.dataset.k) };
-  $('tymsg-' + code).textContent = 'กำลังบันทึก…';
-  try { await api('/api/users', { method: 'PATCH', body: JSON.stringify(body) }); await load(); $('tymsg-' + code).innerHTML = '<span class="ok">✓ บันทึกแล้ว</span>'; }
-  catch (e) { $('tymsg-' + code).textContent = e.message; }
+  const svcGroups = [...row.querySelectorAll('.svc-row')].map((r) => ({ label: r.querySelector('[data-g=label]').value.trim(), prefixes: r.querySelector('[data-g=prefixes]').value, keyword: r.querySelector('[data-g=keyword]').value.trim() })).filter((g) => g.label || g.prefixes.trim() || g.keyword);
+  const kinds = [...row.querySelectorAll('[data-k]')].filter((x) => x.checked).map((x) => x.dataset.k);
+  if (!kinds.length) { $('tymsg-' + code).innerHTML = '<span class="err">เลือกสินค้าอย่างน้อย 1 อย่าง</span>'; return; }
+  const body = { action: 'type', code, vat: q(`[name="vat-${code}"]:checked`).value, opp: q(`[name="opp-${code}"]:checked`).value === '1', svcGroups, kinds };
+  const btn = q('.save'); btn.disabled = true; $('tymsg-' + code).textContent = 'กำลังบันทึก…';
+  try { await api('/api/users', { method: 'PATCH', body: JSON.stringify(body) }); await afterSave(row); $('tymsg-' + code).innerHTML = '<span class="ok">✓ บันทึกแล้ว</span>'; }
+  catch (e) { btn.disabled = false; $('tymsg-' + code).innerHTML = `<span class="err">${esc(e.message)}</span>`; }
 }
-function clsPaint(code) { const m = $('cm-' + code).value; $('cs-' + code).style.display = m === 'segment' ? 'grid' : 'none'; }
+// Saved: reload everything unless another card still has unsaved edits (a reload would drop them).
+async function afterSave(card) {
+  card.classList.remove('dirty'); card.querySelector('.unsaved').hidden = true; card.querySelector('.save').disabled = true;
+  if (!document.querySelector('#ov-cls .tcard.dirty')) { const t = $('cls-g').hidden ? 'types' : 'groups'; await load(); clsTab(t); }
+}
+function clsPaint(code) { const m = (document.querySelector(`[name="cm-${code}"]:checked`) || {}).value; $('cs-' + code).hidden = m !== 'segment'; }
 async function clsSave(code) {
-  const mode = $('cm-' + code).value, segments = {};
+  const mode = (document.querySelector(`[name="cm-${code}"]:checked`) || {}).value, segments = {};
   $('cs-' + code).querySelectorAll('select').forEach((el) => { if (el.value) segments[el.dataset.s] = el.value; });
-  $('cmsg-' + code).textContent = 'กำลังบันทึก…';
-  try { await api('/api/users', { method: 'PATCH', body: JSON.stringify({ action: 'classes', group: code, mode, segments }) }); await load(); $('cmsg-' + code).innerHTML = '<span class="ok">✓ บันทึกแล้ว</span>'; }
-  catch (e) { $('cmsg-' + code).textContent = e.message; }
+  const btn = $('cg-' + code).querySelector('.save'); btn.disabled = true; $('cmsg-' + code).textContent = 'กำลังบันทึก…';
+  try { await api('/api/users', { method: 'PATCH', body: JSON.stringify({ action: 'classes', group: code, mode, segments }) }); await afterSave($('cg-' + code)); $('cmsg-' + code).innerHTML = '<span class="ok">✓ บันทึกแล้ว</span>'; }
+  catch (e) { btn.disabled = false; $('cmsg-' + code).innerHTML = `<span class="err">${esc(e.message)}</span>`; }
 }
 async function load() {
   const d = await api('/api/users');

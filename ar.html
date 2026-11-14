@@ -226,7 +226,7 @@ function detail(r) {
   const fu = (r.followUps || []).slice().reverse().map((f) => `<div><b>${esc(f.loggedAt)}</b> · ${esc(f.channel)} · ${esc(f.result)}${f.nextActionDate ? ' · นัด ' + esc(f.nextActionDate) : ''}<br><span class="small">${esc(f.by)}${f.note ? ' · ' + esc(f.note) : ''}</span></div>`).join('') || '<div class="small">ยังไม่มีบันทึก</div>';
   const paid = r.state === 'Paid', closed = r.state === 'Closed';
   return `<tr class="det"><td colspan="8">
-    <div class="acts">${!CAN_EDIT ? '<span class="small">ดูอย่างเดียว</span>' : `
+    <div class="acts">${D.canOwner ? `<button class="btn btn-g btn-sm" onclick="openOwner('${id}')">👤 เปลี่ยนเซลเจ้าของ</button>` : ''}${!CAN_EDIT ? (D.canOwner ? '' : '<span class="small">ดูอย่างเดียว</span>') : `
       ${closed ? '' : `<button class="btn btn-p btn-sm" onclick="openFollow('${id}')">📞 บันทึกการติดตาม</button>`}
       ${closed ? '' : `<button class="btn ${paid ? 'btn-g' : 'btn-p'} btn-sm" onclick="openPaid('${id}')">💰 ${paid ? 'แก้ไขการรับเงิน' : 'บันทึกรับเงิน'}</button>`}
       <button class="btn btn-g btn-sm" onclick="openDoc('${id}')">📄 สถานะเอกสาร / หมายเหตุ</button>
@@ -363,6 +363,21 @@ function offerReceipt(ivNo, { ch, email, addr, method }) {
         await done(`สร้างใบเสร็จ ${d.peakRtNo || ''} (Draft) ใน PEAK แล้ว ตรวจและอนุมัติใน PEAK แล้วกด "เช็กสถานะจาก PEAK" ที่หน้า รออนุมัติ › ใบเสร็จ`);
       } });
   }, 50);
+}
+function openOwner(iv) {
+  const r = find(iv);
+  const list = (D.owners || []).map((u) => `<option value="${esc(u.email)}">${esc(u.name)}</option>`).join('');
+  formModal({ title: '👤 เปลี่ยนเซลเจ้าของ INV', html: head(r) + `
+    <p class="small" style="margin:0 0 10px">ตอนนี้: ${esc(r.salesName || '(ไม่มีเจ้าของ)')}${r.salesEmail ? ' · ' + esc(r.salesEmail) : ''}</p>
+    <div class="fg"><label for="ow-em">อีเมลเซลคนใหม่ *</label><input type="email" id="ow-em" list="ow-list" autocomplete="off" spellcheck="false" placeholder="name@globish.co.th"><datalist id="ow-list">${list}</datalist>
+    <div class="sub">เลือกจากรายชื่อ หรือพิมพ์อีเมลของเซลที่ยังไม่เคยเข้าระบบ INV นี้จะไปอยู่ใน "คำขอของฉัน" ของเซลคนนั้น</div></div>`,
+    ok: 'เปลี่ยนเจ้าของ',
+    save: async (err) => {
+      const email = val('ow-em').toLowerCase();
+      if (!/^[^\s@]+@globish\.co\.th$/.test(email)) { err('ใส่อีเมล @globish.co.th'); return false; }
+      const d = await patch({ action: 'ar_owner', ivNo: iv, salesEmail: email });
+      await done(`ย้าย ${iv} ไปที่ ${d.salesName} แล้ว`);
+    } });
 }
 function openDoc(iv) {
   const r = find(iv), L = D.lists;

@@ -10,6 +10,7 @@
 const crypto = require('crypto');
 const { checkOrigin, sendError } = require('../lib/session');
 const { requireUser, can, visibility } = require('../lib/users');
+const users = require('../lib/users');
 const hub = require('../lib/hub');
 const drive = require('../lib/drive');
 const notify = require('../lib/notify');
@@ -396,7 +397,7 @@ async function update(req, res, user) {
 // Never blocks the action: a failure goes to SyncLog + chat for accounting to attach by hand.
 async function attachToPeak(kind, transactionId, file, label) { // kind: quotation | invoice | receipt
   const peak = require('../lib/peak');
-  if (peak.mode() === 'off' || !transactionId || !file) return 'skipped';
+  if (peak.mode() === 'off' || !transactionId || String(transactionId).startsWith('legacy:') || !file) return 'skipped';
   try {
     await peak.insertFile(kind, transactionId, { ...file, name: `${String(label).replace(/[^\w.\-ก-๙]/g, '_').slice(0, 60)}.${(file.name || '').split('.').pop() || 'pdf'}` });
     await hub.log('catalog', 'peak_attach', label, `${kind} ${transactionId}`).catch(() => {});
@@ -484,12 +485,37 @@ async function arList(req, res, user) {
   for (const f of fus) { if (!byIv.has(f.ivNo)) byIv.set(f.ivNo, []); byIv.get(f.ivNo).push(f); }
   const keep = all.filter((r) => r.state === 'Outstanding' || r.state === 'Overdue' || (r.paidMs !== null && r.paidMs >= today - 120 * 86400e3) || (r.issueMs !== null && r.issueMs >= today - 120 * 86400e3));
   const out = keep.map(({ _row, issueMs, dueMs, paidMs, preVatN, ...r }) => ({ ...r, ...(contact.get(r.ivRequestId) || {}), followUps: (byIv.get(r.ivNo) || []).slice(-20).map(({ _row: x, ...f }) => f) }));
-  res.status(200).json({ ok: true, peakLive: require('../lib/peak').mode() !== 'off', summary: summarise(all, today), invoices: out, total: all.length,
+  const canOwner = isOp(user) || can(user, 'team_view');
+  const owners = canOwner ? (await users.list()).filter((u) => ['sales', 'lead'].includes(u.role)).map((u) => ({ email: u.email, name: u.name || u.email })) : [];
+  res.status(200).json({ ok: true, peakLive: require('../lib/peak').mode() !== 'off', summary: summarise(all, today), invoices: out, total: all.length, canOwner, owners,
     lists: { docStatus: ar.DOC_STATUS, payMethods: ar.PAY_METHODS, channels: ar.CHANNELS, follow: ar.FOLLOW, delay: ar.DELAY } });
+}
+
+// Hand an INV (and the INV request sales see under "คำขอของฉัน") to another salesperson, e.g. when the
+// original one left or an imported INV had no owner. Accounting / collectors, and sales leads for INVs they can see.
+async function arOwner(req, res, user) {
+  const b = req.body || {};
+  if (!isOp(user) && !can(user, 'team_view')) throw bad('ไม่มีสิทธิ์เปลี่ยนเซลเจ้าของ', 403);
+  const ivNo = text(b.ivNo, 40);
+  const email = text(b.salesEmail, 120).toLowerCase();
+  if (!/^[^\s@]+@globish\.co\.th$/.test(email)) throw bad('ใส่อีเมล @globish.co.th ของเซลคนใหม่');
+  const [rows, ivreqs, people] = await Promise.all([hub.readTable('Invoices'), hub.readTable('InvoiceRequests'), users.list()]);
+  const row = rows.find((x) => x.ivNo === ivNo);
+  if (!row) throw bad('ไม่พบ INV นี้ใน AR', 404);
+  if (!isOp(user) && !(await visibility(user))(row.salesEmail)) throw bad('INV นี้ไม่อยู่ในทีมของคุณ', 403);
+  const p = people.find((u) => u.email.toLowerCase() === email);
+  const name = (p && p.name) || text(b.salesName, 80) || email.split('@')[0];
+  const at = hub.sheetDateTime();
+  await hub.updateRow('Invoices', row._row, { salesEmail: email, salesName: name });
+  const linked = ivreqs.filter((x) => (row.ivRequestId && x.ivRequestId === row.ivRequestId) || String(x.peakIvNo || '').toUpperCase() === String(ivNo).toUpperCase());
+  for (const x of linked) await hub.updateRow('InvoiceRequests', x._row, { requestedBy: email, salesName: name, updatedAt: at });
+  await hub.log('catalog', 'ar_owner', ivNo, `${user.email} · ${row.salesEmail || '-'} → ${email}`);
+  res.status(200).json({ ok: true, salesEmail: email, salesName: name });
 }
 
 async function arUpdate(req, res, user) {
   checkOrigin(req);
+  if ((req.body || {}).action === 'ar_owner') return arOwner(req, res, user);
   if (!isOp(user)) throw bad('ไม่มีสิทธิ์บันทึกติดตามหนี้', 403);
   const b = req.body || {};
   const ivNo = text(b.ivNo, 40);

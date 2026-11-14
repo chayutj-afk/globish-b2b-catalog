@@ -68,3 +68,12 @@ test('part of a QT by students: PEAK copies the whole QT → the Draft is edited
   assert.doesNotMatch(fields.accountNote, /ไม่ตรงกับคำขอ/);
   assert.match(fields.accountNote, /4 คน/);
 });
+
+test('imported QT ("legacy:QO-…") → INV made on the real PEAK id, found by number', async () => {
+  const c = stub();
+  const row = { ...qtRow, peakQtId: 'legacy:QO-1' };
+  await ivdraft.createForIvRequest(iv, row, []);
+  assert.equal(c.create[0].PeakInvoices.quotationId, 'q1');
+  assert.equal(row.peakQtId, 'q1');
+});
+

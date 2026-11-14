@@ -72,7 +72,7 @@ table.sum tr.tot td{font-weight:500;color:var(--head)}
   <section class="tab on" id="tab-work">
     <div class="card" id="pn-card" hidden>
       <h2>เซลแจ้งว่าลูกค้าจ่ายแล้ว รอตรวจเงินเข้า <span class="small" id="pn-n"></span></h2>
-      <p class="hint">เช็คกับ statement ธนาคาร ถ้าเงินเข้าแล้วกด <b>ยืนยันเงินเข้า</b> ระบบบันทึกรับเงินให้ แล้ว INV ไปรอออกใบเสร็จที่หน้ารออนุมัติ</p>
+      <p class="hint">เช็คกับ statement ธนาคาร ถ้าเงินเข้าแล้วกด <b>ยืนยันเงินเข้า</b> ระบบบันทึกรับเงินให้ แล้วถามต่อว่าจะสร้างใบเสร็จ Draft ใน PEAK เลยไหม (ออกทีหลังได้ที่หน้ารออนุมัติ › ใบเสร็จ)</p>
       <div id="pn-list"></div>
     </div>
     <div class="card">
@@ -293,6 +293,7 @@ function confirmNotice(id) {
     save: async (err) => {
       if (!val('cn-dt') || !(toNum(val('cn-am')) > 0)) { err('ใส่วันที่และยอดที่ได้รับ'); return false; }
       await patch({ action: 'pay_confirm', noticeId: id, paidDate: val('cn-dt'), amount: val('cn-am'), note: val('cn-nt') }); await done(`ยืนยันเงินเข้า ${n.ivNo} แล้ว`);
+      offerReceipt(n.ivNo, { ch: n.deliveryChannel, email: n.email, addr: n.deliveryAddress, method: n.paymentMethod });
     } });
 }
 function rejectNotice(id) {
@@ -335,10 +336,34 @@ function openPaid(iv) {
       if (!paid && !fl) { err('แนบสลิป / หลักฐานการรับเงิน'); return false; }
       if (fl) { if (fl.size > 3 * 1024 * 1024) { err('ไฟล์ใหญ่เกิน 3 MB'); return false; } body.file = { name: fl.name, type: fl.type, data: await readB64(fl) }; }
       await patch(body); OPEN = null; await done(`บันทึกรับเงิน ${iv} แล้ว`);
+      if (!paid) offerReceipt(iv, { ch: body.deliveryChannel, email: body.email, addr: body.deliveryAddress, method: body.paymentMethod });
     } });
   confirmDiff = false;
 }
 let confirmDiff = false;
+// Right after money is confirmed: offer the receipt Draft in PEAK in the same flow (PEAK API on and the INV
+// came from PEAK), instead of sending accounting to another tab. "Later" leaves it in the pending tab.
+let PAYM = null, CAN_RT = false;
+const PM_TY = { 1: 'เงินสด', 2: 'บัญชีธนาคาร', 4: 'e-Wallet' };
+const CH_TH = { sales: 'ส่งไฟล์ให้ Sales', email: 'ส่งอีเมลลูกค้า', post: 'ส่งตัวจริงตามที่อยู่', email_post: 'ส่งอีเมลและตัวจริง' };
+function offerReceipt(ivNo, { ch, email, addr, method }) {
+  const r = find(ivNo);
+  if (!CAN_RT || !D.peakLive || !r || !r.peakIvId || r.rtNo || !r.paidDate) return;
+  setTimeout(async () => {
+    try { if (!PAYM) PAYM = (await api('/api/invoice-requests?view=pay-methods')).methods || []; } catch (e) { return; }
+    let last = ''; try { last = localStorage.getItem('paym:' + (method || '')) || ''; } catch {}
+    const chan = ch || 'sales';
+    formModal({ title: '🧾 ออกใบเสร็จต่อเลยไหม?', ok: '🧾 สร้างใบเสร็จ Draft ใน PEAK', html: `<p style="margin:0 0 12px"><b>${esc(r.company)}</b> · ${esc(ivNo)}<br>รับเงิน <b>${fmt(toNum(r.paidAmount))}</b> เมื่อ ${esc(r.paidDate)}</p>
+      <div class="fg"><label>เงินเข้าบัญชี (PEAK) *</label><select id="or-acc"><option value="">— เลือกบัญชีที่รับเงิน —</option>${PAYM.map((m) => `<option value="${esc(m.code)}"${m.code === last ? ' selected' : ''}>${esc(m.code)} · ${esc(m.name)} (${PM_TY[m.type] || ''})</option>`).join('')}</select></div>
+      <p class="small">ส่งใบเสร็จ: ${esc(CH_TH[chan] || chan)}${email ? ' · ' + esc(email) : ''}<br>ระบบสร้างใบเสร็จ/ใบกำกับภาษี สถานะ Draft จาก INV นี้ใน PEAK (หัก ณ ที่จ่ายคิดจากยอด INV − ยอดที่รับ) แนบสลิป แล้วอนุมัติใน PEAK · กดยกเลิกถ้าจะออกทีหลังที่หน้า รออนุมัติ › ใบเสร็จ</p>`,
+      save: async (err) => {
+        const code = val('or-acc'); if (!code) { err('เลือกบัญชีที่รับเงินใน PEAK'); return false; }
+        try { localStorage.setItem('paym:' + (method || ''), code); } catch {}
+        const d = await patch({ action: 'rt_make', ivNo, paymentMethodCode: code, deliveryChannel: chan, email: email || '', deliveryAddress: addr || '' });
+        await done(`สร้างใบเสร็จ ${d.peakRtNo || ''} (Draft) ใน PEAK แล้ว ตรวจและอนุมัติใน PEAK แล้วกด "เช็กสถานะจาก PEAK" ที่หน้า รออนุมัติ › ใบเสร็จ`);
+      } });
+  }, 50);
+}
 function openDoc(iv) {
   const r = find(iv), L = D.lists;
   formModal({ title: '📄 สถานะเอกสาร / หมายเหตุ', html: head(r) + `
@@ -386,7 +411,7 @@ $('imp-go').onclick = async () => {
   catch (e) { $('imp-msg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
 };
 let CAN_EDIT = false;
-window.SHELL_ME.then((u) => { if (!u) return; const P = u.perms || []; $('imp').hidden = !P.includes('users'); CAN_EDIT = P.includes('ar'); if (!P.includes('ar_view')) { $('msg').innerHTML = '<div class="msg err">ไม่มีสิทธิ์ดูหน้าติดตามหนี้ (ขอสิทธิ์จากผู้ดูแลที่หน้าจัดการผู้ใช้)</div>'; return; } load(); });
+window.SHELL_ME.then((u) => { if (!u) return; const P = u.perms || []; $('imp').hidden = !P.includes('users'); CAN_EDIT = P.includes('ar'); CAN_RT = P.includes('approve'); if (!P.includes('ar_view')) { $('msg').innerHTML = '<div class="msg err">ไม่มีสิทธิ์ดูหน้าติดตามหนี้ (ขอสิทธิ์จากผู้ดูแลที่หน้าจัดการผู้ใช้)</div>'; return; } load(); });
 </script>
 </body>
 </html>

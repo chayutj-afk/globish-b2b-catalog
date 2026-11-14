@@ -484,7 +484,7 @@ async function arList(req, res, user) {
   for (const f of fus) { if (!byIv.has(f.ivNo)) byIv.set(f.ivNo, []); byIv.get(f.ivNo).push(f); }
   const keep = all.filter((r) => r.state === 'Outstanding' || r.state === 'Overdue' || (r.paidMs !== null && r.paidMs >= today - 120 * 86400e3) || (r.issueMs !== null && r.issueMs >= today - 120 * 86400e3));
   const out = keep.map(({ _row, issueMs, dueMs, paidMs, preVatN, ...r }) => ({ ...r, ...(contact.get(r.ivRequestId) || {}), followUps: (byIv.get(r.ivNo) || []).slice(-20).map(({ _row: x, ...f }) => f) }));
-  res.status(200).json({ ok: true, summary: summarise(all, today), invoices: out, total: all.length,
+  res.status(200).json({ ok: true, peakLive: require('../lib/peak').mode() !== 'off', summary: summarise(all, today), invoices: out, total: all.length,
     lists: { docStatus: ar.DOC_STATUS, payMethods: ar.PAY_METHODS, channels: ar.CHANNELS, follow: ar.FOLLOW, delay: ar.DELAY } });
 }
 

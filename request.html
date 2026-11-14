@@ -21,6 +21,7 @@
 .balance div{background:var(--panel-2);border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px}
 .balance b{display:block;font-size:17px;margin-top:2px;color:var(--head);font-weight:500}
 .balance .neg b{color:var(--bad-ink)}
+b.neg{color:var(--bad-ink)}
 .inv{border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:12px;background:var(--panel-2)}
 .inv-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
 .inv-head b{font-size:14px;color:var(--head);font-weight:500}
@@ -96,9 +97,9 @@
     <div class="row c3">
       <div class="fg"><label>หัก ณ ที่จ่าย *</label><select id="q-wht"><option value="">— เลือก —</option><option value="0">ไม่หัก ณ ที่จ่าย</option><option value="3">หัก 3% (ค่าบริการ · นิติบุคคล)</option><option value="1">หัก 1% (หน่วยงานรัฐ)</option><option value="2">หัก 2%</option><option value="5">หัก 5%</option></select><div class="sub">ลูกค้านิติบุคคลส่วนใหญ่หัก 3% · บุคคลธรรมดาไม่หัก · หน่วยงานรัฐ 1%</div></div>
       <div class="fg"><label>ลูกค้าต้องออก PO ไหม</label><select id="q-po"><option value="no">ไม่ต้องใช้ PO</option><option value="yes">ต้องมี PO</option></select></div>
-      <div class="fg"><label>หมายเหตุถึงฝ่ายบัญชี</label><input id="q-note" type="text" maxlength="1000"></div>
+      <div class="fg"><label>อีเมลลูกค้า (สำหรับส่งเอกสาร) *</label><input id="q-email" type="email" maxlength="120" placeholder="name@company.com"></div>
     </div>
-    <input type="hidden" id="q-replaces"><div class="row c3"><div class="fg"><label>อีเมลลูกค้า (สำหรับส่งเอกสาร) *</label><input id="q-email" type="email" maxlength="120" placeholder="name@company.com"></div></div>
+    <input type="hidden" id="q-replaces"><div class="row c1"><div class="fg"><label>หมายเหตุถึงฝ่ายบัญชี</label><input id="q-note" type="text" maxlength="1000" placeholder="ถ้ามี เช่น เงื่อนไขพิเศษที่ฝ่ายบัญชีควรรู้"></div></div>
   </div>
 
   <div class="card" id="q-items-card" hidden>
@@ -118,9 +119,10 @@
     <h2>1. ใบเสนอราคาที่จะออก INV</h2>
     <p class="hint">QT 1 ใบออก INV ได้หลายใบ เช่น ทยอยออกตามงวด หรือแยกออกให้บริษัทลูก กลับมาขอเพิ่มจาก QT เดิมได้</p>
     <div class="row">
-      <div class="fg"><label>คำขอ QT ในระบบ</label><select id="i-req" onchange="onPickQT()"><option value="">— QT นอกระบบ / กรอกเอง —</option></select></div>
-      <div class="fg"><label>เลขที่ใบเสนอราคา (QT) *</label><input id="i-qt" type="text" maxlength="40" placeholder="QO-2026110001"><div class="sub" id="i-qt-hint"></div></div>
+      <div class="fg"><label>เลือก QT *</label><select id="i-req" onchange="onPickQT()"><option value="">— เลือก QT ที่อนุมัติแล้ว —</option></select><div class="sub">ไม่มีในรายการ (ออกใน PEAK เองก่อนใช้ระบบ) เลือก "QT นอกระบบ" ท้ายรายการ</div></div>
+      <div class="fg" id="i-qt-wrap" hidden><label>เลขที่ใบเสนอราคา (QT) *</label><input id="i-qt" type="text" maxlength="40" placeholder="QO-2026110001"><div class="sub" id="i-qt-hint"></div></div>
     </div>
+    <div id="i-detail" hidden>
     <div class="fg" id="i-off-wrap" style="margin-top:6px"><label style="color:var(--bad-ink)">เหตุผลที่ใช้ QT นอกระบบ *</label><input id="i-off" type="text" maxlength="300" placeholder="เช่น QT ออกก่อนเปิดใช้ระบบ / ออกตรงใน PEAK"><div class="sub">ระบบตรวจยอดและสถานะของ QT นอกระบบไม่ได้ ฝ่ายบัญชีจะเห็นเหตุผลนี้ตอนอนุมัติ</div></div>
     <div id="i-balance"></div>
     <div class="row c4">
@@ -131,9 +133,10 @@
     </div>
     <div class="row"><div class="fg"><label>ชื่อลูกค้าตาม QT *</label><input id="i-company" type="text" maxlength="200"></div>
       <div class="fg"><label>หัก ณ ที่จ่าย *</label><select id="i-wht"><option value="">— เลือก —</option><option value="0">ไม่หัก ณ ที่จ่าย</option><option value="3">หัก 3% (ค่าบริการ · นิติบุคคล)</option><option value="1">หัก 1% (หน่วยงานรัฐ)</option><option value="2">หัก 2%</option><option value="5">หัก 5%</option></select><div class="sub" id="i-wht-hint">ใช้กับทุกใบในคำขอนี้</div></div></div>
+    </div>
   </div>
 
-  <div class="card">
+  <div class="card i-step" hidden>
     <h2>2. หลักฐานว่าลูกค้ายอมรับ QT</h2>
     <p class="hint">QT ที่ลูกค้าเซ็นแล้ว หรือเอกสารที่ใช้แทนได้ถ้าลูกค้าไม่เซ็น แนบครั้งเดียวใช้กับทุกใบในคำขอนี้</p>
     <div class="row">
@@ -147,7 +150,7 @@
     </div>
   </div>
 
-  <div class="card">
+  <div class="card i-step" hidden>
     <h2>3. ใบแจ้งหนี้ที่ต้องการ</h2>
     <p class="hint">เพิ่มได้หลายใบ แต่ละใบเลือกได้ว่าออกในนามลูกค้าตาม QT หรือบริษัทอื่น (เช่น บริษัทลูก) และต้องส่งตัวจริงไหม ถ้ายังไม่รู้ เลือก "ยังไม่ทราบ" แล้วค่อยอัปเดตในหน้า "คำขอของฉัน"</p>
     <div id="i-list"></div>
@@ -156,7 +159,7 @@
     <div class="fg" id="i-over-wrap" hidden style="margin-top:10px"><label style="color:var(--bad-ink)">เหตุผลที่ยอดเกิน QT *</label><input id="i-over" type="text" maxlength="300" placeholder="เช่น ลูกค้าเพิ่มจำนวนผู้เรียน รอออก QT ใหม่"></div>
   </div>
 
-  <div class="card">
+  <div class="card i-step" hidden>
     <h2>4. การวางบิลและผู้ติดต่อฝ่ายการเงินของลูกค้า</h2>
     <div class="row">
       <div class="fg"><label>ลูกค้าต้องใช้ PO ในการวางบิลไหม *</label><select id="i-poneed"><option value="">— เลือก —</option><option value="yes">ใช่ ต้องมี PO</option><option value="no">ไม่ต้องใช้</option><option value="unknown">ยังไม่ทราบ</option></select></div>
@@ -170,7 +173,7 @@
     <div class="row c1"><div class="fg"><label>หมายเหตุถึงฝ่ายบัญชี</label><input id="i-note" type="text" maxlength="1000"></div></div>
   </div>
 
-  <button class="btn btn-p btn-block" id="i-submit" onclick="submitINV()">📨 ส่งคำขอออก INV</button>
+  <button class="btn btn-p btn-block i-step" hidden id="i-submit" onclick="submitINV()">📨 ส่งคำขอออก INV</button>
   <div id="i-msg"></div>
 </section>
 
@@ -346,6 +349,7 @@ async function api(url, opts = {}) {
 }
 function go(tab) {
   ['qt', 'inv', 'rt', 'mine', 'pend'].forEach((t) => { $('tab-' + t).classList.toggle('on', t === tab); $('nav-' + t).classList.toggle('on', t === tab); });
+  { const mm = $('m-more'); if (mm) mm.classList.toggle('on', !!document.querySelector('#rail a.ri.on.m-more')); }
   history.replaceState(null, '', '#' + tab);
   const T = { qt: 'ขอใบเสนอราคา (QT)', inv: 'ขอใบแจ้งหนี้ (INV)', rt: 'ขอใบเสร็จ / ใบกำกับภาษี', mine: 'คำขอของฉัน', pend: 'รออนุมัติ' };
   if ($('page-title')) $('page-title').textContent = T[tab]; document.title = T[tab] + ' · Globish Sales Desk';
@@ -933,9 +937,10 @@ const qtLeft = (q) => { const a = qtAmt(q); return Math.round((a.total - a.done)
 function fillQTPicker() {
   const sel = $('i-req'); const keep = sel.value;
   // QTs already invoiced in full are left out: no more INV from them.
-  sel.innerHTML = '<option value="">— QT นอกระบบ / กรอกเอง —</option>' + REQS.filter((q) => QT_LIVE.includes(q.status) && (qtLeft(q) > 0.01 || q.requestId === keep)).map((q) => {
-    return `<option value="${esc(q.requestId)}">${esc(q.peakQtNo || q.requestId)} · ${esc(q.company)} · คงเหลือ ${fmt(qtLeft(q))} (${qtAmt(q).lbl})</option>`;
-  }).join('');
+  sel.innerHTML = '<option value="">— เลือก QT ที่อนุมัติแล้ว —</option>' + REQS.filter((q) => QT_LIVE.includes(q.status) && (qtLeft(q) > 0.01 || q.requestId === keep)).map((q) => {
+    const ed = q.peakQtNo && pendEdit('QT', q.peakQtNo);
+    return `<option value="${esc(q.requestId)}"${ed ? ' disabled' : ''}>${esc(q.peakQtNo || q.requestId)} · ${esc(q.company)} · ${ed ? 'รอฝ่ายบัญชีแก้ QT ขอ INV ยังไม่ได้' : `คงเหลือ ${fmt(qtLeft(q))} (${qtAmt(q).lbl})`}</option>`;
+  }).join('') + '<option value="__ext">QT นอกระบบ (ออกใน PEAK เอง ไม่ได้ขอผ่านระบบ)</option>';
   sel.value = keep;
 }
 // PEAK API on: check the picked QT against PEAK (it may have been edited there) before pricing the INV.
@@ -962,7 +967,10 @@ function onPickQT() {
   // Linked QT number comes from the Revenue Hub (accounting / PEAK); only external QTs are typed.
   $('i-qt').readOnly = !!(q && q.peakQtNo);
   $('i-seg').disabled = !!(q && q.segment); onInvSeg();
-  $('i-off-wrap').hidden = !!$('i-req').value;
+  const pick = $('i-req').value;
+  $('i-off-wrap').hidden = pick !== '__ext';
+  $('i-detail').hidden = !pick; $('i-qt-wrap').hidden = !pick;
+  document.querySelectorAll('#tab-inv .i-step').forEach((el) => { el.hidden = !pick; });
   $('i-qt-hint').textContent = !q ? '' : q.peakQtNo ? '✓ ดึงจาก Revenue Hub' : 'ฝ่ายบัญชียังไม่ได้ใส่เลข QT ของคำขอนี้ ใส่เลขที่ได้รับเองได้';
   renderInvs();
 }
@@ -974,7 +982,7 @@ function readFileB64(file) { return new Promise((res, rej) => { const r = new Fi
 async function submitINV() {
   const v = (id) => $(id).value.trim();
   const body = {
-    requestId: v('i-req'), qtNo: v('i-qt'), segment: v('i-seg'), customerType: ($('i-seg').selectedOptions[0] || { dataset: {} }).dataset.code || '', whtRate: v('i-wht'), opportunityId: v('i-seg') && !oppOf(v('i-seg')) ? '' : getOpp('i'), company: v('i-company'),
+    requestId: v('i-req') === '__ext' ? '' : v('i-req'), qtNo: v('i-qt'), segment: v('i-seg'), customerType: ($('i-seg').selectedOptions[0] || { dataset: {} }).dataset.code || '', whtRate: v('i-wht'), opportunityId: v('i-seg') && !oppOf(v('i-seg')) ? '' : getOpp('i'), company: v('i-company'),
     taxId: v('i-tax'), branch: v('i-branch'),
     evidenceType: v('i-evtype'), evidenceOther: v('i-evother'),
     financeContact: v('i-fin-name'), financeEmail: v('i-fin-email'), financePhone: v('i-fin-phone'), note: v('i-note'),
@@ -1034,7 +1042,7 @@ async function submitINV() {
     INV_DIRTY = false;
     $('i-msg').innerHTML = `<div class="done-card"><b>✓ ส่งคำขอ ${esc(d.batchId)} (${d.ivRequestIds.length} ใบ) แล้ว</b><div style="margin:6px 0 10px">${d.remaining !== null && d.remaining !== undefined ? `QT คงเหลือ ${fmt(d.remaining)} · ` : ''}${esc(d.message)}</div><button class="btn btn-o btn-sm" onclick="go('mine');setMine('inv',document.querySelectorAll('#mine-seg button')[1])">ดูสถานะในคำขอของฉัน</button></div>`;
     ['i-req', 'i-qt', 'i-seg', 'i-wht', 'i-opp-y', 'i-opp-n', 'i-company', 'i-tax', 'i-branch', 'i-evother', 'i-fin-name', 'i-fin-email', 'i-fin-phone', 'i-note', 'i-over', 'i-off', 'i-poneed', 'i-paycycle'].forEach((id) => { $(id).value = ''; }); paintOpp('i');
-    $('i-file').value = ''; $('i-qt').readOnly = false; $('i-seg').disabled = false; onInvSeg(); $('i-qt-hint').textContent = ''; INVS = [blankInv()]; renderInvs(); taxHint('i');
+    $('i-file').value = ''; $('i-qt').readOnly = false; $('i-seg').disabled = false; onInvSeg(); $('i-qt-hint').textContent = ''; INVS = [blankInv()]; renderInvs(); taxHint('i'); onPickQT();
     loadAll();
   } catch (e) { msg('i-msg', 'err', e.message); }
   finally { btn.disabled = false; }
@@ -1042,14 +1050,14 @@ async function submitINV() {
 
 // ─── Mine ─────────────────────────────────────────────────
 const QT_ST = { new: ['รอฝ่ายบัญชีอนุมัติ', 'new'], approved: ['อนุมัติแล้ว · รอระบบสร้าง QT', 'blue'], qt_creating: ['กำลังสร้าง QT ใน PEAK', 'blue'],
-  needs_contact: ['รอฝ่ายบัญชี: ลูกค้าใน PEAK', 'new'], needs_review: ['รอตรวจคำอธิบายเพิ่มเติม', 'new'], needs_service_code: ['รอฝ่ายบัญชี: รหัสบริการ', 'new'], qt_error: ['รอฝ่ายบัญชีตรวจ', 'red'],
-  qt_draft: ['QT Draft · รอบัญชีอนุมัติ', 'blue'], qt_approved: ['QT อนุมัติแล้ว · ส่งลูกค้าได้', 'green'], rejected: ['ตีกลับ', 'red'], changes_requested: ['ขอแก้ไข', 'new'],
+  needs_contact: ['รอฝ่ายบัญชี: ลูกค้าใน PEAK', 'new'], needs_review: ['คำอธิบายเพิ่มเติมต้องแก้ · ดูหมายเหตุ', 'red'], needs_service_code: ['รอฝ่ายบัญชี: รหัสบริการ', 'new'], qt_error: ['รอฝ่ายบัญชีตรวจ', 'red'],
+  qt_draft: ['QT Draft · รอบัญชีอนุมัติ', 'blue'], qt_approved: ['QT อนุมัติแล้ว · ส่งลูกค้าได้', 'green'], rejected: ['ตีกลับ · ดูเหตุผลแล้วส่งใหม่', 'red'], changes_requested: ['ขอแก้ไข', 'new'],
   accepted: ['ลูกค้าตอบรับ', 'green'], iv_requested: ['ขอ INV แล้ว', 'green'], iv_issued: ['ออก INV แล้ว', 'green'], cancelled: ['ยกเลิก', 'red'] };
 // Payment status from AR (Invoices tab) once the INV is issued.
 const payChip = (v) => { const a = v.ar; if (!a) return ''; const m = { Paid: ['green', 'ลูกค้าจ่ายแล้ว' + (a.paidDate ? ' ' + a.paidDate : '') + (a.rtNo ? ' · ใบเสร็จ ' + a.rtNo : ' · รอออกใบเสร็จ')], Overdue: ['red', `เกินกำหนด ${a.daysOverdue} วัน`], Outstanding: ['blue', 'ครบกำหนด ' + a.dueDate], Closed: ['', 'INV ปิดแล้ว'] }[a.state]; return m ? `<span class="st ${m[0]}" title="${esc(a.followStatus || '')}${a.commitDate ? ' · นัดจ่าย ' + esc(a.commitDate) : ''}">${esc(m[1])}</span>` : ''; };
 const IV_ST = { new: ['รอฝ่ายบัญชีออก INV', 'new'], iv_creating: ['กำลังสร้าง INV ใน PEAK', 'blue'], iv_draft: ['INV Draft · รอบัญชีอนุมัติ', 'blue'], iv_issued: ['ออก INV แล้ว', 'green'], rejected: ['ตีกลับ', 'red'] };
 const ORIG_ST = { not_needed: ['ไม่ต้องส่งตัวจริง', ''], pending_decision: ['ยังไม่ทราบเรื่องตัวจริง', 'new'], requested: ['รอส่งตัวจริง', 'blue'], sent: ['ส่งตัวจริงแล้ว', 'green'] };
-const st = (map, k) => { const [t, c] = map[k] || [k || '-', '']; return `<span class="st ${c}">${esc(t)}</span>`; };
+const st = (map, k) => { if (!k) return ''; const [t, c] = map[k] || [k, '']; return `<span class="st ${c}">${esc(t)}</span>`; };
 
 function setMine(w, btn) { document.querySelectorAll('#mine-seg button').forEach((b) => b.classList.toggle('on', b === btn)); ['qt', 'inv', 'rt', 'edit'].forEach((k) => { $('mine-' + k).hidden = w !== k; }); $('mine-qt-f').hidden = w !== 'qt'; if (w === 'edit' || w === 'rt') markSeen(w); }
 // Results from accounting the requester hasn't looked at yet: edit requests (done / rejected),
@@ -1147,7 +1155,7 @@ function renderMine() {
     return `<div class="list-row">
       <div class="list-head"><div>${q.peakQtNo ? `<span class="list-id">QT ${qtLink(q)}</span>` : '<span class="small">ยังไม่มีเลข QT</span>'} · ${esc(q.company)}</div>${st(QT_ST, q.status)}</div>
       <div class="list-sub">${esc(q.requestId)}${q.replaces ? ` <span class="small">(แทนคำขอ ${esc(q.replaces)} ที่ถูกตีกลับ)</span>` : ''} · ${esc(q.createdAt)} · ${esc(q.segment)}${q.opportunityId ? ' · ' + esc(q.opportunityId) : ''}${op ? ' · ' + esc(q.salesName) : ''}<br>
-        ${heroes}<br>ยอด${lbl} <b>${fmt(total)}</b> · ขอ INV แล้ว ${fmt(done)} · คงเหลือ <b>${fmt(total - done)}</b>${q.peakNote ? `<br><span class="small">หมายเหตุ: ${esc(q.peakNote)}</span>` : ''}</div>
+        ${heroes}<br>ยอด${lbl} <b>${fmt(total)}</b> · ขอ INV แล้ว ${fmt(done)} · ${total - done < -0.01 ? `<b class="neg">ขอเกินยอด QT ${fmt(done - total)}</b>` : `คงเหลือ <b>${fmt(total - done)}</b>`}${q.peakNote ? `<br><span class="small">หมายเหตุ: ${esc(q.peakNote)}</span>` : ''}</div>
       ${q.qtEditedAt && QT_LIVE.includes(q.status) ? `<div class="pc-note warn" style="margin-top:8px">✏️ QT นี้ถูกแก้ไขใน PEAK เมื่อ ${esc(q.qtEditedAt)} ไฟล์ที่เปิดจากลิงก์อาจยังเป็นเวอร์ชันเก่า จนกว่าฝ่ายบัญชีจะกดรีเฟรชใน PEAK กด "ดู QT ล่าสุดจาก PEAK" เพื่อดูข้อมูลจริงก่อนส่งลูกค้า</div>` : ''}
       ${PEAK_LIVE && q.peakQtId && q.peakQtNo ? `<details class="qlive" ontoggle="if(this.open)liveQt('${esc(q.requestId)}')"><summary class="small" style="cursor:pointer;margin-top:6px">🔎 ดู QT ล่าสุดจาก PEAK</summary><div id="qlv-${esc(q.requestId)}" class="small">กำลังโหลด…</div></details>` : ''}
       ${mineIvs.length ? `<div class="inv-mini">${mineIvs.map((v) => `<div class="inv-mini-row"><span class="mono">${esc(v.ivRequestId)}</span><span>${esc(v.company)} · ${fmt(ivAmt(v).amt)}</span><span>${st(IV_ST, v.status)} ${st(ORIG_ST, v.originalStatus)}</span></div>`).join('')}</div>` : ''}
@@ -1397,7 +1405,7 @@ function renderPending() {
     $('pend-hint-inv').innerHTML = 'ตรวจหลักฐานแล้วกด <b>สร้าง INV Draft ใน PEAK</b> ระบบสร้าง INV จาก QT ใบเดิม แนบหลักฐาน แล้วอนุมัติใน PEAK';
     $('pend-hint-rt').innerHTML = 'INV ที่รับเงินแล้ว: เลือกบัญชีที่เงินเข้า แล้วกด <b>สร้างใบเสร็จ Draft ใน PEAK</b> · คำขอใบเสร็จจาก Sales (ไม่มี INV) ยังออกใน PEAK แล้วใส่เลขเหมือนเดิม';
   }
-  const n = waitQ.length + waitI.length + readyO.length + editedQ.length + draftI.length;
+  const n = waitQ.length + fixQ.length + draftQ.length + waitI.length + readyO.length + editedQ.length + draftI.length;
   $('pend-orig-n').textContent = readyO.length ? `(${readyO.length})` : '';
   $('pend-orig').innerHTML = waitO.length ? waitO.map((v) => `<div class="pcard"><div class="pc-body">
       <div class="pc-top"><div class="pc-title">${esc(v.company)}<small>${esc(v.ivRequestId)} · โดย ${esc(v.salesName)}${v.originalRequestedAt ? ' · ขอเมื่อ ' + esc(v.originalRequestedAt) : ''}</small></div>${st(ORIG_ST, v.originalStatus)}</div>
@@ -1412,7 +1420,8 @@ function renderPending() {
     </div>`).join('') : '<div class="empty">ไม่มีเอกสารตัวจริงที่ต้องส่ง</div>';
   const extra = renderPendingMore();
   $('pend-count').textContent = n + extra; $('pend-count').hidden = !(n + extra);
-  $('pend-qt-n').textContent = waitQ.length + editedQ.length ? `(${waitQ.length + editedQ.length})` : '';
+  const qN = waitQ.length + fixQ.length + draftQ.length + editedQ.length;
+  $('pend-qt-n').textContent = qN ? `(${qN})` : '';
   $('pend-inv-n').textContent = waitI.length + draftI.length ? `(${waitI.length + draftI.length})` : '';
   const lineRows = (q) => (q.lines || []).map((l) => `<tr><td>${esc(l.qtDescription || l.description).replace(/\n/g, '<br>')}${l.salesNote && !l.qtDescription ? `<div class="small note-box">✍️ Sales เขียนเพิ่ม (จะเรียบเรียงรวมกับคำอธิบายใน QT): ${esc(l.salesNote)}</div>` : ''}${l.freebie ? `<div class="small note-box">🎁 ของแถม: ${esc(l.freebie)}</div>` : ''}${l.peakServiceCode ? `<div class="small mono">${esc(l.peakServiceCode)}</div>` : '<div class="err-line">ยังไม่มีรหัสบริการ PEAK</div>'}</td><td class="num">${esc(l.qty)}</td><td class="num">${esc(l.unitPrice)}</td><td class="num">${esc(l.discount || '')}</td></tr>`).join('');
   const F = (label, val, cls) => (val === '' || val === undefined || val === null ? '' : `<div class="f"><span>${label}</span><b${cls ? ` class="${cls}"` : ''}>${val}</b></div>`);

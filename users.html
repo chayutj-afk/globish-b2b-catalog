@@ -26,7 +26,7 @@ td.who{white-space:normal}
 .sub{color:var(--muted);font-size:13px;line-height:1.7;margin:0 0 6px}
 </style>
 </head>
-<body data-page="users">
+<body data-page="users" data-need="users">
 <div class="app"><nav class="rail" id="rail"></nav><div class="main">
 <header class="top"><h1 id="page-title">จัดการสิทธิ์ผู้ใช้</h1><div class="top-r" id="top-r"></div></header>
 <script src="/shell.js"></script>
@@ -195,7 +195,7 @@ async function load() {
   USERS = d.users.sort((a, b) => (b.fixedAdmin - a.fixedAdmin) || (order.indexOf(b.role) - order.indexOf(a.role)) || String(a.name).localeCompare(String(b.name)));
   renderMatrix(); render();
 }
-load().catch((e) => { $('rows').innerHTML = `<tr><td colspan="7" class="err">${esc(e.message)}</td></tr>`; });
+load().catch((e) => { const r = $('rows'); if (r) r.innerHTML = `<tr><td colspan="7" class="err">${esc(e.message)}</td></tr>`; });
 async function testChat() {
   $('chat-msg').textContent = 'กำลังส่ง…';
   try { const d = await api('/api/users', { method: 'PATCH', body: JSON.stringify({ action: 'test_chat' }) }); const c = d.chat || {};

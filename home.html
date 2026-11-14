@@ -66,7 +66,7 @@ a.tile .dd{color:var(--muted);font-size:12.5px;line-height:1.6}
   <div class="group" data-gate="request" hidden>ขอเอกสาร</div>
   <div class="grid">
     <a class="tile" href="/request#qt" data-gate="request" hidden><div class="ic"><svg viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></svg></div>
-      <div class="tt">ขอใบเสนอราคา (QT) <span class="badge" id="cart" hidden></span></div><div class="dd">B2B, B2C, MaoMao, B2E, B2S และ Others ระบบสร้าง QT Draft ใน PEAK ให้หลังฝ่ายบัญชีอนุมัติ</div></a>
+      <div class="tt">ขอใบเสนอราคา (QT) <span class="badge" id="cart" hidden></span></div><div class="dd">เลือกประเภทลูกค้า (B2B / B2C / B2S) และสินค้า ฝ่ายบัญชีอนุมัติแล้วระบบสร้าง QT Draft ใน PEAK ให้</div></a>
     <a class="tile" href="/request#inv" data-gate="request" hidden><div class="ic"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg></div>
       <div class="tt">ขอใบแจ้งหนี้ (INV)</div><div class="dd">แนบหลักฐานที่ลูกค้ายอมรับ QT แล้ว แบ่งหลายงวดหรือออกในนามบริษัทอื่นได้</div></a>
     <a class="tile" href="/request#rt" data-gate="request" hidden><div class="ic"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="m9 11 2 2 4-4"/></svg></div>
@@ -125,7 +125,7 @@ a.tile .dd{color:var(--muted);font-size:12.5px;line-height:1.6}
       document.getElementById('s-mine').textContent = mine.filter(function (q) { return done.indexOf(q.status) < 0; }).length;
       document.getElementById('s-ready').textContent = mine.filter(function (q) { return q.status === 'qt_approved'; }).length;
       if ((u.perms || []).includes('approve')) {
-        document.getElementById('s-pend').textContent = reqs.filter(function (q) { return q.status === 'new'; }).length + ivs.filter(function (v) { return v.status === 'new'; }).length;
+        document.getElementById('s-pend').textContent = reqs.filter(function (q) { return ['new', 'needs_contact', 'needs_service_code', 'needs_review', 'qt_error', 'qt_draft'].indexOf(q.status) >= 0; }).length + ivs.filter(function (v) { return v.status === 'new' || v.status === 'iv_draft'; }).length;
         document.getElementById('s-orig').textContent = ivs.filter(function (v) { return v.originalStatus === 'requested' && v.status === 'iv_issued'; }).length;
       }
     });

@@ -15,7 +15,7 @@ main{max-width:820px}
 .steps{padding-left:20px;line-height:2.1;margin:6px 0 4px;font-size:13.5px}
 </style>
 </head>
-<body data-page="wh">
+<body data-page="wh" data-need="import">
 <div class="app"><nav class="rail" id="rail"></nav><div class="main">
 <header class="top"><h1 id="page-title">แพ็กเกจ Whitehouse</h1><div class="top-r" id="top-r"></div></header>
 <script src="/shell.js"></script>
@@ -47,8 +47,8 @@ async function loadNow() {
   try {
     const r = await fetch('/api/wh-packages', { cache: 'no-store' }); const d = await r.json();
     if (!r.ok || !d.ok) throw new Error(d.error || 'HTTP ' + r.status);
-    $('now').innerHTML = d.count ? `มี <b>${d.count.toLocaleString('th-TH')}</b> แพ็กเกจ · อัปเดตล่าสุด <b>${d.updatedAt || '-'}</b>` : 'ยังไม่มีข้อมูล';
-  } catch (e) { $('now').textContent = 'โหลดไม่ได้: ' + e.message; }
+    if ($('now')) $('now').innerHTML = d.count ? `มี <b>${d.count.toLocaleString('th-TH')}</b> แพ็กเกจ · อัปเดตล่าสุด <b>${d.updatedAt || '-'}</b>` : 'ยังไม่มีข้อมูล';
+  } catch (e) { if ($('now')) $('now').textContent = 'โหลดไม่ได้: ' + e.message; }
 }
 loadNow();
 let busy = false;

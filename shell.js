@@ -18,6 +18,7 @@
     sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
     moon: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
     out: '<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/>',
+    more: '<path d="M4 6h16M4 12h16M4 18h16"/>',
   };
   const svg = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${I[k]}</svg>`;
   const page = document.body.dataset.page || '';
@@ -44,7 +45,11 @@
       if (it.sep) return `<div class="sep" ${it.gate ? `data-gate="${it.gate}" hidden` : ''}></div>`;
       const on = (it.k === page) || (onReq && it.k === 'qt' && !location.hash);
       return `<a class="ri${on ? ' on' : ''}" href="${onReq && it.k === 'catalog' ? '/catalog?return=request' : it.href}" ${onReq && it.k === 'catalog' ? 'data-keep="1"' : ''} ${it.id ? `id="${it.id}"` : ''} ${it.gate ? `data-gate="${it.gate}" hidden` : ''}>${svg(it.k)}<span>${it.label}</span>${it.badge ? `<span class="badge" id="${it.badge}" hidden></span>` : ''}</a>`;
-    }).join('');
+    }).join('') + `<a class="ri m-only" href="#" id="m-more" aria-expanded="false">${svg('more')}<span>เมนู</span></a>`;
+    // Phone: the bottom bar keeps 4 main items for the person's role; the rest open from "เมนู".
+    const more = document.getElementById('m-more');
+    more.addEventListener('click', (e) => { e.preventDefault(); const o = rail.classList.toggle('open'); more.setAttribute('aria-expanded', String(o)); });
+    rail.addEventListener('click', (e) => { if (e.target.closest('a.ri') && e.target.closest('a.ri') !== more) { rail.classList.remove('open'); more.setAttribute('aria-expanded', 'false'); } });
     if (onReq) rail.querySelectorAll('a.ri[id^="nav-"]').forEach((a) => a.addEventListener('click', (e) => {
       if (typeof window.go === 'function') { e.preventDefault(); window.go(a.id.slice(4)); }
     }));
@@ -76,6 +81,15 @@
     const P = new Set(u.perms || []);
     const extra = { op: P.has('approve'), admin: P.has('users'), mine: P.has('request') || P.has('team_view'), tools: P.has('users') || P.has('import'), tools2: P.has('users') || P.has('import') || P.has('approve') || P.has('ar_view') };
     document.querySelectorAll('[data-gate]').forEach((el) => { const g = el.dataset.gate; el.hidden = !(g in extra ? extra[g] : P.has(g)); });
+    const main = P.has('approve') ? ['home', 'pend', 'ar', 'mine'] : P.has('ar_view') && !P.has('request') ? ['home', 'ar', 'catalog', 'mine'] : ['home', 'qt', 'inv', 'mine'];
+    document.querySelectorAll('#rail a.ri:not(#m-more)').forEach((a) => {
+      const k = (a.getAttribute('href') || '').replace(/^\/request#/, '').replace(/^\/$/, 'home').replace(/^\/(catalog).*/, '$1').replace(/^\//, '');
+      a.classList.toggle('m-more', !main.includes(k));
+    });
+    const mm = document.getElementById('m-more'); if (mm) mm.classList.toggle('on', !!document.querySelector('#rail a.ri.on.m-more'));
+    // A page only some roles may use: show one clear message instead of a half-empty page.
+    const need = document.body.dataset.need;
+    if (need && !P.has(need)) { const m = document.querySelector('main'); if (m) m.innerHTML = '<div class="card" style="margin-top:16px"><h2>ไม่มีสิทธิ์ใช้หน้านี้</h2><p class="hint" style="margin:6px 0 0">ถ้าต้องใช้ ขอสิทธิ์จากผู้ดูแลระบบ (หน้า จัดการสิทธิ์ผู้ใช้) · <a href="/">กลับหน้าแรก</a></p></div>'; }
     // Payment notices from Sales waiting for accounting / collector: count on the "ติดตามหนี้" menu.
     if (P.has('ar') || P.has('approve')) window.refreshPayBadge();
     return u;

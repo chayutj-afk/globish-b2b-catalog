@@ -277,9 +277,13 @@ async function qtLive(req, res, user) {
   const sees = await visibility(user);
   if (!row || (!sees(row.requestedBy) && !can(user, 'approve'))) throw bad('ไม่พบคำขอนี้', 404);
   if (!row.peakQtId) throw bad('คำขอนี้ยังไม่มี QT ใน PEAK', 404);
-  const q = peak.quotationView(await peak.getQuotation(row.peakQtId));
+  const raw = await peak.getQuotation(row.peakQtId);
+  const q = peak.quotationView(raw);
   if (!q) throw bad('ไม่พบ QT นี้ใน PEAK', 404);
-  res.status(200).json({ ok: true, qt: q, editedAt: row.qtEditedAt || '' });
+  // Edited in PEAK without the app knowing: bring the request (totals, lines) up to date now.
+  const sigBefore = row.qtSig;
+  await require('../lib/qtlines').refreshRequest(row, raw).catch(() => null);
+  res.status(200).json({ ok: true, qt: q, editedAt: row.qtEditedAt || '', changed: !!sigBefore && row.qtSig !== sigBefore });
 }
 
 async function update(req, res, user) {

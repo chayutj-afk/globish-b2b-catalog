@@ -169,6 +169,11 @@ async function create(req, res, user) {
     if (!linked || (!can(user, 'approve') && linked.requestedBy !== user.email)) throw bad('ไม่พบคำขอใบเสนอราคาที่เลือก');
     // Only a QT accounting has approved in PEAK can be billed.
     if (!['qt_approved', 'accepted', 'iv_requested', 'iv_issued'].includes(linked.status)) throw bad('QT นี้ยังไม่ได้อนุมัติใน PEAK ขอ INV ได้หลังฝ่ายบัญชีอนุมัติ QT แล้ว', 409);
+    // PEAK API on: the QT may have been edited in PEAK since; balance checks below use its current totals.
+    if (linked.peakQtId) {
+      const pk = require('../lib/peak');
+      if (pk.mode() !== 'off') { const pq = await pk.getQuotation(linked.peakQtId).catch(() => null); if (pq) await require('../lib/qtlines').refreshRequest(linked, pq).catch(() => null); }
+    }
     if (linked.peakQtNo && (await hub.readTable('EditRequests')).some((x) => x.docType === 'QT' && x.docNo === String(linked.peakQtNo).toUpperCase() && x.status === 'new')) {
       throw bad(`QT ${linked.peakQtNo} มีคำขอแก้ไขที่รอฝ่ายบัญชีอยู่ ขอ INV ได้หลังฝ่ายบัญชีแก้เสร็จ`, 409);
     }

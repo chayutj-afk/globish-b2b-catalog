@@ -43,7 +43,7 @@
     rail.setAttribute('aria-label', 'เมนู');
     rail.innerHTML = '<a class="logo" href="/" title="Globish Sales Desk">G</a>' + items.map((it) => {
       if (it.sep) return `<div class="sep" ${it.gate ? `data-gate="${it.gate}" hidden` : ''}></div>`;
-      const on = (it.k === page) || (onReq && it.k === 'qt' && !location.hash);
+      const on = (it.k === page) || (onReq && (location.hash ? it.href === '/request' + location.hash : it.k === 'qt'));
       return `<a class="ri${on ? ' on' : ''}" href="${onReq && it.k === 'catalog' ? '/catalog?return=request' : it.href}" ${onReq && it.k === 'catalog' ? 'data-keep="1"' : ''} ${it.id ? `id="${it.id}"` : ''} ${it.gate ? `data-gate="${it.gate}" hidden` : ''}>${svg(it.k)}<span>${it.label}</span>${it.badge ? `<span class="badge" id="${it.badge}" hidden></span>` : ''}</a>`;
     }).join('') + `<a class="ri m-only" href="#" id="m-more" aria-expanded="false">${svg('more')}<span>เมนู</span></a>`;
     // Phone: the bottom bar keeps 4 main items for the person's role; the rest open from "เมนู".

@@ -12,6 +12,8 @@
 /* request page extras (shared look lives in /app.css) */
 [hidden]{display:none!important}
 .tab{display:none}.tab.on{display:block}
+/* The tab named in the URL (#mine, #inv …) shows from the first paint, before the scripts run. */
+html[data-tab] .tab{display:none}html[data-tab=qt] #tab-qt,html[data-tab=inv] #tab-inv,html[data-tab=rt] #tab-rt,html[data-tab=mine] #tab-mine,html[data-tab=pend] #tab-pend{display:block}
 .fg .sub.warnbg{color:var(--warn-ink);font-weight:500}
 .svc-name{margin-top:5px;padding:6px 10px;border-radius:4px;background:var(--panel-2);font-size:13px;min-height:30px}
 .svc-name.bad{background:var(--bad-bg);color:var(--bad-ink)}.svc-name.warnbg{background:var(--primary-soft);color:var(--warn-ink)}
@@ -46,6 +48,7 @@ details.more{margin-top:8px}details.more>summary{cursor:pointer;font-size:12.5px
 <div class="ov" id="ov-load" hidden><div class="ldbox" role="status" aria-live="polite"><div class="spin"></div><b id="ld-text">กำลังดำเนินการ…</b><small id="ld-sub">กรุณารอสักครู่ อย่าปิดหน้านี้</small></div></div>
 <div class="app"><nav class="rail" id="rail"></nav><div class="main">
 <header class="top"><h1 id="page-title">ขอใบเสนอราคา (QT)</h1><div class="top-r" id="top-r"></div></header>
+<script>(function () { var t = (location.hash || '').slice(1), T = { qt: 'ขอใบเสนอราคา (QT)', inv: 'ขอใบแจ้งหนี้ (INV)', rt: 'ขอใบเสร็จ / ใบกำกับภาษี', mine: 'คำขอของฉัน', pend: 'รออนุมัติ' }; if (!T[t]) t = 'qt'; document.documentElement.setAttribute('data-tab', t); document.getElementById('page-title').textContent = T[t]; })();</script>
 <script src="/shell.js"></script>
 
 <main>
@@ -359,6 +362,7 @@ function go(tab) {
   if (tab === 'pend' && ME && !(ME.perms || []).includes('approve')) tab = 'mine';
   ['qt', 'inv', 'rt', 'mine', 'pend'].forEach((t) => { $('tab-' + t).classList.toggle('on', t === tab); $('nav-' + t).classList.toggle('on', t === tab); });
   { const mm = $('m-more'); if (mm) mm.classList.toggle('on', !!document.querySelector('#rail a.ri.on.m-more')); }
+  document.documentElement.setAttribute('data-tab', tab);
   history.replaceState(null, '', '#' + tab);
   const T = { qt: 'ขอใบเสนอราคา (QT)', inv: 'ขอใบแจ้งหนี้ (INV)', rt: 'ขอใบเสร็จ / ใบกำกับภาษี', mine: 'คำขอของฉัน', pend: 'รออนุมัติ' };
   if ($('page-title')) $('page-title').textContent = T[tab]; document.title = T[tab] + ' · Globish Sales Desk';

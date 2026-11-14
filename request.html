@@ -1107,7 +1107,7 @@ function paintNews() {
   if (!rb && $('nav-mine')) { rb = document.createElement('span'); rb.className = 'badge'; rb.id = 'mine-count'; $('nav-mine').appendChild(rb); }
   if (rb) { rb.textContent = xs.length; rb.hidden = !xs.length; }
   const btn = (t, label, i) => n(t) ? ` <button class="btn btn-o btn-sm" type="button" onclick="goNews('${t}',${i})">${label}</button>` : '';
-  $('mine-news').innerHTML = xs.length ? `<div class="msg ok" style="margin-bottom:12px">🔔 ${xs.map((x) => x.t).join('<br>')}<div style="margin-top:6px"><button class="btn btn-g btn-sm" onclick="markSeen()">รับทราบ</button>${btn('inv', 'ดูใบแจ้งหนี้', 1)}${btn('rt', 'ดูใบเสร็จ', 2)}${btn('edit', 'ดูคำขอแก้ไข', 3)}</div></div>` : '';
+  $('mine-news').innerHTML = xs.length ? `<div class="msg ok" style="margin-bottom:12px">🔔 ${xs.map((x) => x.t).join('<br>')}<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-g btn-sm" onclick="markSeen()">รับทราบ</button>${btn('inv', 'ดูใบแจ้งหนี้', 1)}${btn('rt', 'ดูใบเสร็จ', 2)}${btn('edit', 'ดูคำขอแก้ไข', 3)}</div></div>` : '';
 }
 
 async function loadAll() {

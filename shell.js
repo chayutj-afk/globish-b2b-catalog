@@ -77,6 +77,15 @@
     const u = d && d.user;
     if (!u) return null;
     const me = document.getElementById('me'); if (me) me.textContent = u.email;
+    // Signed in but no role yet: nothing works until an admin activates the account on /users.
+    if (u.role === 'pending') {
+      document.querySelectorAll('#rail a.ri, #rail .sep').forEach((el) => { el.hidden = true; });
+      const m = document.querySelector('main');
+      if (m) m.innerHTML = '<div class="card" style="margin-top:16px;max-width:680px"><h2>รอผู้ดูแลระบบเปิดสิทธิ์</h2><p class="hint" style="margin:8px 0 0;line-height:1.8">บัญชี <b>' + String(u.email).replace(/[<>&"]/g, '') + '</b> เข้าสู่ระบบแล้ว แต่ยังใช้งานไม่ได้จนกว่าผู้ดูแลระบบจะกำหนด Role ให้<br>ระบบแจ้งผู้ดูแลแล้ว เมื่อเปิดสิทธิ์เสร็จ ให้รีเฟรชหน้านี้</p><p style="margin:14px 0 0"><button class="btn btn-p" type="button" onclick="location.reload()">↻ รีเฟรช</button></p></div>';
+      document.title = 'รอเปิดสิทธิ์ · Globish Sales Desk'; const h = document.getElementById('page-title'); if (h) h.textContent = 'รอเปิดสิทธิ์';
+      window.SHELL_PENDING = true;
+      return u;
+    }
     // data-gate = a permission name (see lib/users.js PERMS); a few combined gates below.
     const P = new Set(u.perms || []);
     const extra = { op: P.has('approve'), admin: P.has('users'), mine: P.has('request') || P.has('team_view'), tools: P.has('users') || P.has('import'), tools2: P.has('users') || P.has('import') || P.has('approve') || P.has('ar_view') };

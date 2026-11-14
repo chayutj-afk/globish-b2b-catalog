@@ -5,7 +5,7 @@ const { requireUser } = require('../../lib/users');
 module.exports = async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   try {
-    res.status(200).json({ ok: true, user: await requireUser(req) });
+    res.status(200).json({ ok: true, user: await requireUser(req, { allowPending: true }) });
   } catch (e) {
     sendError(res, e);
   }

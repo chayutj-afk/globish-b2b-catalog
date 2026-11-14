@@ -28,16 +28,22 @@ test('admins are chayut.j@ and finance@ by default; everyone else starts as sale
   assert.equal(s.roleFor('someone@globish.co.th'), 'sales');
 });
 
-test('roles from the Users tab: default sales, admins fixed, only admins can change roles', async () => {
+test('roles from the Users tab: new people wait for an admin, admins fixed, only admins can change roles', async () => {
   const fs = require('fs'); const os = require('os'); const path = require('path');
   process.env.HUB_MODE = 'mock';
   process.env.HUB_MOCK_FILE = path.join(os.tmpdir(), `users-test-${process.pid}.json`);
   fs.writeFileSync(process.env.HUB_MOCK_FILE, '{}');
   const users = require('../lib/users');
   await users.touch('new.sales@globish.co.th', 'New');
-  assert.equal(await users.roleOf('new.sales@globish.co.th'), 'sales');
+  assert.equal(await users.roleOf('new.sales@globish.co.th'), 'pending');
   const admin = { email: 'finance@globish.co.th', admin: true };
-  const who = (e) => users.requireUser({ headers: { cookie: 'gc_session=' + encodeURIComponent(s.sign({ email: e, name: 'N', exp: Date.now() + 1e6 })) } });
+  const who = (e, o) => users.requireUser({ headers: { cookie: 'gc_session=' + encodeURIComponent(s.sign({ email: e, name: 'N', exp: Date.now() + 1e6 })) } }, o);
+  // Not activated: every API refuses; only /api/auth/me (allowPending) answers, with no permissions.
+  await assert.rejects(who('new.sales@globish.co.th'), (e) => e.status === 403 && /รอผู้ดูแลระบบเปิดสิทธิ์/.test(e.message));
+  await assert.rejects(who('never.seen@globish.co.th'), (e) => e.status === 403);
+  assert.deepEqual((await who('new.sales@globish.co.th', { allowPending: true })).perms, []);
+  assert.equal((await who('finance@globish.co.th')).role, 'admin');
+  await users.setRole(admin, 'new.sales@globish.co.th', { role: 'sales' }); // the admin activates the account
   assert.equal((await who('new.sales@globish.co.th')).team, 'both');
   assert.equal((await who('new.sales@globish.co.th')).catalog, true);
   await users.setRole(admin, 'new.sales@globish.co.th', { team: 'b2c' });

@@ -280,7 +280,20 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
   [s, j] = await call(ADMIN, 'PATCH', '/api/users', { action: 'add_user', email: 'new.sale@globish.co.th', name: 'New (Sale)', role: 'sales', team: 'b2b', classItems: { G014: 'B2B-S002' } }); ok(s === 200, 'admin adds a user ' + (j.error || ''));
   [s, j] = await call(ADMIN, 'PATCH', '/api/users', { action: 'add_user', email: 'new.sale@globish.co.th', name: 'New', role: 'sales', team: 'b2b' }); ok(s === 409 || s === 400, 'adding the same user twice refused ' + s);
   [s, j] = await call('new.sale@globish.co.th', 'GET', '/api/auth/me'); ok(j.user && j.user.role === 'sales' && j.user.team === 'b2b', 'pre-added user gets role/team on first visit');
-  [s, j] = await call('brand.new@globish.co.th', 'GET', '/api/requests'); ok(s === 200 && j.requests.length === 0, 'unknown company user = sales, sees nothing of others');
+  // a brand-new person: signed in, but nothing works until an admin activates the account
+  const NEWB = 'brand.new@globish.co.th';
+  [s, j] = await call(NEWB, 'GET', '/api/auth/me'); ok(s === 200 && j.user.role === 'pending' && j.user.perms.length === 0, 'new person: role pending, no permissions');
+  for (const [m, u, b] of [['GET', '/api/requests'], ['GET', '/api/invoice-requests'], ['GET', '/api/invoice-requests?view=ar'], ['GET', '/api/contacts?taxId=0105555555554'], ['GET', '/api/services'], ['GET', '/api/users'], ['POST', '/api/requests', qtBody()], ['POST', '/api/invoice-requests', { action: 'receipt' }], ['PATCH', '/api/requests', { requestId: 'x', action: 'approve' }]]) {
+    [s, j] = await call(NEWB, m, u, b); ok(s === 403, `pending user blocked: ${m} ${u} → ${s}`); }
+  { const r = await fetch('http://localhost:3950/catalog', { redirect: 'manual', headers: { Cookie: require('./lib.cjs').ck(NEWB) } }); ok(r.status === 302 && r.headers.get('location') === '/', 'pending user: catalog sends them to the waiting page'); }
+  [s, j] = await call(ACCT, 'PATCH', '/api/users', { email: NEWB, role: 'sales' }); ok(s === 403, 'accounting cannot activate (admin only)');
+  await require('../../lib/users'); // (row is made at sign-in; here the admin adds it)
+  [s, j] = await call(ADMIN, 'PATCH', '/api/users', { action: 'add_user', email: NEWB, name: 'Brand New', role: 'sales', team: 'b2c' }); ok(s === 200, 'admin activates by adding the person ' + (j.error || ''));
+  [s, j] = await call(NEWB, 'GET', '/api/requests'); ok(s === 200 && j.requests.length === 0, 'activated: can use the app, sees only own requests');
+  [s, j] = await call(ADMIN, 'PATCH', '/api/users', { email: NEWB, role: 'pending' }); ok(s === 200, 'admin can switch a person off again');
+  [s, j] = await call(NEWB, 'GET', '/api/requests'); ok(s === 403 && j.pending === true, 'switched off: blocked again');
+  [s, j] = await call(ADMIN, 'PATCH', '/api/users', { email: NEWB, role: 'sales', team: 'b2c' }); [s, j] = await call(NEWB, 'GET', '/api/auth/me'); ok(j.user.role === 'sales' && j.user.team === 'b2c', 're-activated with role + team');
+  [s, j] = await call(ADMIN, 'GET', '/api/auth/me'); ok(j.user.role === 'admin', 'fixed admin is never pending');
   [s, j] = await call(ADMIN, 'PATCH', '/api/users', { email: ADMIN, role: 'sales' }); ok(s >= 400, 'fixed admin cannot be demoted ' + s);
   [s, j] = await call(ADMIN, 'PATCH', '/api/users', { email: BEE, role: 'superuser' }); ok(s === 400, 'unknown role refused');
   [s, j] = await call(ADMIN, 'GET', '/api/users?view=health'); ok(s === 200 && Array.isArray(j.items || (j.health && j.health.items)), 'health view loads');

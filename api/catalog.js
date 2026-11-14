@@ -20,6 +20,7 @@ module.exports = async function handler(req, res) {
     let user;
     try { user = await requireUser(req); } catch (e) {
       if (e.status === 401) { res.statusCode = 302; res.setHeader('Location', '/signin.html?next=/catalog'); return res.end(); }
+      if (e.status === 403) { res.statusCode = 302; res.setHeader('Location', '/'); return res.end(); } // account not activated yet: the home page says so
       throw e;
     }
     res.setHeader('Content-Type', 'text/html; charset=utf-8');

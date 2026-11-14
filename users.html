@@ -20,8 +20,11 @@ td.who{white-space:normal}
 .chip{display:inline-block;padding:1px 9px;border-radius:9999px;font-size:11.5px;background:var(--primary-soft);color:var(--warn-ink);margin:2px 2px 2px 0;white-space:nowrap}
 .chip.warn{background:#fdecea;color:#b42318}
 .pill.soft{background:var(--primary-soft);color:var(--warn-ink)}
-.fl{display:block;margin:0 0 12px;font-size:13px;color:var(--head)}.fl .sel,.fl select{display:block;width:100%;margin-top:4px}.fl input{display:block;width:100%;margin-top:4px;box-sizing:border-box}
-.ck{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:13.5px;color:var(--ink)}
+.fl{display:block;margin:0 0 12px;font-size:13px;color:var(--head)}.fl .sel,.fl select{display:block;width:100%;margin-top:4px}.fl input:not([type=checkbox]):not([type=radio]){display:block;width:100%;margin-top:4px;box-sizing:border-box}
+.ck{display:flex;gap:10px;align-items:flex-start;padding:5px 0;font-size:13.5px;line-height:1.5;color:var(--ink);cursor:pointer}
+.ck input{flex:none;width:16px;height:16px;margin:2px 0 0;accent-color:var(--primary)}
+.saved{display:inline-block;margin-right:14px;white-space:nowrap;color:var(--ok-ink);font-size:12px}
+td.act{text-align:right;white-space:nowrap}
 .u-sum{background:var(--panel2,var(--panel));border:1px solid var(--line);border-radius:6px;padding:10px 12px;font-size:13px;line-height:1.7;margin-top:4px}
 .u-conf{padding:10px 12px;border:1px solid var(--primary);border-radius:6px;color:var(--ink);font-size:13px;line-height:1.7}
 .sub{color:var(--muted);font-size:13px;line-height:1.7;margin:0 0 6px}
@@ -69,7 +72,7 @@ main{max-width:1240px}
 <header class="top"><h1 id="page-title">จัดการสิทธิ์ผู้ใช้</h1><div class="top-r" id="top-r"></div></header>
 <script src="/shell.js"></script>
 <main>
-  <p class="sub">ทุกคนที่เคยเข้าสู่ระบบด้วย @globish.co.th อยู่ในรายการนี้ โดยเริ่มเป็น Sales ทีม Both · กด <b>⚙ ตั้งค่า</b> เพื่อเลือก Role และติ๊กสิทธิ์เพิ่มให้คนที่ทำงานนอก role · ทีม B2C ไม่เห็น B2B Catalog · หัวหน้าเซลเห็นคำขอของทีมตัวเอง · มีผลภายใน 1 นาที · finance@ และ chayut.j@ เป็น Admin เสมอ</p>
+  <p class="sub">ทุกคนที่เคยเข้าสู่ระบบด้วย @globish.co.th อยู่ในรายการนี้ · คนใหม่จะ <b>รอเปิดสิทธิ์</b> และยังใช้ระบบไม่ได้ จนกว่า Admin จะกด <b>✓ เปิดสิทธิ์</b> เลือก Role และทีมให้ (หรือเพิ่มไว้ล่วงหน้าด้วย ＋ เพิ่มผู้ใช้ใหม่) · กด <b>⚙ ตั้งค่า</b> เพื่อเปลี่ยน Role และติ๊กสิทธิ์เพิ่มให้คนที่ทำงานนอก role · ทีม B2C ไม่เห็น B2B Catalog · หัวหน้าเซลเห็นคำขอของทีมตัวเอง · มีผลภายใน 1 นาที · finance@ และ chayut.j@ เป็น Admin เสมอ</p>
   <div class="card tbl" id="matrix"></div>
   <div class="card" style="padding:12px 16px;margin:12px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>แจ้งเตือน Google Chat:</b> <span id="chat-st">…</span><button class="btn btn-g btn-sm" type="button" onclick="testChat()">ส่งข้อความทดสอบ</button><span id="chat-msg" class="small"></span></div>
   <div class="card" style="padding:12px 16px;margin:12px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>เชื่อมต่อ PEAK API:</b> <input id="peak-tax" placeholder="เลขภาษีลูกค้าที่ใช้ทดสอบ (ไม่บังคับ)" inputmode="numeric" maxlength="17" style="width:240px"><button class="btn btn-g btn-sm" type="button" onclick="testPeak()">ทดสอบเชื่อมต่อ (อ่านอย่างเดียว)</button><span id="peak-msg" class="small" style="white-space:pre-line"></span></div>
@@ -98,11 +101,12 @@ async function api(url, opts = {}) {
   if (!r.ok || !d.ok) throw new Error(d.error || ('HTTP ' + r.status));
   return d;
 }
-const roleOf = (id) => ROLES.find((r) => r.id === id) || { id, label: id, perms: [] };
+const PENDING = { id: 'pending', label: 'รอเปิดสิทธิ์ (ใช้ระบบไม่ได้)', perms: [] };
+const roleOf = (id) => ROLES.find((r) => r.id === id) || (id === 'pending' ? PENDING : { id, label: id, perms: [] });
 function renderMatrix() {
   const keys = Object.keys(PERMS);
   $('matrix').innerHTML = `<table><thead><tr><th>สิทธิ์ / เมนู</th>${ROLES.map((r) => `<th style="text-align:center">${esc(r.label)}</th>`).join('')}</tr></thead><tbody>${keys.map((k) => `<tr><td>${esc(PERMS[k])}</td>${ROLES.map((r) => `<td style="text-align:center">${r.perms.includes(k) ? '<span class="ok" style="font-size:15px">✓</span>' : '<span class="small">–</span>'}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
-  $('fr').innerHTML = '<option value="">ทุก role</option>' + ROLES.map((r) => `<option value="${r.id}">${esc(r.label)}</option>`).join('');
+  $('fr').innerHTML = '<option value="">ทุก role</option><option value="pending">รอเปิดสิทธิ์</option>' + ROLES.map((r) => `<option value="${r.id}">${esc(r.label)}</option>`).join('');
 }
 const permList = (ps) => ps.map((p) => esc(PERMS[p] || p)).join(' · ') || '—';
 function render() {
@@ -115,11 +119,11 @@ function render() {
     return `<tr>
     <td class="who"><b>${esc(u.name)}</b><br><span class="small">${e}</span></td>
     <td class="small">${esc(u.lastLogin) || '<span class="chip">ยังไม่เคยเข้าระบบ</span>'}</td>
-    <td>${u.fixedAdmin ? '<span class="pill">Admin (ผู้ดูแลหลัก)</span>' : `<span class="pill ${u.role === 'admin' ? '' : 'soft'}">${esc(roleOf(u.role).label)}</span>`}</td>
+    <td>${u.fixedAdmin ? '<span class="pill">Admin (ผู้ดูแลหลัก)</span>' : u.role === 'pending' ? '<span class="chip warn">รอเปิดสิทธิ์ · ยังใช้ระบบไม่ได้</span>' : `<span class="pill ${u.role === 'admin' ? '' : 'soft'}">${esc(roleOf(u.role).label)}</span>`}</td>
     <td>${all ? '<span class="small">ทั้งหมด</span>' : esc(TEAM[u.team] || u.team)}</td>
     <td class="who">${all ? '<span class="small">ทุกสิทธิ์</span>' : extra.length ? extra.map((p) => `<span class="chip">${esc(PERMS[p] || p)}</span>`).join(' ') : '<span class="small">—</span>'}</td>
     <td class="small">${esc(perf) || (needsPerf(u) ? '<span class="chip warn">ยังไม่ผูก Sales Performance</span>' : '—')}</td>
-    <td style="text-align:right" id="m-${e}">${u.fixedAdmin ? '<span class="small">ล็อก</span>' : `<button class="btn btn-o btn-sm" type="button" onclick="openUser('${e}')">⚙ ตั้งค่า</button>`}</td></tr>`;
+    <td class="act" id="m-${e}">${u.fixedAdmin ? '<span class="small">ล็อก</span>' : u.role === 'pending' ? `<button class="btn btn-p btn-sm" type="button" onclick="openUser('${e}')">✓ เปิดสิทธิ์</button>` : `<button class="btn btn-o btn-sm" type="button" onclick="openUser('${e}')">⚙ ตั้งค่า</button>`}</td></tr>`;
   }).join('') : '<tr><td colspan="7" class="small">ไม่พบผู้ใช้</td></tr>';
 }
 const needsPerf = (u) => ['sales', 'lead'].includes(u.role) && sellerGroups().some((g) => !(u.classItems || {})[g.code]);
@@ -185,15 +189,17 @@ async function openUser(email) {
   $('m-title').textContent = `ตั้งค่าสิทธิ์ · ${u.name}`; $('m-ok').textContent = 'ตรวจและบันทึก';
   $('m-cancel').textContent = 'ยกเลิก';
   $('m-body').innerHTML = `<p class="small" style="margin-top:0">${esc(u.email)}</p><div id="u-conf-w"></div><div id="u-form">
-    <label class="fl">Role<select id="u-role" class="sel">${ROLES.map((r) => opt(r.id, r.label, u.role)).join('')}</select></label>
+    ${u.role === 'pending' ? '<p class="u-conf" style="margin:0 0 12px">คนนี้เข้าสู่ระบบแล้วแต่ยังใช้งานไม่ได้ เลือก Role และทีม แล้วบันทึกเพื่อเปิดสิทธิ์</p>' : ''}
+    <label class="fl">Role<select id="u-role" class="sel">${ROLES.map((r) => opt(r.id, r.label, u.role === 'pending' ? 'sales' : u.role)).join('')}${opt('pending', 'ปิดสิทธิ์ (ใช้ระบบไม่ได้)', u.role === 'pending' ? '' : u.role)}</select></label>
     <label class="fl" id="u-team-w">ทีม<select id="u-team" class="sel">${Object.entries(TEAM).map(([v, t]) => opt(v, t, u.team)).join('')}</select></label>
     <div class="fl" id="u-extra-w">สิทธิ์เพิ่ม (นอก role)<div id="u-extra"></div></div>
     ${clsFields(u, false)}
     <div class="u-sum" id="u-sum"></div></div><div class="err" id="u-err"></div>`;
   let extra = new Set(u.extra || []);
   const paint = () => {
-    const role = $('u-role').value, base = roleOf(role).perms, admin = role === 'admin';
-    $('u-team-w').hidden = admin; $('u-extra-w').hidden = admin;
+    const role = $('u-role').value, base = roleOf(role).perms, admin = role === 'admin', off = role === 'pending';
+    $('u-team-w').hidden = admin || off; $('u-extra-w').hidden = admin || off; document.querySelectorAll('#u-form .u-cls').forEach((el) => { const w = el.closest('.fl'); if (w) w.hidden = off; });
+    if (off) { $('u-sum').innerHTML = '<b>หลังบันทึก</b><br>คนนี้จะเข้าสู่ระบบได้ แต่ใช้งานอะไรไม่ได้จนกว่าจะเปิดสิทธิ์ใหม่'; return; }
     $('u-extra').innerHTML = Object.keys(PERMS).filter((p) => !base.includes(p) && p !== 'users').map((p) => `<label class="ck"><input type="checkbox" value="${p}"${extra.has(p) ? ' checked' : ''}> ${esc(PERMS[p])}</label>`).join('') || '<span class="small">role นี้มีครบแล้ว</span>';
     $('u-extra').querySelectorAll('input').forEach((x) => { x.onchange = () => { x.checked ? extra.add(x.value) : extra.delete(x.value); paint(); }; });
     const eff = admin ? Object.keys(PERMS) : [...new Set([...base, ...[...extra].filter((p) => !base.includes(p))])];
@@ -206,8 +212,9 @@ async function openUser(email) {
   $('m-cancel').onclick = () => ($('m-ok').dataset.step ? back() : close());
   $('m-ok').onclick = async () => {
     const role = $('u-role').value, admin = role === 'admin', base = roleOf(role).perms;
-    const next = { role, team: admin ? u.team : $('u-team').value, extra: admin ? [] : [...extra].filter((p) => !base.includes(p)).sort() };
-    const cls = {}; document.querySelectorAll('.u-cls').forEach((el) => { if (el.value !== ((u.classItems || {})[el.dataset.g] || '')) cls[el.dataset.g] = el.value; });
+    const off = role === 'pending';
+    const next = { role, team: admin || off ? u.team : $('u-team').value, extra: admin || off ? [] : [...extra].filter((p) => !base.includes(p)).sort() };
+    const cls = {}; if (!off) document.querySelectorAll('.u-cls').forEach((el) => { if (el.value !== ((u.classItems || {})[el.dataset.g] || '')) cls[el.dataset.g] = el.value; });
     const curExtra = (u.extra || []).filter((p) => !roleOf(u.role).perms.includes(p)).sort();
     const changes = [];
     if (next.role !== u.role) changes.push(`Role: ${roleOf(u.role).label} → <b>${esc(roleOf(role).label)}</b>`);
@@ -226,7 +233,7 @@ async function openUser(email) {
     if (next.team !== u.team) body.team = next.team;
     if (next.extra.join() !== curExtra.join()) body.extra = next.extra;
     if (Object.keys(cls).length) body.classItems = cls;
-    try { await api('/api/users', { method: 'PATCH', body: JSON.stringify({ email, ...body }) }); close(); await load(); const m = document.getElementById('m-' + email); if (m) m.insertAdjacentHTML('afterbegin', '<span class="ok">✓ บันทึกแล้ว </span>'); }
+    try { await api('/api/users', { method: 'PATCH', body: JSON.stringify({ email, ...body }) }); close(); await load(); const m = document.getElementById('m-' + email); if (m) m.insertAdjacentHTML('afterbegin', '<span class="saved">✓ บันทึกแล้ว</span>'); }
     catch (e) { $('u-err').textContent = e.message; }
     finally { $('m-ok').disabled = false; }
   };
@@ -317,7 +324,7 @@ async function load() {
   $('chat-st').textContent = { ok: '✓ ตั้งค่าแล้ว', missing: '✗ ยังไม่ได้ตั้ง GCHAT_WEBHOOK_URL ใน Vercel (ของ environment นี้)', invalid: '✗ GCHAT_WEBHOOK_URL ไม่ใช่ลิงก์ webhook ของ Google Chat' }[d.chat] || d.chat;
   CLASSES = d.classes || { groups: [], segments: [] }; ROLES = d.roles || []; PERMS = d.perms || {}; renderClasses();
   const order = ROLES.map((r) => r.id);
-  USERS = d.users.sort((a, b) => (b.fixedAdmin - a.fixedAdmin) || (order.indexOf(b.role) - order.indexOf(a.role)) || String(a.name).localeCompare(String(b.name)));
+  USERS = d.users.sort((a, b) => ((b.role === 'pending') - (a.role === 'pending')) || (b.fixedAdmin - a.fixedAdmin) || (order.indexOf(b.role) - order.indexOf(a.role)) || String(a.name).localeCompare(String(b.name)));
   renderMatrix(); render();
 }
 load().catch((e) => { const r = $('rows'); if (r) r.innerHTML = `<tr><td colspan="7" class="err">${esc(e.message)}</td></tr>`; });

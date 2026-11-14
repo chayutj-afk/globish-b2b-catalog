@@ -158,12 +158,12 @@ async function load() {
   renderNotices(); if (window.refreshPayBadge) window.refreshPayBadge();
   const s = D.summary;
   $('b-check').hidden = !s.legacyCheckCount;
-  if (s.legacyCheckCount) $('f-hint').innerHTML = `"ต้องตาม" = เกินกำหนด หรือครบกำหนดใน 7 วัน หรือถึงวันนัดติดตาม · <b>ข้อมูลเก่ารอตรวจ ${s.legacyCheckCount} ใบ (${fmt0(s.legacyCheck)} บาท)</b> คือ INV ปี 2023–2025 ที่ชีท Debt ยังเป็น "รอชำระ" ไม่นับในยอดค้างรับจนกว่าจะตรวจกับ PEAK`;
+  if (s.legacyCheckCount) $('f-hint').innerHTML = `"ต้องตาม" = เกินกำหนด หรือครบกำหนดใน 7 วัน หรือถึงวันนัดติดตาม · <b>ข้อมูลเก่ารอตรวจ ${s.legacyCheckCount} ใบ (${fmt0(s.legacyCheck)} บาท)</b> คือ INV ก่อนปี 2026 ที่ชีท Debt ยังเป็น "รอชำระ" และ INV ปี 2026 ที่มีใน PEAK แต่ไม่มีในชีท Debt ไม่นับในยอดค้างรับจนกว่าจะตรวจ (กด "↻ อัปเดตจาก PEAK" หรือบันทึกรับเงิน / ยกเลิก)`;
   const segs = [...new Set(D.invoices.map((r) => r.segment).filter(Boolean))].sort();
   const sales = [...new Set(D.invoices.map((r) => r.salesName || r.salesEmail).filter(Boolean))].sort();
   const keepS = $('f-seg').value, keepP = $('f-sales').value;
   $('f-seg').innerHTML = '<option value="">ทุกกลุ่ม</option>' + segs.map((x) => `<option>${esc(x)}</option>`).join(''); $('f-seg').value = keepS;
-  $('f-sales').innerHTML = '<option value="">ทุกเซล</option>' + sales.map((x) => `<option>${esc(x)}</option>`).join(''); $('f-sales').value = keepP;
+  $('f-sales').innerHTML = '<option value="">ทุกเซล</option>' + sales.map((x) => `<option>${esc(x)}</option>`).join('') + (D.invoices.some((r) => !(r.salesName || r.salesEmail)) ? '<option value="__none">(ไม่มีเจ้าของ)</option>' : ''); $('f-sales').value = keepP;
   render(); renderSum();
 }
 
@@ -193,7 +193,7 @@ function rowsFor(only) {
   const seg = $('f-seg').value, sal = $('f-sales').value, q = $('f-q').value.trim().toLowerCase();
   let xs = D.invoices.filter((r) => {
     if (seg && r.segment !== seg) return false;
-    if (sal && (r.salesName || r.salesEmail) !== sal) return false;
+    if (sal && (sal === '__none' ? !!(r.salesName || r.salesEmail) : (r.salesName || r.salesEmail) !== sal)) return false;
     if (q && ![r.company, r.ivNo, r.qtNo, r.taxId, r.rtNo].some((v) => String(v || '').toLowerCase().includes(q))) return false;
     if (mode === 'all') return true;
     if (mode === 'check') return r.legacyCheck;

@@ -272,10 +272,11 @@ async function qtLive(req, res, user) {
   const q = peak.quotationView(raw);
   if (!q) throw bad('ไม่พบ QT นี้ใน PEAK', 404);
   // Edited in PEAK without the app knowing: bring the request (totals, lines) up to date now.
-  const sigBefore = row.qtSig;
+  const sigBefore = row.qtSig, before = [row.totalPreVat, row.totalInclVat, row.segment].join('|');
   await require('../lib/qtlines').refreshRequest(row, raw).catch(() => null);
   await require('../lib/peaksync').syncQuotationClasses(row, raw).catch(() => false);
-  res.status(200).json({ ok: true, qt: q, editedAt: row.qtEditedAt || '', changed: !!sigBefore && row.qtSig !== sigBefore });
+  const moved = before !== [row.totalPreVat, row.totalInclVat, row.segment].join('|');
+  res.status(200).json({ ok: true, qt: q, editedAt: row.qtEditedAt || '', changed: (!!sigBefore && row.qtSig !== sigBefore) || moved });
 }
 
 async function update(req, res, user) {

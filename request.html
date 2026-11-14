@@ -1189,6 +1189,11 @@ function fillWho() {
   sel.value = [...sel.options].some((o) => o.value === cur) ? cur : '';
 }
 const whoOk = (x) => { const w = $('mine-who') && $('mine-who').value; return !w || ownerKey(x) === w; };
+// A step for the salesperson, seen by someone else (accounting, a lead): name whose turn it is.
+function forMe(nx, row) {
+  if (!nx.you || (ME && row.requestedBy && row.requestedBy.toLowerCase() === ME.email)) return nx;
+  return { ...nx, you: false, who: !row.requestedBy ? 'ยังไม่มีเซลเจ้าของ' : row.salesName && row.salesName !== 'ลาออก' ? row.salesName : 'เซล' };
+}
 function renderMine() {
   const op = canDo('approve') || canDo('team_view');
   const replaced = new Set(REQS.map((q) => q.replaces).filter(Boolean));
@@ -1207,12 +1212,12 @@ function renderMine() {
     const heroes = (q.lines || []).filter((l) => l.role !== 'supplement').map((l) => `${esc(l.packageId === 'CUSTOM' ? 'Customized' : l.packageId === 'SURCHARGE' ? 'ค่าเพิ่ม' : l.packageId)} × ${esc(l.qty)}`).join(', ');
     const { total, done, lbl } = qtAmt(q);
     const mineIvs = IVS.filter((v) => v.requestId === q.requestId);
-    const nx = nextStep(q, mineIvs, replaced);
+    const nx = forMe(nextStep(q, mineIvs, replaced), q);
     const actions = (q.status === 'rejected' && ME && q.requestedBy === ME.email && !replaced.has(q.requestId) ? `<button class="btn btn-p btn-sm" onclick="rebuildQT('${esc(q.requestId)}')">↻ สร้างคำขอใหม่จากข้อมูลเดิม</button>` : '')
       + (q.peakQtNo && QT_LIVE.includes(q.status) && !pendEdit('QT', q.peakQtNo) ? `${qtLeft(q) > 0.01 ? `<button class="btn btn-o btn-sm" onclick="startInvFor('${esc(q.requestId)}')">🧾 ขอ INV จาก QT นี้</button>` : ''}${mineIvs.some((v) => !['rejected', 'iv_void'].includes(v.status)) ? '' : `<button class="btn btn-g btn-sm" onclick="askEdit('QT','${esc(q.peakQtNo)}','${esc(q.requestId)}')">✏️ ขอแก้ไข QT</button>`}` : '');
     return `<div class="list-row">
       <div class="list-head"><div>${q.peakQtNo ? `<span class="list-id">QT ${qtLink(q)}</span>` : '<span class="small">ยังไม่มีเลข QT</span>'} · ${esc(q.company)}${ownerTag(q)}</div>${st(QT_ST, q.status)}</div>
-      <div class="next ${nx.you ? 'you' : 'wait'}"><b>${nx.you ? 'ถัดไป (คุณ):' : 'ถัดไป:'}</b> ${nx.t}</div>
+      <div class="next ${nx.you ? 'you' : 'wait'}"><b>${nx.you ? 'ถัดไป (คุณ):' : nx.who ? `ถัดไป (${esc(nx.who)}):` : 'ถัดไป:'}</b> ${nx.t}</div>
       <div class="list-sub">ยอด${lbl} <b>${fmt(total)}</b>${QT_LIVE.includes(q.status) ? ` · ขอ INV แล้ว ${fmt(done)} · ${total - done < -0.01 ? `<b class="neg">ขอเกินยอด QT ${fmt(done - total)}</b>` : `คงเหลือ <b>${fmt(total - done)}</b>`}` : ''}</div>
       ${['rejected', 'needs_review'].includes(q.status) && q.peakNote && !replaced.has(q.requestId) ? `<div class="pc-note err" style="margin-top:8px">เหตุผล: ${esc(q.peakNote)}</div>` : ''}
       ${q.qtEditedAt && QT_LIVE.includes(q.status) ? `<div class="pc-note warn" style="margin-top:8px">✏️ QT นี้ถูกแก้ไขใน PEAK เมื่อ ${esc(q.qtEditedAt)} ไฟล์ที่เปิดจากลิงก์อาจยังเป็นเวอร์ชันเก่า จนกว่าฝ่ายบัญชีจะกดรีเฟรชใน PEAK กด "ดู QT ล่าสุดจาก PEAK" เพื่อดูข้อมูลจริงก่อนส่งลูกค้า</div>` : ''}
@@ -1229,7 +1234,7 @@ function renderMine() {
   const shownI = IVS.filter(whoOk);
   $('mine-inv').innerHTML = shownI.length ? shownI.map((v) => {
     const canOrig = v.originalStatus !== 'sent';
-    const nx = nextIv(v);
+    const nx = forMe(nextIv(v), v);
     const origBtns = (canOrig && v.originalStatus !== 'requested' ? `<button class="btn btn-g btn-sm" onclick="openOrig('${esc(v.ivRequestId)}')">📮 ลูกค้าขอตัวจริง</button>` : '')
       + (canOrig && v.originalStatus !== 'not_needed' ? `<button class="btn btn-g btn-sm" onclick="setOrig('${esc(v.ivRequestId)}','no')">ไม่ต้องส่งตัวจริง</button>` : '');
     const acts = (canPayNotice(v) ? `<button class="btn btn-o btn-sm" onclick="openPayNotice('${esc(v.ivRequestId)}')">💰 แจ้งบัญชีว่าลูกค้าจ่ายแล้ว</button>` : '')
@@ -1237,7 +1242,7 @@ function renderMine() {
       + (v.peakIvNo && !pendEdit('INV', v.peakIvNo) && v.status === 'iv_issued' && !(v.ar && (v.ar.rtNo || v.ar.paidDate)) && !RTS.some((r) => String(r.refDoc || '').toUpperCase() === String(v.peakIvNo).toUpperCase() && !['rejected', 'rt_void'].includes(r.status)) ? `<button class="btn btn-g btn-sm" onclick="askEdit('INV','${esc(v.peakIvNo)}','${esc(v.ivRequestId)}')">✏️ ขอแก้ไข INV</button>` : '');
     return `<div class="list-row" id="row-${esc(v.ivRequestId)}">
       <div class="list-head"><div>${v.peakIvNo ? `<span class="list-id">INV ${docLink(v.peakIvNo, v.peakDocLink)}</span>` : '<span class="small">ยังไม่มีเลข INV</span>'} · ${esc(v.company)}${v.billToRelation ? ` <span class="small">(${esc(v.billToRelation)})</span>` : ''}${ownerTag(v)}</div><div>${st(IV_ST, v.status)} ${payChip(v)}</div></div>
-      <div class="next ${nx.you ? 'you' : 'wait'}"><b>${nx.you ? 'ถัดไป (คุณ):' : 'ถัดไป:'}</b> ${nx.t}</div>
+      <div class="next ${nx.you ? 'you' : 'wait'}"><b>${nx.you ? 'ถัดไป (คุณ):' : nx.who ? `ถัดไป (${esc(nx.who)}):` : 'ถัดไป:'}</b> ${nx.t}</div>
       <div class="list-sub">ยอด${ivAmt(v).lbl} <b>${fmt(ivAmt(v).amt)}</b>${ivAmt(v).sub ? ` <span class="small">(${ivAmt(v).sub})</span>` : ''}${v.installment ? ' · ' + esc(v.installment) : ''} · จาก QT ${esc(v.qtNo)}</div>
       ${v.status === 'rejected' && v.accountNote ? `<div class="pc-note err" style="margin-top:8px">เหตุผล: ${esc(v.accountNote)}</div>` : ''}
       ${v.peakIvNo && pendEdit('INV', v.peakIvNo) ? editNote(pendEdit('INV', v.peakIvNo)) : ''}
@@ -1343,14 +1348,14 @@ function alertMsg(t, ok) { ask({ title: ok ? 'เรียบร้อย' : '�
 function renderMineMore() {
   const op = canDo('approve') || canDo('team_view');
   const shownR = RTS.filter(whoOk), shownE = EDITS.filter(whoOk);
-  $('mine-rt').innerHTML = shownR.length ? shownR.map((r) => { const nx = nextRt(r); return `<div class="list-row" id="row-${esc(r.rtRequestId)}"><div class="list-head"><div>${r.peakRtNo ? `<span class="list-id">ใบเสร็จ ${docLink(r.peakRtNo, r.peakDocLink)}</span>` : '<span class="small">ยังไม่มีเลขใบเสร็จ</span>'} · ${esc(r.billName)}${ownerTag(r)}</div><div>${st(RT_ST, r.status)}${r.sentStatus === 'waiting' && r.status === 'issued' ? ' <span class="st blue">รอส่งตัวจริง</span>' : r.sentStatus === 'sent' ? ' <span class="st green">ส่งแล้ว</span>' : ''}</div></div>
-    <div class="next ${nx.you ? 'you' : 'wait'}"><b>${nx.you ? 'ถัดไป (คุณ):' : 'ถัดไป:'}</b> ${nx.t}</div>
+  $('mine-rt').innerHTML = shownR.length ? shownR.map((r) => { const nx = forMe(nextRt(r), r); return `<div class="list-row" id="row-${esc(r.rtRequestId)}"><div class="list-head"><div>${r.peakRtNo ? `<span class="list-id">ใบเสร็จ ${docLink(r.peakRtNo, r.peakDocLink)}</span>` : '<span class="small">ยังไม่มีเลขใบเสร็จ</span>'} · ${esc(r.billName)}${ownerTag(r)}</div><div>${st(RT_ST, r.status)}${r.sentStatus === 'waiting' && r.status === 'issued' ? ' <span class="st blue">รอส่งตัวจริง</span>' : r.sentStatus === 'sent' ? ' <span class="st green">ส่งแล้ว</span>' : ''}</div></div>
+    <div class="next ${nx.you ? 'you' : 'wait'}"><b>${nx.you ? 'ถัดไป (คุณ):' : nx.who ? `ถัดไป (${esc(nx.who)}):` : 'ถัดไป:'}</b> ${nx.t}</div>
     <div class="list-sub">${fmt(toNum(r.price) - toNum(r.discount))} บาท · ${esc(r.packages)} ${esc(r.whStudent)}</div>
     ${r.status === 'rejected' && r.accountNote ? `<div class="pc-note err" style="margin-top:8px">เหตุผล: ${esc(r.accountNote)}</div>` : ''}
     <details class="more"><summary>รายละเอียด</summary><div class="list-sub">${esc(r.rtRequestId)} · ${esc(r.createdAt)} · ${esc(r.segment)}${op ? ' · ' + esc(r.salesName) : ''} · ส่งทาง ${esc(r.deliveryChannel)}${r.trackingNo ? ' · เลขพัสดุ ' + esc(r.trackingNo) : ''}${r.accountNote && r.status !== 'rejected' ? `<br><span class="small">ฝ่ายบัญชี: ${esc(r.accountNote)}</span>` : ''}</div></details>
 </div>`; }).join('') : '<div class="empty">ยังไม่มีคำขอใบเสร็จ</div>';
-  $('mine-edit').innerHTML = shownE.length ? shownE.map((e) => { const nx = nextEdit(e); return `<div class="list-row"><div class="list-head"><div><span class="list-id">ขอแก้ ${esc(e.docType)} ${esc(e.docNo)}</span> · ${esc(e.company)}${ownerTag(e)}</div>${st(ED_ST, e.status)}</div>
-    <div class="next ${nx.you ? 'you' : 'wait'}"><b>${nx.you ? 'ถัดไป (คุณ):' : 'ถัดไป:'}</b> ${nx.t}</div>
+  $('mine-edit').innerHTML = shownE.length ? shownE.map((e) => { const nx = forMe(nextEdit(e), e); return `<div class="list-row"><div class="list-head"><div><span class="list-id">ขอแก้ ${esc(e.docType)} ${esc(e.docNo)}</span> · ${esc(e.company)}${ownerTag(e)}</div>${st(ED_ST, e.status)}</div>
+    <div class="next ${nx.you ? 'you' : 'wait'}"><b>${nx.you ? 'ถัดไป (คุณ):' : nx.who ? `ถัดไป (${esc(nx.who)}):` : 'ถัดไป:'}</b> ${nx.t}</div>
     <div class="list-sub">ขอแก้: ${esc(e.detail).replace(/\n/g, '<br>')}</div>
     ${e.status === 'rejected' && e.accountNote ? `<div class="pc-note err" style="margin-top:8px">เหตุผล: ${esc(e.accountNote)}</div>` : ''}
     <details class="more"><summary>รายละเอียด</summary><div class="list-sub">${esc(e.editId)} · ${esc(e.createdAt)}${op ? ' · ' + esc(e.salesName) : ''}${e.accountNote && e.status !== 'rejected' ? `<br><span class="small">ฝ่ายบัญชี: ${esc(e.accountNote)}</span>` : ''}</div></details></div>`; }).join('') : '<div class="empty">ยังไม่มีคำขอแก้ไข</div>';

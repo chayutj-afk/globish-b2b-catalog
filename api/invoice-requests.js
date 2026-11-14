@@ -1118,7 +1118,7 @@ async function list(req, res, user) {
   const out = rows
     .filter((r) => sees(r.requestedBy))
     .reverse()
-    .slice(0, 100)
+    .slice(0, can(user, 'approve') || can(user, 'team_view') ? 1000 : 300)
     .map(({ _row, ...r0 }) => {
       const n = lastNotice.get(r0.ivRequestId);
       const r = n ? { ...r0, payNotice: { noticeId: n.noticeId, status: n.status, source: n.source, paidDate: n.paidDate, amount: n.amount, paymentMethod: n.paymentMethod, slipLink: n.slipLink, deliveryChannel: n.deliveryChannel, email: n.email, deliveryAddress: n.deliveryAddress, accountNote: n.accountNote, salesName: n.salesName, updatedAt: n.updatedAt } } : r0;

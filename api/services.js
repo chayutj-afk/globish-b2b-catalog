@@ -6,27 +6,13 @@
 const { sendError } = require('../lib/session');
 const { requireUser } = require('../lib/users');
 const hub = require('../lib/hub');
-const { describeWh, describeKeyHS, heroName, fullServiceName } = require('../lib/pricing');
-
-let cache = null; // { at, map } per instance, 5 min
-async function services() {
-  if (cache && Date.now() - cache.at < 300e3) return cache.map;
-  cache = { at: Date.now(), map: await hub.readServices() };
-  return cache.map;
-}
+const { describeWh, describeKeyHS, heroName } = require('../lib/pricing');
 
 let whCache = null; // { at, map } per instance, 5 min
 async function whPackages() {
   if (whCache && Date.now() - whCache.at < 300e3) return whCache.map;
   whCache = { at: Date.now(), map: new Map((await hub.readTable('WHPackages')).map((x) => [String(x.id), x])) };
   return whCache.map;
-}
-
-function lookup(map, code) {
-  const c = String(code || '').trim().toUpperCase();
-  const s = map.get(c);
-  if (!s) return { found: false, code: c };
-  return { found: true, code: s.code, name: s.name, group: s.group, inactive: s.proposal.startsWith('ปิดใช้งาน') };
 }
 
 module.exports = async function handler(req, res) {
@@ -46,32 +32,23 @@ module.exports = async function handler(req, res) {
       const t = (await require('../lib/types').list()).find((x) => x.code === sp.get('type'));
       if (!t || !t.svcGroups.length) return res.status(200).json({ ok: true, groups: [] });
       const peak = require('../lib/peak');
-      if (peak.mode() !== 'off') {
-        try { return res.status(200).json({ ok: true, source: 'peak', groups: await peak.servicesForGroups(t.svcGroups) }); }
-        catch (e) { console.error('PEAK services failed', e.message); }
-      }
-      // PEAK off: the old service list (sheet), same rules.
-      const { inGroup } = require('../lib/types');
-      const all = [...(await services()).values()];
-      return res.status(200).json({ ok: true, source: 'sheet', groups: t.svcGroups.map((g) => ({ label: g.label, services: all.filter((x) => inGroup(g, x)).map((x) => ({ code: x.code, name: x.name, description: '' })) })) });
+      if (peak.mode() === 'off') return res.status(503).json({ ok: false, error: 'ยังไม่ได้เปิดการเชื่อมต่อ PEAK API' });
+      return res.status(200).json({ ok: true, source: 'peak', groups: await peak.servicesForGroups(t.svcGroups) });
     }
     const code = new URL(req.url, 'http://x').searchParams.get('code') || '';
     if (!/^[A-Za-z0-9_-]{1,40}$/.test(code)) return res.status(400).json({ ok: false, error: 'รหัสไม่ถูกต้อง' });
     res.setHeader('Cache-Control', 'no-store');
-    // PEAK API on: the code is checked in PEAK itself (the sheet list is only the fallback).
+    // The code is checked in PEAK itself; the name always comes from PEAK.
     const peak = require('../lib/peak');
-    let out = null;
-    if (peak.mode() !== 'off') {
-      try { const s2 = await peak.getServiceByCode(code); out = s2 ? { found: true, code: s2.code, name: s2.name, inactive: false, source: 'peak' } : { found: false, code: code.toUpperCase(), source: 'peak' }; }
-      catch (e) { console.error('PEAK service lookup failed', e.message); }
-    }
-    if (!out) out = lookup(await services(), code);
+    if (peak.mode() === 'off') return res.status(503).json({ ok: false, error: 'ยังไม่ได้เปิดการเชื่อมต่อ PEAK API' });
+    const s2 = await peak.getServiceByCode(code);
+    const out = s2 ? { found: true, code: s2.code, name: s2.name, inactive: false, source: 'peak' } : { found: false, code: code.toUpperCase(), source: 'peak' };
     // Preview of the line text the QT will carry (from the WHPackages tab) so sales see it before sending.
     if (out.found) {
       try {
         const wh = (await whPackages()).get(out.code.replace(/_.*$/, ''));
         const lang = new URL(req.url, 'http://x').searchParams.get('lang') === 'EN' ? 'EN' : 'TH';
-        if (wh) { if (out.source !== 'peak') out.name = fullServiceName(out.name, wh); out.preview = describeWh(wh, { lang, title: out.name, code: out.code }); }
+        if (wh) { out.preview = describeWh(wh, { lang, title: out.name, code: out.code }); }
       } catch (e) { console.error('WHPackages read failed', e); }
     }
     return res.status(200).json({ ok: true, ...out });
@@ -80,5 +57,3 @@ module.exports = async function handler(req, res) {
   }
 };
 
-module.exports.services = services;
-module.exports._test = { lookup };

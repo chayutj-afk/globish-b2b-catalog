@@ -12,7 +12,6 @@ const hub = require('../lib/hub');
 const peak = require('../lib/peak');
 const qtdraft = require('../lib/qtdraft');
 const { OPP_RE, normaliseOppId } = require('../lib/crm');
-const { services } = require('./services');
 
 const SEGMENTS = ['B2B', 'B2C', 'MaoMao', 'B2S', 'B2E', 'Others'];
 // The rules the old segments had (requests made before customer types came from PEAK, and tests).
@@ -125,7 +124,8 @@ async function create(req, res, user) {
   // Whitehouse Package ID / PEAK service code must exist in PEAK; the name always comes from PEAK.
   // PEAK API on: every service code is checked in PEAK (name + text from PEAK). Types that pick from PEAK
   // groups (e.g. B2S: B2S services + Assessment) may only use services in those groups.
-  if (items.some((it) => it.kind === 'service') && peak.mode() !== 'off') {
+  if (items.some((it) => it.kind === 'service')) {
+    if (peak.mode() === 'off') throw bad('ยังไม่ได้เปิดการเชื่อมต่อ PEAK API ตรวจรหัสบริการไม่ได้ แจ้งผู้ดูแลระบบ', 503);
     const allowed = type.svcGroups && type.svcGroups.length ? new Map((await peak.servicesForGroups(type.svcGroups)).flatMap((g) => g.services).map((x) => [String(x.code).toUpperCase(), x])) : null;
     for (const it of items.filter((x) => x.kind === 'service')) {
       const code = String(it.code || '').trim().toUpperCase();
@@ -136,19 +136,10 @@ async function create(req, res, user) {
     }
   }
   if (items.some((it) => it.kind === 'service' && it.peakDesc === undefined)) {
-    // PEAK off: the old service list (sheet) is the check.
-    const svc = items.some((it) => it.kind === 'service' && !it.fromPeak) ? await services() : null;
-    for (const it of items.filter((x) => x.kind === 'service' && !x.fromPeak)) {
-      const code = String(it.code || '').trim().toUpperCase();
-      const s = svc.get(code);
-      if (!s) throw bad(`ไม่พบรหัส ${code || '(ว่าง)'} ใน PEAK ตรวจ Package ID อีกครั้ง (ถ้าเพิ่งสร้างใน PEAK แจ้งฝ่ายบัญชี)`);
-      it.code = code;
-      it.name = s.name;
-    }
     // Customer-readable description from the Whitehouse package details (WHPackages tab, imported on /import-wh).
     let wh = new Map();
     try { wh = new Map((await hub.readTable('WHPackages')).map((x) => [String(x.id), x])); } catch (e) { console.error('WHPackages read failed', e); }
-    for (const it of items.filter((x) => x.kind === 'service' && x.peakDesc === undefined)) { it.wh = wh.get(it.code.replace(/_.*$/, '')) || null; if (!it.fromPeak) it.name = require('../lib/pricing').fullServiceName(it.name, it.wh); }
+    for (const it of items.filter((x) => x.kind === 'service' && x.peakDesc === undefined)) it.wh = wh.get(it.code.replace(/_.*$/, '')) || null;
   }
 
   const priced = items.map((it) => {

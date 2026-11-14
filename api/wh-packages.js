@@ -38,10 +38,8 @@ module.exports = async function handler(req, res) {
     const b = req.body || {};
     if (!Array.isArray(b.rows) || !b.rows.length || b.rows.length > MAX_ROWS) return res.status(400).json({ error: `ต้องมี rows 1–${MAX_ROWS} แถว` });
     const now = hub.sheetDateTime();
-    // Keep only packages that are PEAK service codes (e.g. 3822 or 4884_TikTok → 4884).
-    let codes = null;
-    try { codes = new Set([...(await hub.readServices()).keys()].map((c) => String(c).replace(/_.*$/, ''))); } catch (e) { console.error('services read failed', e); }
-    const rows = cleanRows(b.rows).filter((r) => !codes || codes.has(r.id)).map((r) => ({ ...r, updatedAt: now }));
+    // All Whitehouse packages are kept: the QT form checks each Package ID in PEAK itself.
+    const rows = cleanRows(b.rows).map((r) => ({ ...r, updatedAt: now }));
     if (!rows.length) return res.status(400).json({ error: 'ไม่มีแถวที่ใช้ได้' });
     await hub.replaceTable('WHPackages', rows);
     await hub.log('wh-import', 'wh_packages_replaced', 'Whitehouse', `${user.email} · ${rows.length} rows`);

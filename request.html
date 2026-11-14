@@ -1350,7 +1350,7 @@ function editForm(e) {
     ${link ? `<a class="btn btn-o btn-sm" href="${esc(e.docType === 'QT' ? peakEdit(link, 'quotation') : link)}" target="_blank" rel="noopener">เปิด ${esc(e.docNo)} ใน PEAK ↗</a>` : ''}
     <select id="edm-mode-${id}" onchange="document.getElementById('edn-wrap-${id}').hidden=this.value!=='new'"><option value="same">แก้ในเลขเดิม (${esc(e.docNo)})</option><option value="new">ออกเลขใหม่</option></select>
     <span id="edn-wrap-${id}" hidden><input id="edn-${id}" type="text" maxlength="40" placeholder="เลขเอกสารใหม่" style="width:170px"> <input id="edl-${id}" type="text" maxlength="500" placeholder="ลิงก์เอกสารใหม่ใน PEAK *" style="width:240px"></span>
-    ${e.docType !== 'RT' ? `<label class="small">ยอดก่อน VAT หลังแก้</label><input id="eda-${id}" type="number" step="0.01" value="${esc(String(amt || '').replace(/,/g, ''))}" style="width:130px">` : ''}
+    ${e.docType === 'QT' && PEAK_LIVE ? '<span class="small">แก้ในเลขเดิม: ระบบดึงยอดและจำนวนผู้เรียนใหม่จาก PEAK ให้เอง</span>' : e.docType !== 'RT' ? `<label class="small">ยอดก่อน VAT หลังแก้ (ไม่รวม VAT)</label><input id="eda-${id}" type="number" step="0.01" value="${esc(String(amt || '').replace(/,/g, ''))}" style="width:130px">` : ''}
     <input id="edt-${id}" class="grow" type="text" maxlength="500" placeholder="หมายเหตุถึง Sales">
     ${e.docType === 'RT' ? '<span class="small warn">ใบเสร็จแก้ไม่ได้ ตีกลับคำขอนี้</span>' : `<button class="btn btn-p btn-sm" onclick="editAction('${id}','edit_done')">✓ แก้แล้ว</button>`}<button class="btn btn-g btn-sm" onclick="editAction('${id}','edit_reject')">ตีกลับ</button><span id="edm-${id}"></span></div>
     ${src ? '' : '<div class="small" style="padding:0 16px 10px">ไม่พบคำขอต้นทางในระบบ ระบบจะบันทึกแค่ว่าแก้แล้ว</div>'}`;

@@ -110,3 +110,17 @@ test('sales note + Claude API key → description written now, Draft made; contr
     assert.equal((await qtdraft.createForRequest(row, [{ ...lines[0], salesNote: 'x' }], users)).defer, 'notes');
   } finally { global.fetch = orig; delete process.env.ANTHROPIC_API_KEY; }
 });
+
+test('QT edited in PEAK → RequestLines qty / price / discount follow PEAK', async () => {
+  const hub = require('../lib/hub'); const writes = [];
+  const oRead = hub.readTable, oUpd = hub.updateRow;
+  hub.readTable = async () => [{ _row: 7, requestId: 'REQ-1', line: '1', peakServiceCode: '5136', qty: '5', unitPrice: '14,500', discount: '0' }];
+  hub.updateRow = async (t, r, f) => { writes.push([t, r, f]); };
+  try {
+    const { syncFromPeak } = require('../lib/qtlines');
+    const r = await syncFromPeak('REQ-1', { products: [{ productCode: '5136', quantity: 10, price: 15515, discount: 0 }] });
+    assert.equal(r.changed, 1);
+    assert.deepEqual(writes[0], ['RequestLines', 7, { qty: 10, unitPrice: 15515 }]);
+    assert.equal((await syncFromPeak('REQ-1', { products: [{ productCode: 'X', quantity: 1, price: 1 }] })).changed, 0);
+  } finally { hub.readTable = oRead; hub.updateRow = oUpd; }
+});

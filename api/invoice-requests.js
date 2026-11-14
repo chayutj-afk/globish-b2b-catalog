@@ -963,7 +963,19 @@ async function updateEdit(req, res, user) {
         if (newNo && newNo !== q.peakQtNo) { f.peakQtNo = newNo; f.peakQtId = ''; }
         if (newLink) f.peakDocLink = newLink;
         if (newAmt !== null) { f.totalPreVat = newAmt; f.totalInclVat = vatSplit(newAmt, false).inclVat; }
+        // PEAK API on and the same QT edited in place: take totals and lines straight from PEAK.
+        let pq = null; const peak = require('../lib/peak');
+        if (peak.mode() !== 'off' && q.peakQtId && !(newNo && newNo !== q.peakQtNo)) pq = await peak.getQuotation(q.peakQtId).catch(() => null);
+        if (pq && !(Number(pq.isVoid) === 1 || /void/i.test(pq.status || ''))) {
+          const incl = q.vatMode ? q.vatMode === 'incl' : vatIncluded(q.segment);
+          const pre = Number(pq.preTaxAmount) || 0, net = Number(pq.netAmount) || 0;
+          if (pre) f.totalPreVat = pre;
+          if (net) f.totalInclVat = incl ? net : vatSplit(pre, false).inclVat;
+          f.qtSig = peak.quotationSig(pq);
+          if (pq.documentLink) f.peakDocLink = pq.documentLink;
+        }
         await hub.updateRow('Requests', q._row, f);
+        if (pq) await require('../lib/qtlines').syncFromPeak(q.requestId, pq).catch(() => null);
       }
     } else if (row.docType === 'INV') {
       const iv = (await hub.readTable('InvoiceRequests')).find((x) => x.ivRequestId === row.refId);

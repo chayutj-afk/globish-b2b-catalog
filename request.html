@@ -49,7 +49,7 @@
     <p class="hint">ใส่เลขผู้เสียภาษี 13 หลักแล้วเลือกสาขา ระบบดึงรหัสและชื่อลูกค้าจาก PEAK ให้ (บุคคลธรรมดาใช้เลขบัตรประชาชน)</p>
     <div class="row c3">
       <div class="fg"><label>ประเภทลูกค้า <span class="small">(PEAK)</span> *</label>
-        <select id="q-segment" class="ctype" onchange="changeSegment()"><option value="B2B" data-code="G012-00002">B2B</option><option value="B2C" data-code="G012-00001">B2C</option><option value="B2S" data-code="G012-00003">B2S</option></select><div class="sub" id="q-type-sub"></div></div>
+        <select id="q-segment" class="ctype" data-blank="1" onchange="changeSegment()"><option value="">— เลือกประเภทลูกค้า —</option><option value="B2B" data-code="G012-00002">B2B</option><option value="B2C" data-code="G012-00001">B2C</option><option value="B2S" data-code="G012-00003">B2S</option></select><div class="sub" id="q-type-sub"></div></div>
       <div class="fg"><label>ประเภทดีล</label>
         <select id="q-deal"><option value="New Logo">New Logo (ลูกค้าใหม่)</option><option value="Retention">Retention (ต่อสัญญา)</option><option value="Others">อื่นๆ</option></select></div>
       <div class="fg" id="q-opp-wrap"><label id="q-opp-label">Opportunity ID ใน CRM *</label>
@@ -101,7 +101,7 @@
     <input type="hidden" id="q-replaces"><div class="row c3"><div class="fg"><label>อีเมลลูกค้า (สำหรับส่งเอกสาร) *</label><input id="q-email" type="email" maxlength="120" placeholder="name@company.com"></div></div>
   </div>
 
-  <div class="card">
+  <div class="card" id="q-items-card" hidden>
     <h2>2. รายการสินค้า</h2>
     <p class="hint" id="q-items-hint"></p>
     <div id="q-items"></div>
@@ -453,7 +453,7 @@ async function loadClasses() {
   // Type pickers on every form: PEAK's G012 items that have rules (value = name, data-code = the G012 item).
   document.querySelectorAll('select.ctype').forEach((el) => {
     const cur = el.value;
-    el.innerHTML = (el.dataset.blank ? '<option value="">— เลือก —</option>' : '') + TYPES.filter((t) => t.ready).map((t) => `<option value="${esc(t.name)}" data-code="${esc(t.code)}">${esc(t.name)}</option>`).join('');
+    el.innerHTML = (el.dataset.blank ? `<option value="">${el.id === 'q-segment' ? '— เลือกประเภทลูกค้า —' : '— เลือก —'}</option>` : '') + TYPES.filter((t) => t.ready).map((t) => `<option value="${esc(t.name)}" data-code="${esc(t.code)}">${esc(t.name)}</option>`).join('');
     if ([...el.options].some((o) => o.value === cur)) el.value = cur;
   });
   const rbox = $('r-cls-w');
@@ -463,7 +463,7 @@ async function loadClasses() {
   onSegment();
   const box = $('q-cls');
   box.innerHTML = CLS.map((g) => `<div class="fg"><label>${esc(g.name)} <span class="small">(PEAK ${esc(g.code)})</span></label><select id="cls-${esc(g.code)}" data-g="${esc(g.code)}" onchange="this.dataset.touched='1'"><option value="">— ไม่ติด —</option>${g.items.map((i) => `<option value="${esc(i.code)}">${esc(i.name)}</option>`).join('')}</select><div class="sub">ตัวเลือกจาก PEAK · ระบบเลือกให้ตามประเภทลูกค้า เปลี่ยนได้</div></div>`).join('');
-  box.hidden = !CLS.length;
+  box.hidden = !CLS.length || !$('q-segment').value;
   prefillClasses();
   return CLS;
 }
@@ -498,8 +498,11 @@ function syncCatalogVat(seg) {
 const catVf = () => (vatIn($('q-segment').value) ? 1.07 : 1);
 function onSegment() {
   const seg = $('q-segment').value;
+  // Nothing about products until the customer type is picked (it decides VAT and what can be quoted).
+  $('q-items-card').hidden = !seg;
+  if ($('q-cls')) $('q-cls').hidden = !seg || !(CLS || []).length;
   syncCatalogVat(seg);
-  $('q-opp-wrap').hidden = !oppOf(seg);
+  $('q-opp-wrap').hidden = !seg || !oppOf(seg);
   const T = typeOf(seg);
   if ($('q-type-sub')) $('q-type-sub').textContent = T ? `${T.vat === 'incl' ? 'ราคารวม VAT' : 'ราคาก่อน VAT'}${T.opp ? '' : ' · ไม่ต้องใส่ Opportunity ID'}` : '';
   $('q-opp-label').textContent = 'Opportunity ID ใน CRM *';
@@ -671,7 +674,7 @@ function renderItems() {
       } else if (pickFromPeak(typeOf($('q-segment').value))) {
         const TT = typeOf($('q-segment').value), groups = PSVC[TT.code] || [], all = groups.flatMap((g) => g.services);
         desc = `<span class="kind service" id="svk-${i}">บริการจาก PEAK</span>
-          <select class="mono" data-i="${i}" onchange="pickPeakSvc(this)"><option value="">${PSVC[TT.code] ? '— เลือกบริการ —' : 'กำลังโหลดจาก PEAK…'}</option>${groups.map((g) => `<optgroup label="${esc(g.label)} (${g.services.length})">${g.services.map((x) => `<option value="${esc(x.code)}"${x.code === it.code ? ' selected' : ''}>${esc(x.code)} · ${esc(x.name)}</option>`).join('')}</optgroup>`).join('')}${it.code && !all.some((x) => x.code === it.code) ? `<option value="${esc(it.code)}" selected>${esc(it.code)}</option>` : ''}</select>
+          <select class="svc-pick" data-i="${i}" onchange="pickPeakSvc(this)"><option value="">${PSVC[TT.code] ? '— เลือกบริการ —' : 'กำลังโหลดจาก PEAK…'}</option>${groups.map((g) => `<optgroup label="${esc(g.label)} (${g.services.length})">${g.services.map((x) => `<option value="${esc(x.code)}"${x.code === it.code ? ' selected' : ''}>${esc(x.code)} · ${esc(x.name)}</option>`).join('')}</optgroup>`).join('')}${it.code && !all.some((x) => x.code === it.code) ? `<option value="${esc(it.code)}" selected>${esc(it.code)}</option>` : ''}</select>
           <div class="svc-name" id="svc-${i}"></div>
           <input type="text" maxlength="300" placeholder="🎁 ของแถม (ถ้ามี)" style="margin-top:4px" ${inp(i, 'freebie', it.freebie)}>`;
       } else {
@@ -785,6 +788,7 @@ async function submitQT() {
     docLang: v('q-lang'), wantedQtDate: v('q-date'), creditTermDays: v('q-term'), whtRate: v('q-wht'), poRequired: v('q-po') === 'yes', note: v('q-note'), customerEmail: v('q-email'), replaces: v('q-replaces'),
     items: CART, newContact: newContactOf(), classPicks: classPicksOf(),
   };
+  if (!seg) return msg('q-msg', 'err', 'เลือกประเภทลูกค้า');
   if (!CART.length) return msg('q-msg', 'err', 'ยังไม่มีรายการสินค้า');
   const nc = body.newContact;
   if (nc) {
@@ -820,7 +824,7 @@ async function submitQT() {
     if (!d) { msg('q-msg', 'info', 'ยังไม่ได้ส่ง ดูคำขอเดิมได้ที่ "คำขอของฉัน"'); return; }
     $('q-msg').innerHTML = `<div class="done-card"><b>✓ ส่งคำขอ ${esc(d.requestId)} แล้ว</b><div style="margin:6px 0 10px">${d.vatMode === 'incl' ? `ยอดรวม VAT ${fmt(d.totalInclVat)} (ก่อน VAT ${fmt(d.total)})` : `ยอดก่อน VAT ${fmt(d.total)}`} · ${esc(d.message)}${d.belowFloor ? '<br>มีรายการต่ำกว่าราคาขั้นต่ำ Catalog (บันทึกไว้ให้ผู้อนุมัติเห็น)' : ''}</div><button class="btn btn-o btn-sm" onclick="go('mine')">ดูสถานะในคำขอของฉัน</button></div>`;
     CART = []; saveCart(); renderItems();
-    ['q-opp-y', 'q-opp-n', 'q-tax', 'q-branch', 'q-client', 'q-company', 'q-date', 'q-term', 'q-wht', 'q-note', 'q-email', 'q-replaces', 'nc-type', 'nc-prefix', 'nc-phone', 'nc-addr', 'nc-sub', 'nc-dist', 'nc-prov', 'nc-post', 'nc-cname', 'nc-cphone'].forEach((id) => { $(id).value = ''; }); paintOpp('q'); showNewC('q', false); prefillClasses(true);
+    ['q-opp-y', 'q-opp-n', 'q-tax', 'q-branch', 'q-client', 'q-company', 'q-date', 'q-term', 'q-wht', 'q-note', 'q-email', 'q-replaces', 'nc-type', 'nc-prefix', 'nc-phone', 'nc-addr', 'nc-sub', 'nc-dist', 'nc-prov', 'nc-post', 'nc-cname', 'nc-cphone'].forEach((id) => { $(id).value = ''; }); paintOpp('q'); showNewC('q', false); $('q-segment').value = ''; changeSegment(); prefillClasses(true);
     onTaxInput('q');
     clearDraft();
     taxHint('q'); loadAll();
@@ -1603,7 +1607,8 @@ function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch {} }
   buildOpp('q'); buildOpp('i');
   restoreDraft(); paintOpp('q');
   let hasDraft = false; try { hasDraft = !!localStorage.getItem(DRAFT_KEY); } catch {}
-  if (!hasDraft && CART.length && CART.every((it) => kindOf(it) === 'service')) $('q-segment').value = 'B2C';
+  // Came from the Catalog with packages in the cart: the type is obvious (Catalog = B2B); otherwise Sales picks it.
+  if (!hasDraft && CART.length && !$('q-segment').value) { $('q-segment').value = CART.every((it) => kindOf(it) === 'service') ? 'B2C' : 'B2B'; changeSegment(); }
   ['input', 'change'].forEach((ev) => $('tab-qt').addEventListener(ev, saveDraft));
   $('tab-inv').addEventListener('input', () => { INV_DIRTY = true; });
   // INV form isn't kept as a draft: warn before leaving with unsent data, or while something is still saving.

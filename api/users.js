@@ -26,6 +26,15 @@ async function classView(list) {
   return { rules, groups, live, error, segments: types.map((t) => t.name), types };
 }
 
+// A salesperson's name on requests follows their PEAK Sales Performance item, e.g. "Siraprapa (Bee)".
+async function nameFromPerf(email, items) {
+  const code = items && items.G014;
+  if (!code) return;
+  const g = (await require('../lib/classrules').peakGroups().catch(() => [])).find((x) => x.code === 'G014');
+  const it = g && g.items.find((i) => i.code === code);
+  if (it) await users.setName(email, it.name);
+}
+
 module.exports = async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   try {
@@ -79,11 +88,12 @@ module.exports = async function handler(req, res) {
       }
       if (b.action === 'add_user') {
         const email = await users.addUser(me, b);
-        if (b.classItems && typeof b.classItems === 'object') await require('../lib/classrules').saveUser(email, b.classItems, await users.list(), me.email);
+        if (b.classItems && typeof b.classItems === 'object') { await require('../lib/classrules').saveUser(email, b.classItems, await users.list(), me.email); await nameFromPerf(email, b.classItems); }
         return res.status(200).json({ ok: true, email });
       }
       if (b.classItems && typeof b.classItems === 'object') {
         await require('../lib/classrules').saveUser(String(b.email || '').toLowerCase(), b.classItems, await users.list(), me.email);
+        await nameFromPerf(b.email, b.classItems);
       }
       const access = { role: b.role, team: b.team, extra: b.extra };
       if (Object.values(access).some((v) => v !== undefined)) await users.setRole(me, b.email, access);

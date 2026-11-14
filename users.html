@@ -157,7 +157,7 @@ function openAdd() {
   $('m-title').textContent = 'เพิ่มผู้ใช้ใหม่'; $('m-ok').textContent = 'เพิ่มผู้ใช้'; $('m-cancel').textContent = 'ยกเลิก'; delete $('m-ok').dataset.step;
   $('m-body').innerHTML = `<p class="small" style="margin-top:0">ตั้งค่าไว้ก่อนได้ เมื่อคนนี้เข้าระบบครั้งแรกด้วย Google จะได้สิทธิ์ตามนี้ทันที</p>
     <label class="fl">อีเมล *<input id="a-em" type="email" autocomplete="off" spellcheck="false" placeholder="name@globish.co.th"></label>
-    <label class="fl">ชื่อ<input id="a-nm" autocomplete="off" placeholder="เช่น Chattraya (Benz) Lawhawished"></label>
+    <label class="fl">ชื่อ<input id="a-nm" autocomplete="off" placeholder="เว้นว่างได้ ระบบใช้ชื่อจาก Sales Performance เช่น Chattraya (Benz)"></label>
     <label class="fl">Role<select id="a-role" class="sel">${ROLES.filter((r) => r.id !== 'admin').map((r) => opt(r.id, r.label, 'sales')).join('')}</select></label>
     <label class="fl">ทีม<select id="a-team" class="sel">${Object.entries(TEAM).map(([v, t]) => opt(v, t, 'b2b')).join('')}</select></label>
     <div id="a-cls"></div><div class="err" id="u-err"></div>`;

@@ -209,3 +209,5 @@ details.rej .in{display:flex;gap:8px;flex-wrap:wrap}
 .sec-h{display:flex;align-items:baseline;gap:8px;margin:22px 0 10px;font-size:15px;color:var(--head);font-weight:500}
 .sec-h .n{font-size:12px;color:var(--muted);font-weight:400}
 @media(max-width:560px){.pc-top{flex-direction:column}.pc-amt{text-align:left}}
+
+.owner{display:inline-block;margin-left:6px;padding:1px 9px;border-radius:9999px;font-size:12px;font-weight:600;background:var(--primary-soft);color:var(--head);white-space:nowrap;vertical-align:middle}.owner.none{background:#fdecea;color:#b42318}

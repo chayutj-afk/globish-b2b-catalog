@@ -284,11 +284,12 @@ const VAT_IN = ['B2C', 'B2E', 'MaoMao', 'Others']; // requests made before custo
 // Customer types = PEAK G012 (ประเภทลูกค้า), with the rules accounting set on /users (VAT, products, Opportunity ID).
 let TYPES = [{ code: 'G012-00002', name: 'B2B', vat: 'excl', kinds: ['catalog', 'keyhs', 'surcharge'], opp: true, prefix: '', ready: true },
   { code: 'G012-00001', name: 'B2C', vat: 'incl', kinds: ['service'], opp: true, prefix: '', ready: true },
-  { code: 'G012-00003', name: 'B2S', vat: 'excl', kinds: ['service'], opp: false, prefix: 'B2S', ready: true }];
+  { code: 'G012-00003', name: 'B2S', vat: 'excl', kinds: ['service'], opp: false, svcGroups: [{ label: 'บริการ B2S', prefixes: ['B2S'] }, { label: 'Assessment', keyword: 'Assessment' }], ready: true }];
+const pickFromPeak = (t) => !!(t && t.svcGroups && t.svcGroups.length);
 const typeOf = (seg) => TYPES.find((t) => t.name === seg);
 const vatIn = (seg) => { const t = typeOf(seg); return t ? t.vat === 'incl' : VAT_IN.includes(seg); };
 // Receipt form: Whitehouse student + package needed for types that sell WH packages (B2C).
-const whNeeded = (seg) => { const t = typeOf(seg); return t ? t.kinds.includes('service') && !t.prefix : ['B2C', 'B2E', 'MaoMao'].includes(seg); };
+const whNeeded = (seg) => { const t = typeOf(seg); return t ? t.kinds.includes('service') && !pickFromPeak(t) : ['B2C', 'B2E', 'MaoMao'].includes(seg); };
 const oppOf = (seg) => { const t = typeOf(seg); return t ? t.opp : seg !== 'B2S'; };
 const basisOf = (seg) => (vatIn(seg) ? 'รวม VAT' : 'ก่อน VAT');
 const rnd2 = (n) => Math.round(n * 100) / 100;
@@ -507,27 +508,28 @@ function onSegment() {
   if (k.includes('catalog') && !(ME && ME.catalog === false)) add.push('<a class="btn btn-o" href="/catalog?return=request" data-keep="1" onclick="saveDraft()">➕ เลือกจาก B2B Catalog</a>');
   if (k.includes('keyhs')) add.push('<button class="btn btn-o" type="button" onclick="addLine(\'keyhs\')">➕ Customized Package (Key H.S.)</button>');
   if (k.includes('surcharge')) add.push('<button class="btn btn-o" type="button" onclick="addLine(\'surcharge\')">➕ ค่าเพิ่ม (โค้ชต่างชาติ / เดินทาง)</button>');
-  if (k.includes('service')) add.push(T && T.prefix ? `<button class="btn btn-o" type="button" onclick="addLine('service')">➕ บริการ ${esc(T.prefix)} จาก PEAK</button>` : '<button class="btn btn-o" type="button" onclick="addLine(\'service\')">➕ แพ็กเกจ Whitehouse / รหัสบริการ PEAK</button>');
-  if (T && T.prefix) loadPrefixSvcs(T.prefix);
+  if (k.includes('service')) add.push(pickFromPeak(T) ? `<button class="btn btn-o" type="button" onclick="addLine('service')">➕ บริการจาก PEAK (${esc(T.svcGroups.map((g) => g.label).join(' / '))})</button>` : '<button class="btn btn-o" type="button" onclick="addLine(\'service\')">➕ แพ็กเกจ Whitehouse (Package ID)</button>');
+  if (pickFromPeak(T)) loadTypeSvcs(T.code);
   $('q-adders').innerHTML = add.join('');
   const hints = [];
   if (k.includes('catalog') || k.includes('keyhs')) hints.push('เลือกแพ็กเกจจาก Catalog หรือใส่ Key H.S. ที่ทีม Product ให้ (Customized Package) ราคาใน Catalog เป็นราคาอ้างอิง แก้ราคาและส่วนลดได้');
-  if (k.includes('service')) hints.push(T && T.prefix ? `เลือกบริการจาก PEAK (รหัสขึ้นต้นด้วย ${esc(T.prefix)}) ชื่อและรายละเอียดลง QT ตามที่ตั้งไว้ใน PEAK` : 'ใส่ Package ID จาก Whitehouse (ตัวเลข เช่น 3822 ระบบใช้เป็นรหัสบริการใน PEAK) หรือรหัสบริการที่มีใน PEAK อยู่แล้ว');
+  if (k.includes('service')) hints.push(pickFromPeak(T) ? `เลือกบริการจาก PEAK (${esc(T.svcGroups.map((g) => g.label).join(' / '))}) ชื่อและรายละเอียดลง QT ตามที่ตั้งไว้ใน PEAK` : 'ใส่ Package ID จาก Whitehouse (ตัวเลข เช่น 3822) ระบบตรวจรหัสกับ PEAK ให้');
   $('q-items-hint').innerHTML = `${esc(seg)}: ${hints.join(' · ')}`;
   renderItems();
 }
 
-// Services picked from PEAK for types with a code prefix (e.g. B2S), loaded once per prefix.
-const PSVC = {};
-async function loadPrefixSvcs(p) {
-  if (PSVC[p]) return;
-  PSVC[p] = [];
-  try { const r = await fetch('/api/services?prefix=' + encodeURIComponent(p), { cache: 'no-store' }); const d = await r.json(); if (r.ok) PSVC[p] = d.services || []; } catch {}
+// Services picked from PEAK groups for types that have them (e.g. B2S: บริการ B2S + Assessment), loaded once per type.
+const PSVC = {}, PSVC_LOADING = {};
+async function loadTypeSvcs(code) {
+  if (PSVC[code] || PSVC_LOADING[code]) return;
+  PSVC_LOADING[code] = true;
+  try { const r = await fetch('/api/services?type=' + encodeURIComponent(code), { cache: 'no-store' }); const d = await r.json(); PSVC[code] = r.ok ? d.groups || [] : []; } catch { PSVC[code] = []; }
   renderItems();
 }
-function pickPrefixSvc(el) {
+const peakSvcOf = (code) => { const T = typeOf($('q-segment').value); return T && (PSVC[T.code] || []).flatMap((g) => g.services).find((s) => s.code === code); };
+function pickPeakSvc(el) {
   const i = Number(el.dataset.i), it = CART[i]; if (!it) return;
-  const P = (typeOf($('q-segment').value) || {}).prefix, x = (PSVC[P] || []).find((s) => s.code === el.value);
+  const x = peakSvcOf(el.value);
   it.code = el.value; it.name = x ? x.name : ''; it.svc = x ? 'ok' : ''; it.preview = x ? [x.name, x.description].filter(Boolean).join('\n') : '';
   saveCart(); showSvc(i); recalc();
 }
@@ -666,10 +668,10 @@ function renderItems() {
             <option value="travel"${it.type === 'travel' ? ' selected' : ''}>ค่าเดินทางนอกกรุงเทพฯ</option></select>
           <input type="text" placeholder="รายละเอียด เช่น Native coach สำหรับ Workshop 2 ครั้ง / ชลบุรี" maxlength="120" style="margin-top:4px" ${inp(i, 'note', it.note)}>
           <div class="small">ใช้กับ Customized Package ที่มีค่าเพิ่ม (แพ็กเกจจาก Catalog คิดค่าเพิ่มให้เอง)</div>`;
-      } else if ((typeOf($('q-segment').value) || {}).prefix) {
-        const P = typeOf($('q-segment').value).prefix, list = PSVC[P] || [];
-        desc = `<span class="kind service" id="svk-${i}">บริการ ${esc(P)} (PEAK)</span>
-          <select class="mono" data-i="${i}" onchange="pickPrefixSvc(this)"><option value="">${list.length ? '— เลือกบริการ —' : 'กำลังโหลดจาก PEAK…'}</option>${list.map((x) => `<option value="${esc(x.code)}"${x.code === it.code ? ' selected' : ''}>${esc(x.code)} · ${esc(x.name)}</option>`).join('')}${it.code && !list.some((x) => x.code === it.code) ? `<option value="${esc(it.code)}" selected>${esc(it.code)}</option>` : ''}</select>
+      } else if (pickFromPeak(typeOf($('q-segment').value))) {
+        const TT = typeOf($('q-segment').value), groups = PSVC[TT.code] || [], all = groups.flatMap((g) => g.services);
+        desc = `<span class="kind service" id="svk-${i}">บริการจาก PEAK</span>
+          <select class="mono" data-i="${i}" onchange="pickPeakSvc(this)"><option value="">${PSVC[TT.code] ? '— เลือกบริการ —' : 'กำลังโหลดจาก PEAK…'}</option>${groups.map((g) => `<optgroup label="${esc(g.label)} (${g.services.length})">${g.services.map((x) => `<option value="${esc(x.code)}"${x.code === it.code ? ' selected' : ''}>${esc(x.code)} · ${esc(x.name)}</option>`).join('')}</optgroup>`).join('')}${it.code && !all.some((x) => x.code === it.code) ? `<option value="${esc(it.code)}" selected>${esc(it.code)}</option>` : ''}</select>
           <div class="svc-name" id="svc-${i}"></div>
           <input type="text" maxlength="300" placeholder="🎁 ของแถม (ถ้ามี)" style="margin-top:4px" ${inp(i, 'freebie', it.freebie)}>`;
       } else {
@@ -691,7 +693,7 @@ function renderItems() {
   }).join('');
   el.innerHTML = `<div style="overflow-x:auto"><table class="items"><thead><tr><th>รายการ</th><th class="num">จำนวน</th><th class="num">ราคา/หน่วย<br><span class="small">(${basisOf($('q-segment').value)})</span></th><th class="num">ส่วนลด</th><th class="num">รวม</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="total"><span>ยอดรวม${basisOf($('q-segment').value) === 'รวม VAT' ? ' (รวม VAT แล้ว)' : 'ก่อน VAT'}<br><span class="small" id="q-total-sub"></span></span><strong id="q-total">0</strong></div>`;
-  CART.forEach((it, i) => { if (kindOf(it) === 'service') { const P = (typeOf($('q-segment').value) || {}).prefix; const x = P && (PSVC[P] || []).find((s) => s.code === it.code); if (x && !it.svc) { it.name = x.name; it.svc = 'ok'; it.preview = [x.name, x.description].filter(Boolean).join('\n'); } showSvc(i); if (it.code && !it.svc && !(P && PSVC[P] && PSVC[P].length)) lookupSvc(i); } });
+  CART.forEach((it, i) => { if (kindOf(it) === 'service') { const T = typeOf($('q-segment').value), fromPeak = pickFromPeak(T); const x = fromPeak && peakSvcOf(it.code); if (x && !it.svc) { it.name = x.name; it.svc = 'ok'; it.preview = [x.name, x.description].filter(Boolean).join('\n'); } showSvc(i); if (it.code && !it.svc && !(fromPeak && PSVC[T.code])) lookupSvc(i); } });
   recalc();
   CART.forEach((it, i) => { if (kindOf(it) === 'keyhs' && it.keyHS && !it.heading) khsName(i); });
 }

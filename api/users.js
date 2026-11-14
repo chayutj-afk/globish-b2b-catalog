@@ -67,7 +67,7 @@ module.exports = async function handler(req, res) {
         return res.status(200).json({ ok: true, peak: r });
       }
       if (b.action === 'type') {
-        await require('../lib/types').save(String(b.code || ''), { vat: b.vat, kinds: b.kinds, opp: b.opp, prefix: b.prefix }, me.email);
+        await require('../lib/types').save(String(b.code || ''), { vat: b.vat, kinds: b.kinds, opp: b.opp, svcGroups: b.svcGroups }, me.email);
         return res.status(200).json({ ok: true });
       }
       if (b.action === 'classes') {

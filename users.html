@@ -152,13 +152,21 @@ function renderTypes() {
       <td class="who"><b>${esc(t.name)}</b><br><span class="small">${esc(t.code)}${t.ready ? '' : ' · <span class="warn">ยังไม่ได้ตั้ง (เซลยังเลือกไม่ได้)</span>'}</span></td>
       <td><select class="sel" data-f="vat" ${live ? '' : 'disabled'}><option value="incl"${t.vat === 'incl' ? ' selected' : ''}>ราคารวม VAT</option><option value="excl"${t.vat === 'excl' ? ' selected' : ''}>ราคาก่อน VAT</option></select></td>
       <td>${Object.entries(KIND_TH).map(([k, l]) => `<label class="ck"><input type="checkbox" data-k="${k}"${t.kinds.includes(k) ? ' checked' : ''} ${live ? '' : 'disabled'}> ${l}</label>`).join('')}
-        <label class="small" style="display:block;margin-top:4px">บริการจาก PEAK เฉพาะรหัสขึ้นต้นด้วย <input data-f="prefix" value="${esc(t.prefix)}" maxlength="20" placeholder="เช่น B2S (ว่าง = ใส่ Package ID เอง)" style="width:200px" ${live ? '' : 'disabled'}></label></td>
+        <div class="small" style="margin-top:6px">กลุ่มบริการที่เลือกจาก PEAK <span class="small">(ว่าง = เซลกรอก Package ID เอง)</span></div>
+        <div class="svg-list">${(t.svcGroups || []).map((g) => svgRow(g, live)).join('')}</div>
+        ${live ? `<button class="btn btn-g btn-sm" type="button" style="margin-top:4px" onclick="this.previousElementSibling.insertAdjacentHTML('beforeend', svgRow({}, true))">➕ เพิ่มกลุ่ม</button>` : ''}</td>
       <td><label class="ck"><input type="checkbox" data-f="opp"${t.opp ? ' checked' : ''} ${live ? '' : 'disabled'}> ต้องใส่</label></td>
       <td style="text-align:right">${live ? `<button class="btn btn-o btn-sm" type="button" onclick="typeSave('${esc(t.code)}')">บันทึก</button>` : ''}<div class="small" id="tymsg-${esc(t.code)}"></div></td></tr>`).join('')}</tbody></table></div>`;
 }
+// One service group: shown name, code prefixes (comma) and/or a word in the service name.
+function svgRow(g, live) {
+  const d = live ? '' : 'disabled';
+  return `<div class="svg-row" style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap"><input data-g="label" value="${esc(g.label || '')}" placeholder="ชื่อกลุ่ม เช่น Assessment" style="width:130px" ${d}><input data-g="prefixes" value="${esc((g.prefixes || []).join(', '))}" placeholder="รหัสขึ้นต้น เช่น B2S" style="width:120px" ${d}><input data-g="keyword" value="${esc(g.keyword || '')}" placeholder="หรือคำในชื่อ" style="width:110px" ${d}>${live ? '<button class="btn btn-g btn-sm" type="button" onclick="this.parentElement.remove()" title="ลบกลุ่ม">✕</button>' : ''}</div>`;
+}
 async function typeSave(code) {
   const row = $('ty-' + code), q = (sel) => row.querySelector(sel);
-  const body = { action: 'type', code, vat: q('[data-f=vat]').value, opp: q('[data-f=opp]').checked, prefix: q('[data-f=prefix]').value.trim(), kinds: [...row.querySelectorAll('[data-k]')].filter((x) => x.checked).map((x) => x.dataset.k) };
+  const svcGroups = [...row.querySelectorAll('.svg-row')].map((r) => ({ label: r.querySelector('[data-g=label]').value.trim(), prefixes: r.querySelector('[data-g=prefixes]').value, keyword: r.querySelector('[data-g=keyword]').value.trim() })).filter((g) => g.label || g.prefixes.trim() || g.keyword);
+  const body = { action: 'type', code, vat: q('[data-f=vat]').value, opp: q('[data-f=opp]').checked, svcGroups, kinds: [...row.querySelectorAll('[data-k]')].filter((x) => x.checked).map((x) => x.dataset.k) };
   $('tymsg-' + code).textContent = 'กำลังบันทึก…';
   try { await api('/api/users', { method: 'PATCH', body: JSON.stringify(body) }); await load(); $('tymsg-' + code).innerHTML = '<span class="ok">✓ บันทึกแล้ว</span>'; }
   catch (e) { $('tymsg-' + code).textContent = e.message; }

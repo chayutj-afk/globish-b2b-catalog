@@ -123,18 +123,21 @@ async function create(req, res, user) {
   const dupCheck = req.body && req.body.confirmDuplicate !== true;
 
   // Whitehouse Package ID / PEAK service code must exist in PEAK; the name always comes from PEAK.
-  // Types whose services come from PEAK (e.g. B2S: codes starting with B2S): checked in PEAK, name + text from PEAK.
-  if (type.prefix && items.some((it) => it.kind === 'service') && peak.mode() !== 'off') {
+  // PEAK API on: every service code is checked in PEAK (name + text from PEAK). Types that pick from PEAK
+  // groups (e.g. B2S: B2S services + Assessment) may only use services in those groups.
+  if (items.some((it) => it.kind === 'service') && peak.mode() !== 'off') {
+    const allowed = type.svcGroups && type.svcGroups.length ? new Map((await peak.servicesForGroups(type.svcGroups)).flatMap((g) => g.services).map((x) => [String(x.code).toUpperCase(), x])) : null;
     for (const it of items.filter((x) => x.kind === 'service')) {
       const code = String(it.code || '').trim().toUpperCase();
-      if (!code.startsWith(type.prefix)) throw bad(`ลูกค้า ${type.name} เลือกได้เฉพาะบริการใน PEAK ที่รหัสขึ้นต้นด้วย ${type.prefix}`);
-      const s = await peak.getServiceByCode(code);
-      if (!s) throw bad(`ไม่พบบริการ ${code} ใน PEAK`);
-      Object.assign(it, { code, name: String(s.name || '').trim(), peakDesc: String(s.description || '').trim(), fromPeak: true });
+      const s = allowed ? allowed.get(code) : await peak.getServiceByCode(code);
+      if (!s) throw bad(allowed ? `ลูกค้า ${type.name} เลือกได้เฉพาะบริการในกลุ่ม ${type.svcGroups.map((g) => g.label).join(' / ')} (${code})` : `ไม่พบรหัส ${code || '(ว่าง)'} ใน PEAK ตรวจ Package ID อีกครั้ง`);
+      Object.assign(it, { code, name: String(s.name || '').trim(), fromPeak: true });
+      if (allowed) it.peakDesc = String(s.description || '').trim(); // WH packages keep the WH text (below)
     }
   }
-  if (items.some((it) => it.kind === 'service' && !it.fromPeak)) {
-    const svc = await services();
+  if (items.some((it) => it.kind === 'service' && it.peakDesc === undefined)) {
+    // PEAK off: the old service list (sheet) is the check.
+    const svc = items.some((it) => it.kind === 'service' && !it.fromPeak) ? await services() : null;
     for (const it of items.filter((x) => x.kind === 'service' && !x.fromPeak)) {
       const code = String(it.code || '').trim().toUpperCase();
       const s = svc.get(code);
@@ -145,7 +148,7 @@ async function create(req, res, user) {
     // Customer-readable description from the Whitehouse package details (WHPackages tab, imported on /import-wh).
     let wh = new Map();
     try { wh = new Map((await hub.readTable('WHPackages')).map((x) => [String(x.id), x])); } catch (e) { console.error('WHPackages read failed', e); }
-    for (const it of items.filter((x) => x.kind === 'service' && !x.fromPeak)) { it.wh = wh.get(it.code.replace(/_.*$/, '')) || null; it.name = require('../lib/pricing').fullServiceName(it.name, it.wh); }
+    for (const it of items.filter((x) => x.kind === 'service' && x.peakDesc === undefined)) { it.wh = wh.get(it.code.replace(/_.*$/, '')) || null; if (!it.fromPeak) it.name = require('../lib/pricing').fullServiceName(it.name, it.wh); }
   }
 
   const priced = items.map((it) => {

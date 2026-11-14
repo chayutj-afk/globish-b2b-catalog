@@ -1,4 +1,4 @@
-// GET /api/services?prefix=B2S → PEAK services with that code prefix (live from PEAK when the API is on).
+// GET /api/services?type=G012-00003 → PEAK service groups for that customer type (live from PEAK when the API is on).
 // GET /api/services?code=3822 → the PEAK service for a Whitehouse Package ID or PEAK service code.
 //   { ok, found, code, name, group, inactive }  — the form shows the PEAK name (read-only), so the
 //   name on the QT always comes from PEAK, not from what sales typed.
@@ -41,27 +41,37 @@ module.exports = async function handler(req, res) {
       const name = heroName(k, lang);
       return res.status(200).json({ ok: true, name, heading: name ? describeKeyHS(k, { lang }).split('\n')[0] : '' });
     }
-    // ?prefix=B2S → services in PEAK whose code starts with it (customer types that pick from PEAK).
-    if (sp.get('prefix')) {
-      const pre = String(sp.get('prefix')).toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 20);
+    // ?type=G012-00003 → the PEAK service groups that customer type picks from (e.g. B2S + Assessment).
+    if (sp.get('type')) {
+      const t = (await require('../lib/types').list()).find((x) => x.code === sp.get('type'));
+      if (!t || !t.svcGroups.length) return res.status(200).json({ ok: true, groups: [] });
       const peak = require('../lib/peak');
       if (peak.mode() !== 'off') {
-        try { return res.status(200).json({ ok: true, source: 'peak', services: await peak.listServicesByPrefix(pre) }); }
+        try { return res.status(200).json({ ok: true, source: 'peak', groups: await peak.servicesForGroups(t.svcGroups) }); }
         catch (e) { console.error('PEAK services failed', e.message); }
       }
-      const list = [...(await services()).values()].filter((x) => x.code.startsWith(pre)).map((x) => ({ code: x.code, name: x.name, description: '' }));
-      return res.status(200).json({ ok: true, source: 'sheet', services: list });
+      // PEAK off: the old service list (sheet), same rules.
+      const { inGroup } = require('../lib/types');
+      const all = [...(await services()).values()];
+      return res.status(200).json({ ok: true, source: 'sheet', groups: t.svcGroups.map((g) => ({ label: g.label, services: all.filter((x) => inGroup(g, x)).map((x) => ({ code: x.code, name: x.name, description: '' })) })) });
     }
     const code = new URL(req.url, 'http://x').searchParams.get('code') || '';
     if (!/^[A-Za-z0-9_-]{1,40}$/.test(code)) return res.status(400).json({ ok: false, error: 'รหัสไม่ถูกต้อง' });
     res.setHeader('Cache-Control', 'no-store');
-    const out = lookup(await services(), code);
+    // PEAK API on: the code is checked in PEAK itself (the sheet list is only the fallback).
+    const peak = require('../lib/peak');
+    let out = null;
+    if (peak.mode() !== 'off') {
+      try { const s2 = await peak.getServiceByCode(code); out = s2 ? { found: true, code: s2.code, name: s2.name, inactive: false, source: 'peak' } : { found: false, code: code.toUpperCase(), source: 'peak' }; }
+      catch (e) { console.error('PEAK service lookup failed', e.message); }
+    }
+    if (!out) out = lookup(await services(), code);
     // Preview of the line text the QT will carry (from the WHPackages tab) so sales see it before sending.
     if (out.found) {
       try {
         const wh = (await whPackages()).get(out.code.replace(/_.*$/, ''));
         const lang = new URL(req.url, 'http://x').searchParams.get('lang') === 'EN' ? 'EN' : 'TH';
-        if (wh) { out.name = fullServiceName(out.name, wh); out.preview = describeWh(wh, { lang, title: out.name, code: out.code }); }
+        if (wh) { if (out.source !== 'peak') out.name = fullServiceName(out.name, wh); out.preview = describeWh(wh, { lang, title: out.name, code: out.code }); }
       } catch (e) { console.error('WHPackages read failed', e); }
     }
     return res.status(200).json({ ok: true, ...out });

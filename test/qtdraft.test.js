@@ -91,3 +91,22 @@ test('new-customer details are checked', () => {
   assert.throws(() => nc.clean({ type: 2, address: 'a', province: 'b', postCode: '101' }), /5 หลัก/);
   assert.deepEqual(nc.clean({ type: '2', address: ' a ', province: 'b', postCode: '10110', prefixNameType: '2' }), { type: 2, address: 'a', province: 'b', postCode: '10110' });
 });
+
+test('sales note + Claude API key → description written now, Draft made; contradiction → needs_review', async () => {
+  const calls = stub();
+  const orig = global.fetch; process.env.ANTHROPIC_API_KEY = 'test';
+  let reply = { ok: true, description: 'pkg เริ่มเรียนเดือนมกราคม\nของแถม: หนังสือ 1 เล่ม' };
+  global.fetch = async (url, opt) => { calls.api = JSON.parse(opt.body); return { ok: true, json: async () => ({ content: [{ type: 'text', text: JSON.stringify(reply) }] }) }; };
+  try {
+    const l = [{ ...lines[0], salesNote: 'เรียน ม.ค.', freebie: 'หนังสือ 1 เล่ม' }];
+    const r = await qtdraft.createForRequest(row, l, users);
+    assert.equal(r.fields.status, 'qt_draft');
+    assert.match(calls.api.messages[0].content, /NOTE:\nเรียน ม.ค./);
+    assert.equal(calls.create[0].PeakQuotations.quotations[0].products[0].description, reply.description);
+    reply = { ok: false, reason: 'ชั่วโมงเรียนไม่ตรงกับแพ็กเกจ' };
+    const r2 = await qtdraft.createForRequest(row, [{ ...lines[0], salesNote: '40 ชม.' }], users);
+    assert.equal(r2.fields.status, 'needs_review');
+    global.fetch = async () => { throw new Error('down'); };
+    assert.equal((await qtdraft.createForRequest(row, [{ ...lines[0], salesNote: 'x' }], users)).defer, 'notes');
+  } finally { global.fetch = orig; delete process.env.ANTHROPIC_API_KEY; }
+});

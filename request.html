@@ -1487,7 +1487,7 @@ function docLink(no, url) {
     ? `<a class="doc" href="${esc(url)}" target="_blank" rel="noopener" title="เปิดเอกสารใน PEAK (พิมพ์ / ดาวน์โหลด PDF ได้)">${esc(no)} ↗</a>` : esc(no);
 }
 const QT_ASK = {
-  approve: { title: 'อนุมัติคำขอนี้?', ok: '✓ อนุมัติ', body: 'ระบบจะสร้าง QT Draft ใน PEAK ในรอบถัดไป (10:49 / 17:49)' },
+  approve: { title: 'อนุมัติคำขอนี้?', ok: '✓ อนุมัติ', body: 'ระบบจะสร้าง QT Draft ใน PEAK ในรอบถัดไป (10:49 / 17:49)', live: 'ระบบจะสร้าง QT Draft ใน PEAK ทันที รายการที่มีคำอธิบายเพิ่มเติมหรือของแถม Claude จะเรียบเรียงคำอธิบายให้ก่อน (ใช้เวลาไม่กี่วินาที)' },
   reject: { title: 'ตีกลับคำขอนี้?', ok: 'ตีกลับ', kind: 'danger', body: 'Sales จะเห็นเหตุผล และต้องส่งคำขอใหม่' },
   qt_approved: { title: 'อนุมัติ QT ใน PEAK แล้ว?', ok: '✓ อนุมัติแล้ว', body: 'ยืนยันว่าอนุมัติ QT นี้ใน PEAK แล้ว (สถานะรอตอบกลับ) Sales จะเปิดลิงก์ QT ส่งลูกค้าได้' },
   reopen: { title: 'ให้ระบบสร้าง QT ใหม่?', ok: '↻ สร้างใหม่', body: 'ใช้เมื่อแก้ลูกค้า / รหัสบริการใน PEAK แล้ว ระบบจะลองสร้าง QT อีกครั้งในรอบถัดไป' },
@@ -1516,7 +1516,7 @@ async function qtAction(id, action) {
   const note0 = (($('qn-' + id) || {}).value || '').trim();
   if (action === 'reject' && !note0) { $('qm-' + id).innerHTML = '<span class="err-line">ใส่เหตุผลก่อน</span>'; return; }
   const a = QT_ASK[action];
-  if (a && !(await ask({ title: a.title, ok: a.ok, kind: a.kind, html: `<p><b>${esc(q.company)}</b> · ${esc(q.segment)} · ${esc(id)}${action === 'qt_voided' ? `<br>QT เดิม <b>${esc(q.peakQtNo)}</b>` : ''}<br>ยอด${qtAmt(q).lbl} ${fmt(qtAmt(q).total)}</p>${note0 ? `<p>เหตุผล: ${esc(note0)}</p>` : ''}<p class="small">${a.body}</p>${a.note ? '<input id="ask-note" type="text" maxlength="300" placeholder="หมายเหตุ (ถ้ามี) เช่น เผลอกดยกเลิกตอนแก้เอกสาร" style="width:100%;margin-top:8px">' : ''}` }))) return;
+  if (a && !(await ask({ title: a.title, ok: a.ok, kind: a.kind, html: `<p><b>${esc(q.company)}</b> · ${esc(q.segment)} · ${esc(id)}${action === 'qt_voided' ? `<br>QT เดิม <b>${esc(q.peakQtNo)}</b>` : ''}<br>ยอด${qtAmt(q).lbl} ${fmt(qtAmt(q).total)}</p>${note0 ? `<p>เหตุผล: ${esc(note0)}</p>` : ''}<p class="small">${PEAK_LIVE && a.live ? a.live : a.body}</p>${a.note ? '<input id="ask-note" type="text" maxlength="300" placeholder="หมายเหตุ (ถ้ามี) เช่น เผลอกดยกเลิกตอนแก้เอกสาร" style="width:100%;margin-top:8px">' : ''}` }))) return;
   ASK_NOTE = a && a.note ? (($('ask-note') || {}).value || '').trim() : '';
   return withLoading('กำลังบันทึก…', () => qtActionDo(id, action));
 }

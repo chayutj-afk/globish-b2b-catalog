@@ -366,7 +366,7 @@ const PM_TY = { 1: 'เงินสด', 2: 'บัญชีธนาคาร',
 const CH_TH = { sales: 'ส่งไฟล์ให้ Sales', email: 'ส่งอีเมลลูกค้า', post: 'ส่งตัวจริงตามที่อยู่', email_post: 'ส่งอีเมลและตัวจริง' };
 function offerReceipt(ivNo, { ch, email, addr, method }) {
   const r = find(ivNo);
-  if (!CAN_RT || !D.peakLive || !r || !r.peakIvId || r.rtNo || !r.paidDate) return;
+  if (!CAN_RT || !D.peakLive || !r || r.rtNo || !r.paidDate) return;
   setTimeout(async () => {
     try { if (!PAYM) PAYM = (await api('/api/invoice-requests?view=pay-methods')).methods || []; } catch (e) { return; }
     let last = ''; try { last = localStorage.getItem('paym:' + (method || '')) || ''; } catch {}

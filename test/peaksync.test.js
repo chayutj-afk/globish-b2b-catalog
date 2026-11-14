@@ -49,7 +49,19 @@ test('receipt voided in PEAK → RT request rt_void, RT No. cleared on AR', asyn
 
 test('imported INV (no PEAK id) found by number', async () => {
   await seed();
+  const a0 = await ar(); await hub.updateRow('Invoices', a0._row, { peakIvId: '' });
+  const r0 = await req(); await hub.updateRow('InvoiceRequests', r0._row, { peakIvId: '' });
   const out = await ps.syncInvoice({ id: 'i-new', code: 'iv-1', status: 'Approve', preTaxAmount: 10000, issuedDate: '20261101', dueDate: '20261201' });
   assert.ok(out);
   assert.equal((await ar()).peakIvId, 'i-new');
+});
+
+test('another PEAK document that reuses the number (a voided twin) never touches our row', async () => {
+  await seed();
+  const out = await ps.syncInvoice({ id: 'i-other', code: 'IV-1', status: 'Void', isVoid: 1 });
+  assert.equal(out, null);
+  assert.equal((await ar()).docStatus, 'Active');
+  assert.equal((await req()).status, 'iv_issued');
+  assert.equal(await ps.syncReceipt({ id: 'r-other', code: 'RT-9', status: 'Void', isVoid: 1 }), null);
+  assert.equal((await ar()).rtNo, 'RT-9');
 });

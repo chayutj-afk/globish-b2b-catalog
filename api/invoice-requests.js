@@ -289,7 +289,7 @@ async function update(req, res, user) {
   if (b.action === 'original') {
     const want = b.originalDoc === 'no' ? 'no' : 'yes';
     if (row.originalStatus === 'sent') throw bad('ส่งตัวจริงไปแล้ว', 409);
-    if (row.status === 'rejected') throw bad('คำขอ INV นี้ถูกตีกลับแล้ว', 409);
+    if (DEAD.has(row.status)) throw bad(row.status === 'rejected' ? 'คำขอ INV นี้ถูกตีกลับแล้ว' : 'INV ของคำขอนี้ถูกยกเลิกแล้ว', 409);
     const address = text(b.address, 500) || row.originalAddress;
     const recipient = text(b.recipient, 120) || row.originalRecipient;
     if (want === 'yes' && (!address || !recipient)) throw bad('ใส่ผู้รับและที่อยู่สำหรับส่งเอกสารตัวจริง');
@@ -843,8 +843,13 @@ async function rtMake(req, res, user) {
   if (!a.paidDate) throw bad('ยังไม่ได้บันทึกรับเงินของ INV นี้', 409);
   if (a.rtNo || rts.some((x) => x.refDoc === ivNo && !DEAD.has(x.status))) throw bad(`INV นี้มีใบเสร็จแล้ว${a.rtNo ? ' (' + a.rtNo + ')' : ''} รีเฟรชหน้า`, 409);
   const iv = ivreqs.find((x) => x.ivRequestId === a.ivRequestId) || {};
-  const ivId = a.peakIvId || iv.peakIvId;
-  if (!ivId) throw bad('INV นี้ไม่มีรหัสใน PEAK (ออกก่อนเชื่อม API) ออกใบเสร็จใน PEAK เอง แล้วใส่เลข', 409);
+  let ivId = a.peakIvId || iv.peakIvId;
+  // An INV issued before the app (imported row) has no PEAK id yet: find it in PEAK by its number, and keep the id.
+  if (!ivId) {
+    const found = await peak.findInvoiceByCode(ivNo).catch(() => null);
+    if (found && found.id && Number(found.isVoid) !== 1) { ivId = found.id; await hub.updateRow('Invoices', a._row, { peakIvId: ivId }); }
+  }
+  if (!ivId) throw bad(`ไม่พบ ${ivNo} ใน PEAK ออกใบเสร็จใน PEAK เอง แล้วใส่เลข`, 409);
   const methods = await peak.listPaymentMethods();
   const pm = methods.find((m) => m.code === text(b.paymentMethodCode, 40));
   if (!pm) throw bad('เลือกบัญชีที่รับเงินใน PEAK');

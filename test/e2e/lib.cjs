@@ -1,0 +1,16 @@
+process.env.AUTH_SECRET = 'qa-secret-qa-secret-qa-secret-qa-secret-1234';
+const fs = require('fs'); const R = '/tmp/sales-desk-e2e';
+const { sign } = require('../../lib/session');
+const T = require('../../lib/hub').TABLES;
+const B = 'http://localhost:3950';
+const ck = (e) => 'gc_session=' + sign({ email: e, name: e.split('@')[0], exp: Date.now() + 3600e3 });
+const call = async (who, m, u, body, hdr = {}) => { const r = await fetch(B + u, { method: m, headers: { ...(who ? { Cookie: ck(who) } : {}), 'Content-Type': 'application/json', Origin: B, ...hdr }, body: body && JSON.stringify(body) }); return [r.status, await r.json().catch(() => ({}))]; };
+let fails = 0; const failed = [];
+const ok = (c, n) => { console.log((c ? 'PASS ' : 'FAIL ') + n); if (!c) { fails++; failed.push(n); } };
+const strip = (v) => typeof v === 'string' ? v.replace(/^'/, '') : v;
+const db = () => { const x = JSON.parse(fs.readFileSync(R + '/db.json', 'utf8')); const o = {}; for (const k of Object.keys(x)) { o[k] = T[k] ? x[k].map((r) => Object.fromEntries(T[k].map((h, i) => [h, strip(r[i]) ?? '']))) : x[k]; } return o; };
+const peak = () => JSON.parse(fs.readFileSync(R + '/peak.json', 'utf8'));
+const setPeak = (f) => { const s = peak(); f(s); fs.writeFileSync(R + '/peak.json', JSON.stringify(s)); };
+const hook = (type, body, key = 'hookkey123') => call(null, 'POST', '/api/users?view=peak-hook&type=' + type, body, { 'x-api-key': key });
+const done = () => { console.log(fails ? `\n${fails} FAILED:\n - ` + failed.join('\n - ') : '\nALL PASSED'); };
+module.exports = { B, ck, call, ok, db, peak, setPeak, hook, done, T, sign };

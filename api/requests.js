@@ -222,7 +222,7 @@ async function list(req, res, user) {
   const [rows, lines, ivs] = await Promise.all([hub.readTable('Requests'), hub.readTable('RequestLines'), hub.readTable('InvoiceRequests')]);
   const invoiced = {}, invoicedIncl = {};
   const n = (x) => Number(String(x ?? '').replace(/,/g, '')) || 0;
-  ivs.filter((v) => v.requestId && v.status !== 'rejected').forEach((v) => {
+  ivs.filter((v) => v.requestId && !['rejected', 'iv_void'].includes(v.status)).forEach((v) => {
     invoiced[v.requestId] = (invoiced[v.requestId] || 0) + n(v.amountPreVat);
     invoicedIncl[v.requestId] = (invoicedIncl[v.requestId] || 0) + (n(v.amountInclVat) || Math.round(n(v.amountPreVat) * 107) / 100);
   });
@@ -311,7 +311,8 @@ async function update(req, res, user) {
     retry: ['approved'],
     qt_approved: ['qt_draft'],
     // qt_error: the sync found the Draft voided in PEAK ("QT ถูก void ใน PEAK").
-    qt_voided: ['qt_draft', 'qt_approved', 'qt_error'],
+    // iv_requested: only when every INV request of this QT was rejected or voided (checked below).
+    qt_voided: ['qt_draft', 'qt_approved', 'qt_error', 'iv_requested'],
     // qt_fixed: the sync flagged the Draft (e.g. account code differs from the service); accounting
     // fixed it in PEAK, so it goes back to qt_draft and the sync re-checks it on the next run.
     qt_fixed: ['qt_error'],
@@ -340,7 +341,7 @@ async function update(req, res, user) {
   if (b.action === 'qt_voided') {
     if (!row.peakQtNo && !row.peakQtId) throw bad('คำขอนี้ยังไม่มีเลข QT ใน PEAK', 409);
     // A QT that already has INV requests can't just be redone: the INVs point at the old number.
-    const ivs = (await hub.readTable('InvoiceRequests')).filter((v) => v.requestId === row.requestId && v.status !== 'rejected');
+    const ivs = (await hub.readTable('InvoiceRequests')).filter((v) => v.requestId === row.requestId && !['rejected', 'iv_void'].includes(v.status));
     if (ivs.length) throw bad(`QT นี้มีคำขอ INV แล้ว ${ivs.length} ใบ ใช้ "ขอแก้เอกสาร" แทน`, 409);
     const old = `${row.peakQtNo || '?'}|${row.peakQtId || ''}`;
     Object.assign(fields, {

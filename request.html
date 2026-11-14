@@ -284,7 +284,7 @@ const VAT_IN = ['B2C', 'B2E', 'MaoMao', 'Others']; // requests made before custo
 // Customer types = PEAK G012 (ประเภทลูกค้า), with the rules accounting set on /users (VAT, products, Opportunity ID).
 let TYPES = [{ code: 'G012-00002', name: 'B2B', vat: 'excl', kinds: ['catalog', 'keyhs', 'surcharge'], opp: true, prefix: '', ready: true },
   { code: 'G012-00001', name: 'B2C', vat: 'incl', kinds: ['service'], opp: true, prefix: '', ready: true },
-  { code: 'G012-00003', name: 'B2S', vat: 'excl', kinds: ['service'], opp: false, svcGroups: [{ label: 'บริการ B2S', prefixes: ['B2S'] }, { label: 'Assessment', keyword: 'Assessment' }], ready: true }];
+  { code: 'G012-00003', name: 'B2S', vat: 'excl', kinds: ['service'], opp: false, svcGroups: [{ label: 'บริการ B2S', prefixes: ['B2S'] }, { label: 'Assessment', prefixes: ['GECB'] }], ready: true }];
 const pickFromPeak = (t) => !!(t && t.svcGroups && t.svcGroups.length);
 const typeOf = (seg) => TYPES.find((t) => t.name === seg);
 const vatIn = (seg) => { const t = typeOf(seg); return t ? t.vat === 'incl' : VAT_IN.includes(seg); };

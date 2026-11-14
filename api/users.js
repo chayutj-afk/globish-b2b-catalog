@@ -3,6 +3,8 @@
 //   GET ?view=health → data health (admins + accounting); ?view=health-cron → daily Chat digest (Vercel cron)
 //   GET   → everyone who has signed in, with their role
 //   PATCH { email, role?: sales|lead|operation|op|collector|admin, extra?: [perm], team?: 'b2b' | 'b2c' | 'both', classItems?: { G014: code } } → change a user's access
+//   PATCH { action: 'add_user', email, name, role, team, classItems? } → set someone up before their first sign-in
+//   GET ?fresh=1 → re-read PEAK classification items now (new Sales Performance item made in PEAK)
 //   PATCH { action: 'classes', group, mode: segment|seller|off, segments?: { B2B: item } } → how a PEAK classification group is picked
 const { checkOrigin, sendError } = require('../lib/session');
 const users = require('../lib/users');
@@ -49,6 +51,7 @@ module.exports = async function handler(req, res) {
     }
     if (!users.can(me, 'users')) return res.status(403).json({ ok: false, error: 'เฉพาะผู้ดูแลสิทธิ์' });
     if (req.method === 'GET') {
+      if (new URL(req.url, 'http://x').searchParams.get('fresh')) require('../lib/classrules').resetCache();
       const list = await users.list();
       const classes = await classView(list);
       for (const u of list) u.classItems = Object.fromEntries(Object.entries(classes.rules).filter(([, r]) => r.mode === 'seller').map(([g, r]) => [g, r.users[u.email.toLowerCase()] || '']));
@@ -73,6 +76,11 @@ module.exports = async function handler(req, res) {
       if (b.action === 'classes') {
         await require('../lib/classrules').saveGroup(String(b.group || ''), { mode: b.mode, segments: b.segments }, await users.list(), me.email);
         return res.status(200).json({ ok: true });
+      }
+      if (b.action === 'add_user') {
+        const email = await users.addUser(me, b);
+        if (b.classItems && typeof b.classItems === 'object') await require('../lib/classrules').saveUser(email, b.classItems, await users.list(), me.email);
+        return res.status(200).json({ ok: true, email });
       }
       if (b.classItems && typeof b.classItems === 'object') {
         await require('../lib/classrules').saveUser(String(b.email || '').toLowerCase(), b.classItems, await users.list(), me.email);

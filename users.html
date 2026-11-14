@@ -18,8 +18,9 @@ td.who{white-space:normal}
 .pill{display:inline-block;padding:1px 10px;border-radius:9999px;font-size:11.5px;background:var(--primary);color:#fff}
 .ok{color:var(--ok-ink);font-size:12px}.err{color:var(--bad-ink);font-size:12px}
 .chip{display:inline-block;padding:1px 9px;border-radius:9999px;font-size:11.5px;background:var(--primary-soft);color:var(--warn-ink);margin:2px 2px 2px 0;white-space:nowrap}
+.chip.warn{background:#fdecea;color:#b42318}
 .pill.soft{background:var(--primary-soft);color:var(--warn-ink)}
-.fl{display:block;margin:0 0 12px;font-size:13px;color:var(--head)}.fl .sel,.fl select{display:block;width:100%;margin-top:4px}
+.fl{display:block;margin:0 0 12px;font-size:13px;color:var(--head)}.fl .sel,.fl select{display:block;width:100%;margin-top:4px}.fl input{display:block;width:100%;margin-top:4px;box-sizing:border-box}
 .ck{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:13.5px;color:var(--ink)}
 .u-sum{background:var(--panel2,var(--panel));border:1px solid var(--line);border-radius:6px;padding:10px 12px;font-size:13px;line-height:1.7;margin-top:4px}
 .u-conf{padding:10px 12px;border:1px solid var(--primary);border-radius:6px;color:var(--ink);font-size:13px;line-height:1.7}
@@ -71,7 +72,7 @@ td.who{white-space:normal}
   <div class="card" style="padding:12px 16px;margin:12px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>แจ้งเตือน Google Chat:</b> <span id="chat-st">…</span><button class="btn btn-g btn-sm" type="button" onclick="testChat()">ส่งข้อความทดสอบ</button><span id="chat-msg" class="small"></span></div>
   <div class="card" style="padding:12px 16px;margin:12px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>เชื่อมต่อ PEAK API:</b> <input id="peak-tax" placeholder="เลขภาษีลูกค้าที่ใช้ทดสอบ (ไม่บังคับ)" inputmode="numeric" maxlength="17" style="width:240px"><button class="btn btn-g btn-sm" type="button" onclick="testPeak()">ทดสอบเชื่อมต่อ (อ่านอย่างเดียว)</button><span id="peak-msg" class="small" style="white-space:pre-line"></span></div>
   <div class="card" id="cls-card" style="padding:12px 16px;margin:12px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>กลุ่มจัดประเภทใน PEAK:</b> <span class="small" id="cls-sum">…</span><span class="sp" style="flex:1"></span><button class="btn btn-g btn-sm" type="button" onclick="openClasses()">⚙ ตั้งค่า</button></div>
-  <div class="filters" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><input type="search" id="q" placeholder="ค้นหาชื่อหรืออีเมล" oninput="render()" style="flex:1;min-width:200px"><select id="fr" class="sel" onchange="render()" style="width:auto"><option value="">ทุก role</option></select></div>
+  <div class="filters" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><input type="search" id="q" placeholder="ค้นหาชื่อหรืออีเมล" oninput="render()" style="flex:1;min-width:200px"><select id="fr" class="sel" onchange="render()" style="width:auto"><option value="">ทุก role</option></select><button class="btn btn-p" type="button" onclick="openAdd()">＋ เพิ่มผู้ใช้ใหม่</button></div>
   <div class="card tbl"><table><thead><tr><th>ผู้ใช้</th><th>เข้าใช้ล่าสุด</th><th>Role</th><th>ทีม</th><th>สิทธิ์เพิ่ม</th><th>กลุ่มจัดประเภท (รายเซล)</th><th></th></tr></thead><tbody id="rows"><tr><td colspan="7" class="small">กำลังโหลด…</td></tr></tbody></table></div>
 </main></div></div>
 <div class="ov" id="ov-cls" hidden onclick="if(event.target===this)closeClasses()"><div class="modal cls-modal" role="dialog" aria-modal="true" aria-labelledby="cls-title">
@@ -111,13 +112,69 @@ function render() {
     const perf = sellerGroups().map((g) => (u.classItems || {})[g.code] ? itemName(g, u.classItems[g.code]) : '').filter(Boolean).join(' · ');
     return `<tr>
     <td class="who"><b>${esc(u.name)}</b><br><span class="small">${e}</span></td>
-    <td class="small">${esc(u.lastLogin)}</td>
+    <td class="small">${esc(u.lastLogin) || '<span class="chip">ยังไม่เคยเข้าระบบ</span>'}</td>
     <td>${u.fixedAdmin ? '<span class="pill">Admin (ผู้ดูแลหลัก)</span>' : `<span class="pill ${u.role === 'admin' ? '' : 'soft'}">${esc(roleOf(u.role).label)}</span>`}</td>
     <td>${all ? '<span class="small">ทั้งหมด</span>' : esc(TEAM[u.team] || u.team)}</td>
     <td class="who">${all ? '<span class="small">ทุกสิทธิ์</span>' : extra.length ? extra.map((p) => `<span class="chip">${esc(PERMS[p] || p)}</span>`).join(' ') : '<span class="small">—</span>'}</td>
-    <td class="small">${esc(perf) || '—'}</td>
+    <td class="small">${esc(perf) || (needsPerf(u) ? '<span class="chip warn">ยังไม่ผูก Sales Performance</span>' : '—')}</td>
     <td style="text-align:right" id="m-${e}">${u.fixedAdmin ? '<span class="small">ล็อก</span>' : `<button class="btn btn-o btn-sm" type="button" onclick="openUser('${e}')">⚙ ตั้งค่า</button>`}</td></tr>`;
   }).join('') : '<tr><td colspan="7" class="small">ไม่พบผู้ใช้</td></tr>';
+}
+const needsPerf = (u) => ['sales', 'lead'].includes(u.role) && sellerGroups().some((g) => !(u.classItems || {})[g.code]);
+// PEAK item that looks like this person (email first part, or a word of the name / nickname), to pre-pick.
+function suggestItem(g, email, name) {
+  const words = [String(email || '').split('@')[0].split(/[._-]/)[0], ...String(name || '').split(/[\s()]+/)].map((w) => w.toLowerCase()).filter((w) => w.length >= 3);
+  return (g.items || []).find((i) => words.some((w) => String(i.name || '').toLowerCase().includes(w))) || null;
+}
+// Seller-group pickers (Sales Performance): items come live from PEAK. A new salesperson needs an item made
+// in PEAK first (the PEAK API cannot create classification items); "↻ ดึงรายการล่าสุด" picks it up at once.
+function clsFields(u, isNew) {
+  const opt = (v, t, cur) => `<option value="${esc(v)}"${cur === v ? ' selected' : ''}>${esc(t)}</option>`;
+  return sellerGroups().map((g) => {
+    const saved = (u.classItems || {})[g.code] || '';
+    const sug = !saved ? suggestItem(g, u.email, u.name) : null;
+    const cur = saved || (sug ? sug.code : '');
+    return `<div class="fl"><label for="ucls-${esc(g.code)}">${esc(g.name)} (PEAK ${esc(g.code)})</label>
+      <div style="display:flex;gap:6px"><select id="ucls-${esc(g.code)}" class="sel u-cls" data-g="${esc(g.code)}" style="flex:1">${opt('', '— ไม่ติด —', cur)}${(g.items || []).map((p) => opt(p.code, `${p.name} · ${p.code}`, cur)).join('')}${cur && !(g.items || []).some((p) => p.code === cur) ? opt(cur, cur + ' (ไม่มีใน PEAK แล้ว)', cur) : ''}</select>
+      <button class="btn btn-g btn-sm" type="button" onclick="refreshItems(this)" title="ดึงรายการจาก PEAK ใหม่">↻ ดึงรายการล่าสุด</button></div>
+      <div class="small" style="margin-top:4px">${sug ? `ระบบเลือกให้จากชื่อ: <b>${esc(sug.name)}</b> ตรวจก่อนบันทึก` : !saved && (isNew || ['sales', 'lead'].includes(u.role)) ? 'ยังไม่มีรายการของคนนี้? สร้างใน PEAK ที่ ตั้งค่า › การจัดประเภท › ' + esc(g.name) + ' แล้วกด ↻' : ''}</div></div>`;
+  }).join('');
+}
+async function refreshItems(btn) {
+  const sel = btn.parentElement.querySelector('select'), keep = sel.value;
+  btn.disabled = true; btn.textContent = 'กำลังดึง…';
+  try {
+    const d = await api('/api/users?fresh=1'); CLASSES = d.classes || CLASSES;
+    const g = CLASSES.groups.find((x) => x.code === sel.dataset.g) || { items: [] };
+    sel.innerHTML = `<option value="">— ไม่ติด —</option>` + (g.items || []).map((p) => `<option value="${esc(p.code)}">${esc(p.name)} · ${esc(p.code)}</option>`).join('');
+    sel.value = keep && (g.items || []).some((p) => p.code === keep) ? keep : '';
+    btn.textContent = `✓ ${g.items.length} รายการ`;
+  } catch (e) { btn.textContent = '✗ ' + e.message.slice(0, 40); }
+  finally { setTimeout(() => { btn.disabled = false; btn.textContent = '↻ ดึงรายการล่าสุด'; }, 2500); }
+}
+function openAdd() {
+  const opt = (v, t, cur) => `<option value="${esc(v)}"${cur === v ? ' selected' : ''}>${esc(t)}</option>`;
+  $('m-title').textContent = 'เพิ่มผู้ใช้ใหม่'; $('m-ok').textContent = 'เพิ่มผู้ใช้'; $('m-cancel').textContent = 'ยกเลิก'; delete $('m-ok').dataset.step;
+  $('m-body').innerHTML = `<p class="small" style="margin-top:0">ตั้งค่าไว้ก่อนได้ เมื่อคนนี้เข้าระบบครั้งแรกด้วย Google จะได้สิทธิ์ตามนี้ทันที</p>
+    <label class="fl">อีเมล *<input id="a-em" type="email" autocomplete="off" spellcheck="false" placeholder="name@globish.co.th"></label>
+    <label class="fl">ชื่อ<input id="a-nm" autocomplete="off" placeholder="เช่น Chattraya (Benz) Lawhawished"></label>
+    <label class="fl">Role<select id="a-role" class="sel">${ROLES.filter((r) => r.id !== 'admin').map((r) => opt(r.id, r.label, 'sales')).join('')}</select></label>
+    <label class="fl">ทีม<select id="a-team" class="sel">${Object.entries(TEAM).map(([v, t]) => opt(v, t, 'b2b')).join('')}</select></label>
+    <div id="a-cls"></div><div class="err" id="u-err"></div>`;
+  const paintCls = () => { $('a-cls').innerHTML = clsFields({ email: $('a-em').value, name: $('a-nm').value, role: $('a-role').value, classItems: {} }, true); };
+  $('a-em').onchange = paintCls; $('a-nm').onchange = paintCls; paintCls();
+  $('ov-modal').hidden = false; setTimeout(() => $('a-em').focus(), 30);
+  const close = () => { $('ov-modal').hidden = true; $('m-ok').onclick = $('m-cancel').onclick = null; };
+  $('m-cancel').onclick = close;
+  $('m-ok').onclick = async () => {
+    const email = $('a-em').value.trim().toLowerCase();
+    if (!/^[^\s@]+@globish\.co\.th$/.test(email)) { $('u-err').textContent = 'ใส่อีเมล @globish.co.th'; return; }
+    const classItems = {}; document.querySelectorAll('#a-cls .u-cls').forEach((el) => { if (el.value) classItems[el.dataset.g] = el.value; });
+    $('m-ok').disabled = true;
+    try { await api('/api/users', { method: 'PATCH', body: JSON.stringify({ action: 'add_user', email, name: $('a-nm').value.trim(), role: $('a-role').value, team: $('a-team').value, classItems }) }); close(); await load(); const m = document.getElementById('m-' + email); if (m) m.insertAdjacentHTML('afterbegin', '<span class="ok">✓ เพิ่มแล้ว </span>'); }
+    catch (e) { $('u-err').textContent = e.message; }
+    finally { $('m-ok').disabled = false; }
+  };
 }
 // One popup per person: change everything, see the effect, then confirm once.
 async function openUser(email) {
@@ -129,7 +186,7 @@ async function openUser(email) {
     <label class="fl">Role<select id="u-role" class="sel">${ROLES.map((r) => opt(r.id, r.label, u.role)).join('')}</select></label>
     <label class="fl" id="u-team-w">ทีม<select id="u-team" class="sel">${Object.entries(TEAM).map(([v, t]) => opt(v, t, u.team)).join('')}</select></label>
     <div class="fl" id="u-extra-w">สิทธิ์เพิ่ม (นอก role)<div id="u-extra"></div></div>
-    ${sellerGroups().map((g) => { const cur = (u.classItems || {})[g.code] || ''; return `<label class="fl">${esc(g.name)} (PEAK ${esc(g.code)})<select class="sel u-cls" data-g="${esc(g.code)}">${opt('', '— ไม่ติด —', cur)}${(g.items || []).map((p) => opt(p.code, `${p.name} · ${p.code}`, cur)).join('')}${cur && !(g.items || []).some((p) => p.code === cur) ? opt(cur, cur + ' (ไม่มีใน PEAK แล้ว)', cur) : ''}</select></label>`; }).join('')}
+    ${clsFields(u, false)}
     <div class="u-sum" id="u-sum"></div></div><div class="err" id="u-err"></div>`;
   let extra = new Set(u.extra || []);
   const paint = () => {

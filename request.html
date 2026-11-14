@@ -55,6 +55,7 @@
       <div class="fg" id="q-opp-wrap"><label id="q-opp-label">Opportunity ID ใน CRM *</label>
         <div class="opp" id="q-opp" data-p="q"></div><input type="hidden" id="q-opp-y"><input type="hidden" id="q-opp-n"></div>
     </div>
+    <div class="row c3" id="q-cls" hidden></div>
     <div class="row c3">
       <div class="fg"><label>เลขประจำตัวผู้เสียภาษี (13 หลัก) *</label>
         <input id="q-tax" type="text" inputmode="numeric" maxlength="13" placeholder="0105555555554" oninput="digits(this);taxHint('q');onTaxInput('q')">
@@ -433,7 +434,26 @@ const kindOf = (it) => it.kind || 'catalog';
 //   - line items of a kind the segment can't use (B2B catalog / Key H.S. ↔ B2E/B2S package IDs)
 //   - Opportunity ID when switching to B2S (B2S has none)
 // Customer details (tax ID, branch, name) stay: they describe the customer, not the segment.
+// PEAK classification groups Sales picks on the form (e.g. ประเภทลูกค้า G012, Business Unit G013): the options
+// are PEAK's own items; the customer group only pre-fills them, Sales can change.
+let CLS = null;
+async function loadClasses() {
+  if (CLS) return CLS;
+  try { CLS = (await api('/api/requests?view=classes')).groups || []; } catch { CLS = []; }
+  const box = $('q-cls');
+  box.innerHTML = CLS.map((g) => `<div class="fg"><label>${esc(g.name)} <span class="small">(PEAK ${esc(g.code)})</span></label><select id="cls-${esc(g.code)}" data-g="${esc(g.code)}" onchange="this.dataset.touched='1'"><option value="">— ไม่ติด —</option>${g.items.map((i) => `<option value="${esc(i.code)}">${esc(i.name)}</option>`).join('')}</select><div class="sub">ตัวเลือกจาก PEAK · ระบบเลือกให้ตามกลุ่มลูกค้า เปลี่ยนได้</div></div>`).join('');
+  box.hidden = !CLS.length;
+  prefillClasses();
+  return CLS;
+}
+function prefillClasses(force) {
+  const seg = $('q-segment').value;
+  (CLS || []).forEach((g) => { const el = $('cls-' + g.code); if (el && (force || !el.dataset.touched)) { el.value = g.defaults[seg] || ''; if (force) delete el.dataset.touched; } });
+}
+const classPicksOf = () => Object.fromEntries((CLS || []).map((g) => [g.code, ($('cls-' + g.code) || {}).value || '']));
+const clsName = (code, item) => { const g = (CLS || []).find((x) => x.code === code); return (g && (g.items.find((i) => i.code === item) || {}).name) || item; };
 function changeSegment() {
+  prefillClasses();
   const seg = $('q-segment').value;
   const before = CART.length;
   CART = CART.filter((it) => KINDS[seg].includes(kindOf(it)));
@@ -719,7 +739,7 @@ async function submitQT() {
     segment: seg, dealType: v('q-deal'), opportunityId: seg === 'B2S' ? '' : getOpp('q'),
     taxId: v('q-tax'), branch: v('q-branch'), clientCode: v('q-client'), company: v('q-company'),
     docLang: v('q-lang'), wantedQtDate: v('q-date'), creditTermDays: v('q-term'), whtRate: v('q-wht'), poRequired: v('q-po') === 'yes', note: v('q-note'), customerEmail: v('q-email'), replaces: v('q-replaces'),
-    items: CART, newContact: newContactOf(),
+    items: CART, newContact: newContactOf(), classPicks: classPicksOf(),
   };
   if (!CART.length) return msg('q-msg', 'err', 'ยังไม่มีรายการสินค้า');
   const nc = body.newContact;
@@ -742,6 +762,7 @@ async function submitQT() {
   if (badSvc) return msg('q-msg', 'err', `รหัส ${badSvc.code || '(ว่าง)'} ไม่พบใน PEAK แก้ก่อนส่ง`);
   if (!body.company) return msg('q-msg', 'err', 'กรอกชื่อบริษัทหรือหน่วยงาน');
   const ok = await ask({ title: 'ยืนยันส่งคำขอใบเสนอราคา', ok: '📨 ส่งคำขอ', html: `<table>
+    ${(CLS || []).length ? `<tr><td>กลุ่มใน PEAK</td><td>${CLS.map((g) => `${esc(g.name)}: <b>${esc(body.classPicks[g.code] ? clsName(g.code, body.classPicks[g.code]) : 'ไม่ติด')}</b>`).join(' · ')}</td></tr>` : ''}
     <tr><td>ลูกค้า</td><td><b>${esc(body.company)}</b> (${esc(seg)})${body.newContact ? '<br><span class="small">🆕 ลูกค้าใหม่ ระบบจะสร้างใน PEAK เมื่อฝ่ายบัญชีอนุมัติ</span>' : ''}</td></tr>
     <tr><td>เลขภาษี / สาขา</td><td>${esc(body.taxId)} / ${esc(body.branch)}${body.clientCode ? ' · ' + esc(body.clientCode) : ''}</td></tr>
     <tr><td>รายการ</td><td>${CART.length} รายการ · ยอด${basisOf(seg)} <b>${esc($('q-total').textContent)}</b>${vatIn(seg) ? ' <span class="small">(QT ใน PEAK เป็นราคารวม VAT)</span>' : ''}</td></tr>
@@ -755,7 +776,7 @@ async function submitQT() {
     if (!d) { msg('q-msg', 'info', 'ยังไม่ได้ส่ง ดูคำขอเดิมได้ที่ "คำขอของฉัน"'); return; }
     $('q-msg').innerHTML = `<div class="done-card"><b>✓ ส่งคำขอ ${esc(d.requestId)} แล้ว</b><div style="margin:6px 0 10px">${d.vatMode === 'incl' ? `ยอดรวม VAT ${fmt(d.totalInclVat)} (ก่อน VAT ${fmt(d.total)})` : `ยอดก่อน VAT ${fmt(d.total)}`} · ${esc(d.message)}${d.belowFloor ? '<br>มีรายการต่ำกว่าราคาขั้นต่ำ Catalog (บันทึกไว้ให้ผู้อนุมัติเห็น)' : ''}</div><button class="btn btn-o btn-sm" onclick="go('mine')">ดูสถานะในคำขอของฉัน</button></div>`;
     CART = []; saveCart(); renderItems();
-    ['q-opp-y', 'q-opp-n', 'q-tax', 'q-branch', 'q-client', 'q-company', 'q-date', 'q-term', 'q-wht', 'q-note', 'q-email', 'q-replaces', 'nc-type', 'nc-prefix', 'nc-phone', 'nc-addr', 'nc-sub', 'nc-dist', 'nc-prov', 'nc-post', 'nc-cname', 'nc-cphone'].forEach((id) => { $(id).value = ''; }); paintOpp('q'); showNewC('q', false);
+    ['q-opp-y', 'q-opp-n', 'q-tax', 'q-branch', 'q-client', 'q-company', 'q-date', 'q-term', 'q-wht', 'q-note', 'q-email', 'q-replaces', 'nc-type', 'nc-prefix', 'nc-phone', 'nc-addr', 'nc-sub', 'nc-dist', 'nc-prov', 'nc-post', 'nc-cname', 'nc-cphone'].forEach((id) => { $(id).value = ''; }); paintOpp('q'); showNewC('q', false); prefillClasses(true);
     onTaxInput('q');
     clearDraft();
     taxHint('q'); loadAll();
@@ -1003,6 +1024,7 @@ function paintNews() {
 async function loadAll() {
   try {
     const [a, b, c, d] = await Promise.all([api('/api/requests'), api('/api/invoice-requests'), api('/api/invoice-requests?view=receipts'), api('/api/invoice-requests?view=edits')]);
+    loadClasses();
     REQS = a.requests; PEAK_LIVE = !!a.peakLive; IVS = b.requests; RTS = c.requests; EDITS = d.requests;
     fillQTPicker(); renderMine(); renderPending(); updateSum(); autoTab();
   } catch (e) {
@@ -1103,6 +1125,7 @@ async function rebuildQT(id) {
   if ((CART.length || $('q-company').value.trim()) && !(await ask({ kind: 'warn', title: 'แทนที่ข้อมูลในฟอร์ม QT?', ok: 'แทนที่', html: '<p>ฟอร์ม QT มีข้อมูลค้างอยู่ จะถูกแทนด้วยข้อมูลจากคำขอที่ถูกตีกลับ</p>' }))) return;
   const set = (k, v) => { if ($(k)) $(k).value = v ?? ''; };
   set('q-segment', q.segment); set('q-deal', q.dealType); setOpp('q', q.opportunityId);
+  loadClasses().then(() => { let p = {}; try { p = JSON.parse(q.classPicks || '{}'); } catch {} prefillClasses(true); Object.entries(p).forEach(([g, v]) => { const el = $('cls-' + g); if (el) { el.value = v; el.dataset.touched = '1'; } }); });
   set('q-tax', q.taxId); set('q-branch', q.branch); set('q-client', q.clientCode); set('q-company', q.company);
   set('q-lang', q.docLang || 'TH'); set('q-term', q.creditTermDays); set('q-wht', q.whtRate); set('q-po', q.poRequired === 'Yes' ? 'yes' : 'no');
   set('q-note', String(q.note || '').replace(/^\[ตรวจเลขภาษี[^\]]*\]\s*/, '')); set('q-email', q.customerEmail);
@@ -1342,6 +1365,7 @@ function renderPending() {
       ${F('วันที่ใน QT', esc(q.wantedQtDate))}
       ${F('ภาษา / PO', esc(q.docLang) + (q.poRequired === 'Yes' ? ' · ต้องมี PO' : ''))}
       ${F('Opportunity', esc(q.opportunityId))}
+      ${(() => { let p = null; try { p = JSON.parse(q.classPicks || 'null'); } catch {} return p ? Object.entries(p).map(([g, v]) => F(esc(((CLS || []).find((x) => x.code === g) || { name: g }).name), esc(v ? clsName(g, v) : 'ไม่ติด'))).join('') : ''; })()}
     </div>
     ${q.newContact && !q.clientCode ? `<div class="pc-note">🆕 ลูกค้าใหม่: ${esc(q.company)} · ${esc(q.taxId)} / ${esc(q.branch)} · ${esc(q.newContact)}<br><span class="small">กดอนุมัติแล้วระบบจะสร้างลูกค้านี้ใน PEAK ก่อนสร้าง QT ตรวจชื่อ เลขภาษี และที่อยู่ให้ตรงเอกสารลูกค้า</span></div>` : ''}${q.note ? `<div class="pc-note">💬 Sales: ${esc(q.note)}</div>` : ''}${(q.lines || []).filter((l) => l.salesNote && !l.qtDescription).map((l) => `<div class="pc-note warn">✍️ Sales เขียนเพิ่มในรายการ (จะเรียบเรียงรวมกับคำอธิบายใน QT): ${esc(l.salesNote)}</div>`).join('')}${q.belowFloor ? `<div class="pc-note warn">ต่ำกว่าราคาขั้นต่ำ Catalog: ${esc(q.belowFloor)}</div>` : ''}${fix && q.peakNote ? `<div class="pc-note err">${esc(q.peakNote)}</div>` : ''}
     <details style="margin-top:12px"><summary class="small" style="cursor:pointer">ดูรายการสินค้า (${(q.lines || []).length} บรรทัด)</summary>

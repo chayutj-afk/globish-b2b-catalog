@@ -131,11 +131,11 @@ async function openUser(email) {
     finally { $('m-ok').disabled = false; }
   };
 }
-const MODE_TH = { segment: 'ตามกลุ่มลูกค้า', seller: 'ตามเซล (รายคน)', off: 'ไม่ติด' };
+const MODE_TH = { segment: 'เซลเลือกในฟอร์มขอ QT', seller: 'ตามเซล (รายคน)', off: 'ไม่ติด' };
 function renderClasses() {
   const C = CLASSES;
   $('cls').innerHTML = (C.live ? '' : `<p class="small warn">ยังอ่านจาก PEAK ไม่ได้ (${esc(C.error || 'PEAK_MODE = off')}) แสดงกติกาเดิมไว้ก่อน แก้ได้เมื่อเปิด PEAK API</p>`)
-    + `<table style="margin-top:8px"><thead><tr><th>กลุ่ม</th><th>ติดยังไง</th><th>รายการตามกลุ่มลูกค้า</th><th></th></tr></thead><tbody>${C.groups.map((g) => `<tr>
+    + `<table style="margin-top:8px"><thead><tr><th>กลุ่ม</th><th>ติดยังไง</th><th>ค่าที่ระบบเติมให้ก่อน ตามกลุ่มลูกค้า (เซลเปลี่ยนได้)</th><th></th></tr></thead><tbody>${C.groups.map((g) => `<tr>
       <td class="who"><b>${esc(g.name)}</b><br><span class="small">${esc(g.code)}${g.description ? ' · ' + esc(g.description) : ''}</span></td>
       <td><select class="sel" id="cm-${esc(g.code)}" onchange="clsPaint('${esc(g.code)}')" ${C.live ? '' : 'disabled'}>${Object.entries(MODE_TH).map(([m, t]) => `<option value="${m}"${g.mode === m ? ' selected' : ''}>${t}</option>`).join('')}</select></td>
       <td><div id="cs-${esc(g.code)}" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;min-width:420px">${C.segments.map((sg) => { const cur = g.segments[sg] || ''; return `<label class="small">${esc(sg)}<select class="sel" data-s="${esc(sg)}" ${C.live ? '' : 'disabled'}><option value="">— ไม่ติด —</option>${(g.items || []).map((i) => `<option value="${esc(i.code)}"${cur === i.code ? ' selected' : ''}>${esc(i.name)} · ${esc(i.code)}</option>`).join('')}${cur && !(g.items || []).some((i) => i.code === cur) ? `<option value="${esc(cur)}" selected>${esc(cur)} (ไม่มีใน PEAK แล้ว)</option>` : ''}</select></label>`; }).join('')}</div></td>

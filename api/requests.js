@@ -171,12 +171,15 @@ async function create(req, res, user) {
     }
   }
 
+  // PEAK classification Sales picked on the form (G012 / G013 …), checked against PEAK's own items.
+  const picks = await require('../lib/classrules').cleanPicks(req.body && req.body.classPicks, await hub.readTable('Users').catch(() => []));
   const now = new Date();
   const request = {
     requestId: newId(now), createdAt: hub.sheetDateTime(now), requestedBy: user.email, salesName: user.name,
     ...r, wantedQtDate: toYmdDisplay(r.wantedQtDate), status: 'new', peakQtNo: '', peakQtId: '',
     totalPreVat: total, qtApprovedAt: '', ivRequestedAt: '', updatedAt: hub.sheetDateTime(now),
     catalogTotal, belowFloor, vatMode: incl ? 'incl' : 'excl', totalInclVat, voidedQts: '',
+    classPicks: picks ? JSON.stringify(picks) : '',
   };
 
   // The QT Draft is made when accounting approves the request (live via the PEAK API when
@@ -362,6 +365,7 @@ module.exports = async function handler(req, res) {
     const user = await requireUser(req);
     if (req.method === 'POST') return await create(req, res, user);
     if (req.method === 'GET' && req.query && req.query.view === 'qt-live') return await qtLive(req, res, user);
+    if (req.method === 'GET' && req.query && req.query.view === 'classes') return res.status(200).json({ ok: true, groups: await require('../lib/classrules').formGroups(await hub.readTable('Users').catch(() => [])) });
     if (req.method === 'GET') return await list(req, res, user);
     if (req.method === 'PATCH') return await update(req, res, user);
     res.status(405).json({ ok: false, error: 'Method not allowed' });

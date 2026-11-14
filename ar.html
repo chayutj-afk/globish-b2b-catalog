@@ -161,7 +161,7 @@ async function load() {
   $('s-over').textContent = fmt0(s.overdue); $('s-over-n').textContent = `${s.overdueCount} ใบ`;
   const w = s.forecast.weeks[0] || {}; $('s-week').textContent = fmt0(w.expected); $('s-week-n').textContent = `${w.count || 0} ใบ · สัปดาห์ถึง ${w.weekEnd || ''}`;
   $('s-avg').textContent = s.avgDaysToPay ? s.avgDaysToPay + ' วัน' : '–';
-  $('b-check').hidden = !s.legacyCheckCount; $('b-check').textContent = `ข้อมูลเก่ารอตรวจ (${s.legacyCheckCount})`;
+  $('b-check').hidden = !s.legacyCheckCount;
   if (s.legacyCheckCount) $('f-hint').innerHTML = `"ต้องตาม" = เกินกำหนด หรือครบกำหนดใน 7 วัน หรือถึงวันนัดติดตาม · <b>ข้อมูลเก่ารอตรวจ ${s.legacyCheckCount} ใบ (${fmt0(s.legacyCheck)} บาท)</b> คือ INV ปี 2023–2025 ที่ชีท Debt ยังเป็น "รอชำระ" ไม่นับในยอดค้างรับจนกว่าจะตรวจกับ PEAK`;
   const segs = [...new Set(D.invoices.map((r) => r.segment).filter(Boolean))].sort();
   const sales = [...new Set(D.invoices.map((r) => r.salesName || r.salesEmail).filter(Boolean))].sort();
@@ -171,8 +171,8 @@ async function load() {
   render(); renderSum();
 }
 
-function rowsFor() {
-  const mode = document.querySelector('#f-state button.on').dataset.v;
+function rowsFor(only) {
+  const mode = only || document.querySelector('#f-state button.on').dataset.v;
   const seg = $('f-seg').value, sal = $('f-sales').value, q = $('f-q').value.trim().toLowerCase();
   let xs = D.invoices.filter((r) => {
     if (seg && r.segment !== seg) return false;
@@ -193,7 +193,15 @@ function rowsFor() {
   return xs;
 }
 
+// Count per state tab (with the group / sales / search filters applied).
+function countTabs() {
+  document.querySelectorAll('#f-state button').forEach((b) => {
+    if (!b.dataset.label) b.dataset.label = b.textContent.trim();
+    b.textContent = `${b.dataset.label} (${rowsFor(b.dataset.v).length})`;
+  });
+}
 function render() {
+  countTabs();
   const xs = rowsFor();
   $('wl').innerHTML = xs.slice(0, SHOW).map((r) => {
     const d = r.daysOverdue;

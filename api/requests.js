@@ -268,7 +268,7 @@ async function list(req, res, user) {
 //   qt_voided   → accounting voided the QT in PEAK by mistake: back to approved with the QT
 //                 number cleared, so the PEAK sync drafts a new QT from the same request and lines.
 //                 The old number goes to voidedQts (AI) so it is never written back.
-const OP_ACTIONS = { approve: 'approved', reject: 'rejected', reopen: 'approved', qt_approved: 'qt_approved', qt_voided: 'approved', qt_fixed: 'qt_draft' };
+const OP_ACTIONS = { approve: 'approved', retry: 'approved', reject: 'rejected', reopen: 'approved', qt_approved: 'qt_approved', qt_voided: 'approved', qt_fixed: 'qt_draft' };
 // GET ?view=qt-live&id=REQ-…  → the QT as PEAK has it now (lines, totals, status). Read-only.
 async function qtLive(req, res, user) {
   if (peak.mode() === 'off') throw bad('ยังไม่ได้เปิดการเชื่อมต่อ PEAK API', 503);
@@ -314,6 +314,8 @@ async function update(req, res, user) {
     reject: ['new', 'approved', 'needs_contact', 'needs_service_code', 'needs_review', 'qt_error'],
     // needs_review = sales must change the request: accounting rejects it, sales rebuilds it.
     reopen: ['needs_contact', 'needs_service_code', 'qt_error'],
+    // retry: approved but the Draft wasn't made (PEAK / Claude API busy): try again now instead of waiting for the sync.
+    retry: ['approved'],
     qt_approved: ['qt_draft'],
     // qt_error: the sync found the Draft voided in PEAK ("QT ถูก void ใน PEAK").
     qt_voided: ['qt_draft', 'qt_approved', 'qt_error'],
@@ -322,7 +324,7 @@ async function update(req, res, user) {
     qt_fixed: ['qt_error'],
   };
   if (!FROM[b.action].includes(row.status)) {
-    const done = { approve: 'คำขอนี้อนุมัติไปแล้วหรือไม่ได้รออนุมัติ', reject: 'ตีกลับไม่ได้: คำขอนี้ไม่ได้อยู่ในสถานะที่ตีกลับได้ (อาจสร้าง QT ใน PEAK แล้ว)', reopen: 'คำขอนี้ไม่ได้ติดปัญหาแล้ว', qt_approved: 'QT นี้ไม่ได้อยู่ในสถานะ Draft', qt_voided: 'คำขอนี้ไม่มี QT ใน PEAK ที่จะยกเลิก', qt_fixed: 'คำขอนี้ไม่ได้ติดปัญหาแล้ว' };
+    const done = { approve: 'คำขอนี้อนุมัติไปแล้วหรือไม่ได้รออนุมัติ', reject: 'ตีกลับไม่ได้: คำขอนี้ไม่ได้อยู่ในสถานะที่ตีกลับได้ (อาจสร้าง QT ใน PEAK แล้ว)', reopen: 'คำขอนี้ไม่ได้ติดปัญหาแล้ว', retry: 'คำขอนี้ไม่ได้รอสร้าง QT แล้ว', qt_approved: 'QT นี้ไม่ได้อยู่ในสถานะ Draft', qt_voided: 'คำขอนี้ไม่มี QT ใน PEAK ที่จะยกเลิก', qt_fixed: 'คำขอนี้ไม่ได้ติดปัญหาแล้ว' };
     throw bad(`${done[b.action]} (สถานะตอนนี้: ${row.status}) รีเฟรชหน้าเพื่อดูข้อมูลล่าสุด`, 409);
   }
   hub.checkSeen(row, text(b.seen, 80));
@@ -353,7 +355,7 @@ async function update(req, res, user) {
       voidedQts: [row.voidedQts, old].filter(Boolean).join('; '),
     });
   }
-  const auto = { approve: `ฝ่ายบัญชีอนุมัติคำขอแล้ว รอระบบสร้าง QT Draft ใน PEAK — ${who}`, reopen: `ให้ระบบสร้าง QT ใหม่ — ${who}`, qt_approved: `อนุมัติ QT ใน PEAK แล้ว — ${who}`, qt_fixed: `แก้ QT ${row.peakQtNo || ''} ใน PEAK แล้ว รอระบบตรวจใหม่รอบถัดไป — ${who}`, qt_voided: `QT ${row.peakQtNo || ''} ถูกยกเลิกใน PEAK ระบบจะสร้าง QT Draft ใหม่จากข้อมูลเดิม — ${who}` };
+  const auto = { approve: `ฝ่ายบัญชีอนุมัติคำขอแล้ว รอระบบสร้าง QT Draft ใน PEAK — ${who}`, retry: `ลองสร้าง QT อีกครั้ง — ${who}`, reopen: `ให้ระบบสร้าง QT ใหม่ — ${who}`, qt_approved: `อนุมัติ QT ใน PEAK แล้ว — ${who}`, qt_fixed: `แก้ QT ${row.peakQtNo || ''} ใน PEAK แล้ว รอระบบตรวจใหม่รอบถัดไป — ${who}`, qt_voided: `QT ${row.peakQtNo || ''} ถูกยกเลิกใน PEAK ระบบจะสร้าง QT Draft ใหม่จากข้อมูลเดิม — ${who}` };
   if (!(live && b.action === 'qt_fixed')) fields.peakNote = b.action === 'qt_voided' ? `${auto.qt_voided}${note ? ` · ${note}` : ''}` : note ? `${note} — ${who}` : (auto[b.action] || row.peakNote);
   // Approved (or sent back to be re-created) and the PEAK API is on: make the Draft now.
   const makeNow = live && status === 'approved';

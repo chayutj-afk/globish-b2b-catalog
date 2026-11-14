@@ -22,6 +22,11 @@
 .balance b{display:block;font-size:17px;margin-top:2px;color:var(--head);font-weight:500}
 .balance .neg b{color:var(--bad-ink)}
 b.neg{color:var(--bad-ink)}
+.next{margin:8px 0 4px;padding:7px 10px;border-radius:6px;font-size:13px;line-height:1.5}
+.next.you{background:var(--primary-soft);border:1px solid var(--primary-line);color:var(--head)}
+.next.wait{background:var(--panel-2);border:1px solid var(--line);color:var(--muted)}
+.next b{font-weight:600}
+details.more{margin-top:8px}details.more>summary{cursor:pointer;font-size:12.5px;color:var(--muted)}details.more[open]>summary{margin-bottom:6px}
 .inv{border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:12px;background:var(--panel-2)}
 .inv-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
 .inv-head b{font-size:14px;color:var(--head);font-weight:500}
@@ -1135,6 +1140,25 @@ async function openPayNotice(id) {
   } catch (e) { alertMsg(e.message); }
 }
 
+// One line per request: what happens next, and whether it's the salesperson's turn.
+function nextStep(q, ivs, replaced) {
+  const W = (t) => ({ t, you: false }), Y = (t) => ({ t, you: true });
+  switch (q.status) {
+    case 'new': return W('ฝ่ายบัญชีตรวจและอนุมัติคำขอ');
+    case 'approved': case 'qt_creating': return W('ระบบสร้าง QT Draft ใน PEAK');
+    case 'needs_contact': case 'needs_service_code': case 'qt_error': return W('ฝ่ายบัญชีแก้ข้อมูลใน PEAK ก่อนสร้าง QT');
+    case 'needs_review': return Y('แก้คำอธิบายเพิ่มเติมตามหมายเหตุ (ฝ่ายบัญชีจะตีกลับ แล้วกดสร้างคำขอใหม่จากข้อมูลเดิม)');
+    case 'rejected': return replaced.has(q.requestId) ? W('ส่งคำขอใหม่แทนแล้ว') : Y('ดูเหตุผลในหมายเหตุ แล้วกด "สร้างคำขอใหม่จากข้อมูลเดิม"');
+    case 'qt_draft': return W('ฝ่ายบัญชีอนุมัติ QT ใน PEAK');
+    case 'cancelled': return W('ยกเลิกแล้ว');
+  }
+  if (!QT_LIVE.includes(q.status)) return W(QT_ST[q.status] ? QT_ST[q.status][0] : q.status);
+  if (q.peakQtNo && pendEdit('QT', q.peakQtNo)) return W('ฝ่ายบัญชีแก้ QT ตามที่ขอ');
+  const live = ivs.filter((v) => v.status !== 'rejected');
+  if (qtLeft(q) <= 0.01) return W('ขอ INV ครบยอดแล้ว ติดตามต่อที่แท็บ "ใบแจ้งหนี้"');
+  if (!live.length) return Y('ส่ง QT ให้ลูกค้า พอลูกค้ายอมรับแล้วกด "ขอ INV จาก QT นี้"');
+  return Y(`ขอ INV งวดถัดไปได้ (คงเหลือ ${fmt(qtLeft(q))})`);
+}
 function renderMine() {
   const op = canDo('approve') || canDo('team_view');
   const replaced = new Set(REQS.map((q) => q.replaces).filter(Boolean));
@@ -1152,15 +1176,22 @@ function renderMine() {
     const heroes = (q.lines || []).filter((l) => l.role !== 'supplement').map((l) => `${esc(l.packageId === 'CUSTOM' ? 'Customized' : l.packageId === 'SURCHARGE' ? 'ค่าเพิ่ม' : l.packageId)} × ${esc(l.qty)}`).join(', ');
     const { total, done, lbl } = qtAmt(q);
     const mineIvs = IVS.filter((v) => v.requestId === q.requestId);
+    const nx = nextStep(q, mineIvs, replaced);
+    const actions = (q.status === 'rejected' && ME && q.requestedBy === ME.email && !replaced.has(q.requestId) ? `<button class="btn btn-p btn-sm" onclick="rebuildQT('${esc(q.requestId)}')">↻ สร้างคำขอใหม่จากข้อมูลเดิม</button>` : '')
+      + (q.peakQtNo && QT_LIVE.includes(q.status) && !pendEdit('QT', q.peakQtNo) ? `${qtLeft(q) > 0.01 ? `<button class="btn btn-o btn-sm" onclick="startInvFor('${esc(q.requestId)}')">🧾 ขอ INV จาก QT นี้</button>` : ''}${mineIvs.some((v) => v.status !== 'rejected') ? '' : `<button class="btn btn-g btn-sm" onclick="askEdit('QT','${esc(q.peakQtNo)}','${esc(q.requestId)}')">✏️ ขอแก้ไข QT</button>`}` : '');
     return `<div class="list-row">
       <div class="list-head"><div>${q.peakQtNo ? `<span class="list-id">QT ${qtLink(q)}</span>` : '<span class="small">ยังไม่มีเลข QT</span>'} · ${esc(q.company)}</div>${st(QT_ST, q.status)}</div>
-      <div class="list-sub">${esc(q.requestId)}${q.replaces ? ` <span class="small">(แทนคำขอ ${esc(q.replaces)} ที่ถูกตีกลับ)</span>` : ''} · ${esc(q.createdAt)} · ${esc(q.segment)}${q.opportunityId ? ' · ' + esc(q.opportunityId) : ''}${op ? ' · ' + esc(q.salesName) : ''}<br>
-        ${heroes}<br>ยอด${lbl} <b>${fmt(total)}</b> · ขอ INV แล้ว ${fmt(done)} · ${total - done < -0.01 ? `<b class="neg">ขอเกินยอด QT ${fmt(done - total)}</b>` : `คงเหลือ <b>${fmt(total - done)}</b>`}${q.peakNote ? `<br><span class="small">หมายเหตุ: ${esc(q.peakNote)}</span>` : ''}</div>
+      <div class="next ${nx.you ? 'you' : 'wait'}"><b>${nx.you ? 'ถัดไป (คุณ):' : 'ถัดไป:'}</b> ${nx.t}</div>
+      <div class="list-sub">ยอด${lbl} <b>${fmt(total)}</b>${QT_LIVE.includes(q.status) ? ` · ขอ INV แล้ว ${fmt(done)} · ${total - done < -0.01 ? `<b class="neg">ขอเกินยอด QT ${fmt(done - total)}</b>` : `คงเหลือ <b>${fmt(total - done)}</b>`}` : ''}</div>
+      ${['rejected', 'needs_review'].includes(q.status) && q.peakNote && !replaced.has(q.requestId) ? `<div class="pc-note err" style="margin-top:8px">เหตุผล: ${esc(q.peakNote)}</div>` : ''}
       ${q.qtEditedAt && QT_LIVE.includes(q.status) ? `<div class="pc-note warn" style="margin-top:8px">✏️ QT นี้ถูกแก้ไขใน PEAK เมื่อ ${esc(q.qtEditedAt)} ไฟล์ที่เปิดจากลิงก์อาจยังเป็นเวอร์ชันเก่า จนกว่าฝ่ายบัญชีจะกดรีเฟรชใน PEAK กด "ดู QT ล่าสุดจาก PEAK" เพื่อดูข้อมูลจริงก่อนส่งลูกค้า</div>` : ''}
-      ${PEAK_LIVE && q.peakQtId && q.peakQtNo ? `<details class="qlive" ontoggle="if(this.open)liveQt('${esc(q.requestId)}')"><summary class="small" style="cursor:pointer;margin-top:6px">🔎 ดู QT ล่าสุดจาก PEAK</summary><div id="qlv-${esc(q.requestId)}" class="small">กำลังโหลด…</div></details>` : ''}
-      ${mineIvs.length ? `<div class="inv-mini">${mineIvs.map((v) => `<div class="inv-mini-row"><span class="mono">${esc(v.ivRequestId)}</span><span>${esc(v.company)} · ${fmt(ivAmt(v).amt)}</span><span>${st(IV_ST, v.status)} ${st(ORIG_ST, v.originalStatus)}</span></div>`).join('')}</div>` : ''}
-      ${q.status === 'rejected' && ME && q.requestedBy === ME.email && !replaced.has(q.requestId) ? `<div style="margin-top:8px"><button class="btn btn-p btn-sm" onclick="rebuildQT('${esc(q.requestId)}')">↻ สร้างคำขอใหม่จากข้อมูลเดิม</button></div>` : ''}
-      ${q.peakQtNo && QT_LIVE.includes(q.status) ? (pendEdit('QT', q.peakQtNo) ? editNote(pendEdit('QT', q.peakQtNo)) : `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${qtLeft(q) > 0.01 ? `<button class="btn btn-o btn-sm" onclick="startInvFor('${esc(q.requestId)}')">🧾 ขอ INV จาก QT นี้</button>` : '<span class="st green">ขอ INV ครบยอดแล้ว</span>'}${mineIvs.some((v) => v.status !== 'rejected') ? '' : `<button class="btn btn-g btn-sm" onclick="askEdit('QT','${esc(q.peakQtNo)}','${esc(q.requestId)}')">✏️ ขอแก้ไข QT</button>`}</div>`) + `<span id="qm-${esc(q.requestId)}"></span>` : ''}
+      ${q.peakQtNo && pendEdit('QT', q.peakQtNo) ? editNote(pendEdit('QT', q.peakQtNo)) : ''}
+      ${actions ? `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${actions}</div>` : ''}<span id="qm-${esc(q.requestId)}"></span>
+      <details class="more"><summary>รายละเอียด${mineIvs.length ? ` · INV ${mineIvs.length} ใบ` : ''}</summary>
+        <div class="list-sub">${esc(q.requestId)}${q.replaces ? ` <span class="small">(แทนคำขอ ${esc(q.replaces)} ที่ถูกตีกลับ)</span>` : ''} · ${esc(q.createdAt)} · ${esc(q.segment)}${q.opportunityId ? ' · ' + esc(q.opportunityId) : ''}${op ? ' · ' + esc(q.salesName) : ''}<br>${heroes}${q.peakNote ? `<br><span class="small">หมายเหตุ: ${esc(q.peakNote)}</span>` : ''}</div>
+        ${PEAK_LIVE && q.peakQtId && q.peakQtNo ? `<details class="qlive" ontoggle="if(this.open)liveQt('${esc(q.requestId)}')"><summary class="small" style="cursor:pointer;margin-top:6px">🔎 ดู QT ล่าสุดจาก PEAK</summary><div id="qlv-${esc(q.requestId)}" class="small">กำลังโหลด…</div></details>` : ''}
+        ${mineIvs.length ? `<div class="inv-mini">${mineIvs.map((v) => `<div class="inv-mini-row"><span class="mono">${esc(v.ivRequestId)}</span><span>${esc(v.company)} · ${fmt(ivAmt(v).amt)}</span><span>${st(IV_ST, v.status)} ${st(ORIG_ST, v.originalStatus)}</span></div>`).join('')}</div>` : ''}
+      </details>
     </div>`;
   }).join('') : `<div class="empty">${allQ.length ? 'ไม่พบคำขอที่ตรงกับตัวกรอง' : 'ยังไม่มีคำขอใบเสนอราคา'}</div>`;
 
@@ -1399,13 +1430,15 @@ function renderPending() {
   const waitO = IVS.filter((v) => v.originalStatus === 'requested');
   const readyO = waitO.filter((v) => v.status === 'iv_issued');
   const draftQ = REQS.filter((q) => q.status === 'qt_draft');
+  // Approved but no Draft yet (waiting for Claude to write a sales note, PEAK busy, or the sync).
+  const madeQ = REQS.filter((q) => q.status === 'approved' || q.status === 'qt_creating');
   // PEAK API on: the app makes the Drafts itself, so the hints say so.
   if (PEAK_LIVE) {
     $('pend-hint-qt').innerHTML = 'ตรวจคำขอแล้วกด <b>อนุมัติ</b> ระบบสร้าง QT Draft ใน PEAK ทันที (ลูกค้าใหม่จะถูกสร้างใน PEAK ก่อน) ถ้าไม่ถูกต้องให้ <b>ตีกลับ</b> พร้อมเหตุผล';
     $('pend-hint-inv').innerHTML = 'ตรวจหลักฐานแล้วกด <b>สร้าง INV Draft ใน PEAK</b> ระบบสร้าง INV จาก QT ใบเดิม แนบหลักฐาน แล้วอนุมัติใน PEAK';
     $('pend-hint-rt').innerHTML = 'INV ที่รับเงินแล้ว: เลือกบัญชีที่เงินเข้า แล้วกด <b>สร้างใบเสร็จ Draft ใน PEAK</b> · คำขอใบเสร็จจาก Sales (ไม่มี INV) ยังออกใน PEAK แล้วใส่เลขเหมือนเดิม';
   }
-  const n = waitQ.length + fixQ.length + draftQ.length + waitI.length + readyO.length + editedQ.length + draftI.length;
+  const n = waitQ.length + fixQ.length + draftQ.length + madeQ.length + waitI.length + readyO.length + editedQ.length + draftI.length;
   $('pend-orig-n').textContent = readyO.length ? `(${readyO.length})` : '';
   $('pend-orig').innerHTML = waitO.length ? waitO.map((v) => `<div class="pcard"><div class="pc-body">
       <div class="pc-top"><div class="pc-title">${esc(v.company)}<small>${esc(v.ivRequestId)} · โดย ${esc(v.salesName)}${v.originalRequestedAt ? ' · ขอเมื่อ ' + esc(v.originalRequestedAt) : ''}</small></div>${st(ORIG_ST, v.originalStatus)}</div>
@@ -1420,7 +1453,7 @@ function renderPending() {
     </div>`).join('') : '<div class="empty">ไม่มีเอกสารตัวจริงที่ต้องส่ง</div>';
   const extra = renderPendingMore();
   $('pend-count').textContent = n + extra; $('pend-count').hidden = !(n + extra);
-  const qN = waitQ.length + fixQ.length + draftQ.length + editedQ.length;
+  const qN = waitQ.length + fixQ.length + draftQ.length + madeQ.length + editedQ.length;
   $('pend-qt-n').textContent = qN ? `(${qN})` : '';
   $('pend-inv-n').textContent = waitI.length + draftI.length ? `(${waitI.length + draftI.length})` : '';
   const lineRows = (q) => (q.lines || []).map((l) => `<tr><td>${esc(l.qtDescription || l.description).replace(/\n/g, '<br>')}${l.salesNote && !l.qtDescription ? `<div class="small note-box">✍️ Sales เขียนเพิ่ม (จะเรียบเรียงรวมกับคำอธิบายใน QT): ${esc(l.salesNote)}</div>` : ''}${l.freebie ? `<div class="small note-box">🎁 ของแถม: ${esc(l.freebie)}</div>` : ''}${l.peakServiceCode ? `<div class="small mono">${esc(l.peakServiceCode)}</div>` : '<div class="err-line">ยังไม่มีรหัสบริการ PEAK</div>'}</td><td class="num">${esc(l.qty)}</td><td class="num">${esc(l.unitPrice)}</td><td class="num">${esc(l.discount || '')}</td></tr>`).join('');
@@ -1458,6 +1491,10 @@ function renderPending() {
     + (editedQ.length ? secH('QT ถูกแก้ใน PEAK · รอรีเฟรชเอกสาร', editedQ.length) + '<p class="hint">ลิงก์เอกสารที่ Sales เปิดยังเป็นไฟล์ก่อนแก้ เปิด QT ใน PEAK กดรีเฟรชเอกสาร แล้วกด "รีเฟรชแล้ว"</p>' + editedQ.map((q) => `<div class="pcard"><div class="pc-body"><div class="pc-top"><div class="pc-title">${esc(q.company)}<small>${esc(q.peakQtNo)} · ${esc(q.requestId)} · แก้เมื่อ ${esc(q.qtEditedAt)} · โดย ${esc(q.salesName)}</small></div><div class="pc-amt"><b>${fmt(qtAmt(q).total)}</b><span>ยอดใหม่${qtAmt(q).lbl}</span></div></div></div>
       <div class="pc-act">${q.peakDocLink ? `<a class="btn btn-o btn-sm" href="${esc(peakEdit(q.peakDocLink, 'quotation'))}" target="_blank" rel="noopener">เปิดใน PEAK ↗</a>` : ''}<span class="sp"></span><button class="btn btn-p btn-sm" onclick="qtRefreshed('${esc(q.requestId)}')">✓ รีเฟรชแล้ว</button><span id="qm-${esc(q.requestId)}"></span></div></div>`).join('') : '')
     + (fixQ.length ? secH('ต้องแก้ใน PEAK ก่อนสร้าง QT', fixQ.length) + fixQ.map((q) => qCard(q, true)).join('') : '')
+    + (madeQ.length ? secH('อนุมัติแล้ว รอระบบสร้าง QT', madeQ.length) + `<p class="hint">ปกติระบบสร้าง QT Draft ให้ภายในไม่กี่วินาที ถ้าค้างอยู่ตรงนี้ ดูเหตุผลในการ์ด ${PEAK_LIVE ? 'แล้วกด <b>ลองสร้างอีกครั้ง</b> หรือ' : ''}รอระบบลองเองรอบ 10:49 / 17:49</p>` + madeQ.map((q) => `<div class="pcard"><div class="pc-body">
+      <div class="pc-top"><div class="pc-title">${esc(q.company)}<small>${esc(q.requestId)} · โดย ${esc(q.salesName)}${q.updatedAt ? ' · อัปเดต ' + esc(q.updatedAt) : ''}</small></div><div class="pc-amt"><b>${fmt(qtAmt(q).total)}</b><span>ยอด${qtAmt(q).lbl}</span></div></div>
+      ${q.peakNote ? `<div class="pc-note">${esc(q.peakNote)}</div>` : ''}</div>
+      <div class="pc-act">${q.status === 'qt_creating' ? '<span class="small">กำลังสร้างใน PEAK…</span>' : PEAK_LIVE ? `<button class="btn btn-p btn-sm" onclick="qtAction('${esc(q.requestId)}','retry')">↻ ลองสร้างอีกครั้ง</button>` : ''}<span class="sp"></span>${q.status === 'approved' ? rej(q.requestId, 'qtAction', 'qn') : ''}<span id="qm-${esc(q.requestId)}"></span></div></div>`).join('') : '')
     + (draftQ.length ? secH('QT Draft รออนุมัติใน PEAK', draftQ.length) + `<p class="hint">${PEAK_LIVE ? 'อนุมัติ QT ใน PEAK ก่อน (ปุ่ม "แก้ไข / อนุมัติใน PEAK ↗") แล้วกด <b>เช็กสถานะจาก PEAK</b> ระบบไม่ได้อนุมัติแทน แค่อ่านสถานะ (หรือรอระบบเช็กเองรอบ 10:49 / 17:49)' : 'อนุมัติใน PEAK แล้วกดปุ่มนี้ (หรือรอระบบอัปเดตรอบ 10:49 / 17:49)'} จากนั้น Sales จะเปิดลิงก์ QT ส่งลูกค้าได้</p>` + draftQ.map((q) => `<div class="pcard"><div class="pc-body">
       <div class="pc-top"><div class="pc-title">${esc(q.company)}<small>${esc(q.peakQtNo)} · ${esc(q.requestId)} · โดย ${esc(q.salesName)}</small></div><div class="pc-amt"><b>${fmt(qtAmt(q).total)}</b><span>ยอด${qtAmt(q).lbl}</span></div></div></div>
       <div class="pc-act">${q.peakDocLink ? `<a class="btn btn-o btn-sm" href="${esc(peakEdit(q.peakDocLink, 'quotation'))}" target="_blank" rel="noopener">แก้ไข / อนุมัติใน PEAK ↗</a>` : ''}<details class="rej"><summary>เผลอยกเลิก QT นี้ใน PEAK?</summary><div class="in"><span class="small">ระบบจะสร้าง QT Draft ใหม่จากข้อมูลเดิม</span><button class="btn btn-danger btn-sm" onclick="qtAction('${esc(q.requestId)}','qt_voided')">QT ถูกยกเลิกแล้ว สร้างใหม่</button></div></details><span class="sp"></span><button class="btn btn-p btn-sm" onclick="qtAction('${esc(q.requestId)}','qt_approved')"${PEAK_LIVE ? ' title="ไม่ได้อนุมัติแทน: อ่านสถานะ QT จาก PEAK ถ้าอนุมัติใน PEAK แล้ว Sales จะส่ง QT ให้ลูกค้าได้"' : ''}>${PEAK_LIVE ? '↻ เช็กสถานะจาก PEAK' : '✓ อนุมัติ QT ใน PEAK แล้ว'}</button><span id="qm-${esc(q.requestId)}"></span></div></div>`).join('') : '');
@@ -1552,7 +1589,7 @@ async function qtActionDo(id, action) {
     const d = await api('/api/requests', { method: 'PATCH', body: JSON.stringify({ requestId: id, action, note, seen: seenOf(REQS.find((x) => x.requestId === id)) }) });
     await loadAll();
     // PEAK API on: the Draft was made (or not) right now; say what happened.
-    if (d.message && ['qt_draft', 'qt_error', 'needs_contact', 'needs_service_code'].includes(d.status)) alertMsg(d.status === 'qt_draft' ? `สร้าง ${d.peakQtNo} ใน PEAK แล้ว` : d.message, d.status === 'qt_draft');
+    if (d.message && ['qt_draft', 'qt_error', 'needs_contact', 'needs_service_code', 'needs_review', 'approved'].includes(d.status)) alertMsg(d.status === 'qt_draft' ? `สร้าง ${d.peakQtNo} ใน PEAK แล้ว` : d.message, d.status === 'qt_draft');
   }
   catch (e) { $('qm-' + id).innerHTML = `<span class="err-line">${esc(e.message)}</span>`; }
 }

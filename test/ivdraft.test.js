@@ -52,3 +52,19 @@ test('QT still Draft / voided / no QT → refused before anything is created', a
   await assert.rejects(ivdraft.createForIvRequest(iv, { ...qtRow, peakQtId: '' }, []), /ไม่มี QT/);
   assert.equal(c.create.length, 0);
 });
+
+test('part of a QT by students: PEAK copies the whole QT → the Draft is edited to the students asked (still Draft)', async () => {
+  let edited = null;
+  stub({
+    getInvoice: async () => (edited
+      ? { id: 'i1', code: 'IV-1', preTaxAmount: 8000, products: [] }
+      : { id: 'i1', code: 'IV-1', preTaxAmount: 20000, contactCode: 'C1', products: [{ id: 'L1', productCode: 'S1' }, { id: 'L2', productCode: 'S2' }] }),
+    editInvoiceDraft: async (code, inv) => { edited = { code, inv }; return { id: 'i1', code }; },
+  });
+  const { fields } = await ivdraft.createForIvRequest({ ...iv, amountPreVat: '8000', students: '4' }, qtRow, []);
+  assert.equal(edited.code, 'IV-1');
+  assert.deepEqual(edited.inv.products.map((p) => [p.id, p.productCode, p.quantity, p.price]), [['L1', 'S1', 4, 1500], ['L2', 'S2', 4, 500]]);
+  assert.deepEqual(edited.inv.tags, ['CRM-OPP-2026-00001', 'REQ-1', 'INVREQ-1-1']);
+  assert.doesNotMatch(fields.accountNote, /ไม่ตรงกับคำขอ/);
+  assert.match(fields.accountNote, /4 คน/);
+});

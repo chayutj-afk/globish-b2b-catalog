@@ -542,6 +542,13 @@ async function arUpdate(req, res, user) {
   checkOrigin(req);
   if ((req.body || {}).action === 'ar_owner') return arOwner(req, res, user);
   if ((req.body || {}).action === 'ar_refresh') return arRefresh(req, res, user);
+  if ((req.body || {}).action === 'legacy_reclass') {
+    if (!can(user, 'users')) throw bad('เฉพาะผู้ดูแลสิทธิ์', 403);
+    const b = req.body || {};
+    const out = await require('../lib/peaksync').reclassLegacy(b.kind === 'qt' ? 'qt' : 'inv', Math.max(0, Number(b.offset) || 0), Math.min(15, Math.max(1, Number(b.limit) || 10)));
+    if (out.changed) await hub.log('catalog', 'legacy_reclass', b.kind || 'inv', `${user.email} · ${out.offset}+${out.done} changed ${out.changed}`);
+    return res.status(200).json({ ok: true, ...out });
+  }
   if (!isOp(user)) throw bad('ไม่มีสิทธิ์บันทึกติดตามหนี้', 403);
   const b = req.body || {};
   const ivNo = text(b.ivNo, 40);

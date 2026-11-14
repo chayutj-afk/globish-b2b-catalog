@@ -48,8 +48,8 @@
     <h2>1. ลูกค้า</h2>
     <p class="hint">ใส่เลขผู้เสียภาษี 13 หลักแล้วเลือกสาขา ระบบดึงรหัสและชื่อลูกค้าจาก PEAK ให้ (บุคคลธรรมดาใช้เลขบัตรประชาชน)</p>
     <div class="row c3">
-      <div class="fg"><label>กลุ่มลูกค้า</label>
-        <select id="q-segment" onchange="changeSegment()"><option>B2B</option><option>B2C</option><option>MaoMao</option><option>B2E</option><option>B2S</option><option>Others</option></select></div>
+      <div class="fg"><label>ประเภทลูกค้า <span class="small">(PEAK)</span> *</label>
+        <select id="q-segment" class="ctype" onchange="changeSegment()"><option value="B2B" data-code="G012-00002">B2B</option><option value="B2C" data-code="G012-00001">B2C</option><option value="B2S" data-code="G012-00003">B2S</option></select><div class="sub" id="q-type-sub"></div></div>
       <div class="fg"><label>ประเภทดีล</label>
         <select id="q-deal"><option value="New Logo">New Logo (ลูกค้าใหม่)</option><option value="Retention">Retention (ต่อสัญญา)</option><option value="Others">อื่นๆ</option></select></div>
       <div class="fg" id="q-opp-wrap"><label id="q-opp-label">Opportunity ID ใน CRM *</label>
@@ -124,7 +124,7 @@
     <div class="fg" id="i-off-wrap" style="margin-top:6px"><label style="color:var(--bad-ink)">เหตุผลที่ใช้ QT นอกระบบ *</label><input id="i-off" type="text" maxlength="300" placeholder="เช่น QT ออกก่อนเปิดใช้ระบบ / ออกตรงใน PEAK"><div class="sub">ระบบตรวจยอดและสถานะของ QT นอกระบบไม่ได้ ฝ่ายบัญชีจะเห็นเหตุผลนี้ตอนอนุมัติ</div></div>
     <div id="i-balance"></div>
     <div class="row c4">
-      <div class="fg"><label>กลุ่มลูกค้า *</label><select id="i-seg" onchange="onInvSeg()"><option value="">— เลือก —</option><option>B2B</option><option>B2C</option><option>MaoMao</option><option>B2E</option><option>B2S</option><option>Others</option></select></div>
+      <div class="fg"><label>ประเภทลูกค้า <span class="small">(PEAK)</span> *</label><select id="i-seg" class="ctype" data-blank="1" onchange="onInvSeg()"><option value="">— เลือก —</option><option value="B2B" data-code="G012-00002">B2B</option><option value="B2C" data-code="G012-00001">B2C</option><option value="B2S" data-code="G012-00003">B2S</option></select></div>
       <div class="fg" id="i-opp-wrap"><label>Opportunity ID ใน CRM *</label><div class="opp" id="i-opp" data-p="i"></div><input type="hidden" id="i-opp-y"><input type="hidden" id="i-opp-n"></div>
       <div class="fg"><label>เลขผู้เสียภาษีของลูกค้าตาม QT *</label><input id="i-tax" type="text" maxlength="13" inputmode="numeric" placeholder="13 หลัก" oninput="digits(this);taxHint('i')"><div class="sub" id="i-tax-hint"></div></div>
       <div class="fg"><label>รหัสสาขา</label><input id="i-branch" type="text" maxlength="5" inputmode="numeric" placeholder="00000" oninput="digits(this)"></div>
@@ -181,7 +181,7 @@
     <p class="hint">ขอใบเสร็จ / ใบกำกับภาษีหลังลูกค้าชำระเงิน สำหรับรายการที่<b>ไม่มี INV</b> (ส่วนใหญ่ B2C / B2E ที่จ่ายผ่าน Whitehouse) เลขเอกสารจะขึ้นในหน้า "คำขอของฉัน"</p>
     <div class="msg info">ลูกค้าที่มี INV แล้ว (เช่น B2B) <b>ไม่ต้องกรอกฟอร์มนี้</b> เมื่อบันทึกรับเงินแล้ว ฝ่ายบัญชีจะออกใบเสร็จจาก INV ให้ และเลขใบเสร็จจะขึ้นในคำขอ INV ของคุณ</div>
     <div class="row c3">
-      <div class="fg"><label>กลุ่มลูกค้า *</label><select id="r-seg" onchange="onRtSeg()"><option>B2C</option><option>B2E</option><option>MaoMao</option><option>B2B</option><option>B2S</option><option>Others</option></select></div>
+      <div class="fg"><label>ประเภทลูกค้า <span class="small">(PEAK)</span> *</label><select id="r-seg" class="ctype" onchange="onRtSeg()"><option value="B2C" data-code="G012-00001">B2C</option><option value="B2B" data-code="G012-00002">B2B</option><option value="B2S" data-code="G012-00003">B2S</option></select></div><div class="fg" id="r-cls-w"></div>
       <div class="fg"><label>ประเภทเอกสาร *</label><select id="r-kind" onchange="onRtKind()"><option value="company">ใบเสร็จ/ใบกำกับภาษี ในนามบริษัท</option><option value="person">ใบเสร็จ/ใบกำกับภาษี ในนามบุคคล</option></select></div>
       <div class="fg"><label>ภาษาเอกสาร</label><select id="r-lang"><option value="TH">ภาษาไทย</option><option value="EN">English</option></select></div>
     </div>
@@ -279,9 +279,17 @@ const $ = (id) => document.getElementById(id);
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 const fmt = (n) => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
 const toNum = (v) => Number(String(v ?? '').replace(/,/g, '')) || 0;
-// VAT: B2B / B2S quote prices before VAT; B2C / B2E / MaoMao / Others quote VAT-inclusive prices.
-const VAT_IN = ['B2C', 'B2E', 'MaoMao', 'Others'];
-const vatIn = (seg) => VAT_IN.includes(seg);
+// VAT: set per customer type (PEAK G012) on /users; defaults B2B / B2S before VAT, B2C incl. VAT.
+const VAT_IN = ['B2C', 'B2E', 'MaoMao', 'Others']; // requests made before customer types came from PEAK
+// Customer types = PEAK G012 (ประเภทลูกค้า), with the rules accounting set on /users (VAT, products, Opportunity ID).
+let TYPES = [{ code: 'G012-00002', name: 'B2B', vat: 'excl', kinds: ['catalog', 'keyhs', 'surcharge'], opp: true, prefix: '', ready: true },
+  { code: 'G012-00001', name: 'B2C', vat: 'incl', kinds: ['service'], opp: true, prefix: '', ready: true },
+  { code: 'G012-00003', name: 'B2S', vat: 'excl', kinds: ['service'], opp: false, prefix: 'B2S', ready: true }];
+const typeOf = (seg) => TYPES.find((t) => t.name === seg);
+const vatIn = (seg) => { const t = typeOf(seg); return t ? t.vat === 'incl' : VAT_IN.includes(seg); };
+// Receipt form: Whitehouse student + package needed for types that sell WH packages (B2C).
+const whNeeded = (seg) => { const t = typeOf(seg); return t ? t.kinds.includes('service') && !t.prefix : ['B2C', 'B2E', 'MaoMao'].includes(seg); };
+const oppOf = (seg) => { const t = typeOf(seg); return t ? t.opp : seg !== 'B2S'; };
 const basisOf = (seg) => (vatIn(seg) ? 'รวม VAT' : 'ก่อน VAT');
 const rnd2 = (n) => Math.round(n * 100) / 100;
 // A QT's total and what was already invoiced, in the QT's own basis.
@@ -427,7 +435,8 @@ const CART_KEY = 'gc_quote_cart_v1';
 let CART = [];
 function loadCart() { try { const v = JSON.parse(localStorage.getItem(CART_KEY) || '[]'); CART = Array.isArray(v) ? v : []; } catch { CART = []; } }
 function saveCart() { try { localStorage.setItem(CART_KEY, JSON.stringify(CART)); } catch {} }
-const KINDS = { B2B: ['catalog', 'keyhs', 'surcharge'], B2C: ['service'], MaoMao: ['service'], B2E: ['service'], B2S: ['service'], Others: ['catalog', 'keyhs', 'service', 'surcharge'] };
+const KINDS_OLD = { B2B: ['catalog', 'keyhs', 'surcharge'], B2C: ['service'], MaoMao: ['service'], B2E: ['service'], B2S: ['service'], Others: ['catalog', 'keyhs', 'service', 'surcharge'] };
+const KINDS = new Proxy({}, { get: (_, seg) => (typeOf(seg) || {}).kinds || KINDS_OLD[seg] || [] });
 const kindOf = (it) => it.kind || 'catalog';
 
 // User switched the customer segment: drop what doesn't fit the new segment, so nothing stale is sent.
@@ -439,9 +448,20 @@ const kindOf = (it) => it.kind || 'catalog';
 let CLS = null;
 async function loadClasses() {
   if (CLS) return CLS;
-  try { CLS = (await api('/api/requests?view=classes')).groups || []; } catch { CLS = []; }
+  try { const d = await api('/api/requests?view=classes'); CLS = d.groups || []; if (d.types && d.types.length) TYPES = d.types; } catch { CLS = []; }
+  // Type pickers on every form: PEAK's G012 items that have rules (value = name, data-code = the G012 item).
+  document.querySelectorAll('select.ctype').forEach((el) => {
+    const cur = el.value;
+    el.innerHTML = (el.dataset.blank ? '<option value="">— เลือก —</option>' : '') + TYPES.filter((t) => t.ready).map((t) => `<option value="${esc(t.name)}" data-code="${esc(t.code)}">${esc(t.name)}</option>`).join('');
+    if ([...el.options].some((o) => o.value === cur)) el.value = cur;
+  });
+  const rbox = $('r-cls-w');
+  if (rbox) rbox.innerHTML = CLS.map((g) => `<label>${esc(g.name)} <span class="small">(PEAK)</span></label><select id="rcls-${esc(g.code)}"><option value="">— ไม่ติด —</option>${g.items.map((i) => `<option value="${esc(i.code)}">${esc(i.name)}</option>`).join('')}</select>`).join('');
+  const prefR = () => { const seg = $('r-seg').value; CLS.forEach((g) => { const el = $('rcls-' + g.code); if (el && !el.dataset.touched) el.value = g.defaults[seg] || ''; }); };
+  if (rbox) { prefR(); $('r-seg').addEventListener('change', prefR); CLS.forEach((g) => { const el = $('rcls-' + g.code); if (el) el.addEventListener('change', () => { el.dataset.touched = '1'; }); }); }
+  onSegment();
   const box = $('q-cls');
-  box.innerHTML = CLS.map((g) => `<div class="fg"><label>${esc(g.name)} <span class="small">(PEAK ${esc(g.code)})</span></label><select id="cls-${esc(g.code)}" data-g="${esc(g.code)}" onchange="this.dataset.touched='1'"><option value="">— ไม่ติด —</option>${g.items.map((i) => `<option value="${esc(i.code)}">${esc(i.name)}</option>`).join('')}</select><div class="sub">ตัวเลือกจาก PEAK · ระบบเลือกให้ตามกลุ่มลูกค้า เปลี่ยนได้</div></div>`).join('');
+  box.innerHTML = CLS.map((g) => `<div class="fg"><label>${esc(g.name)} <span class="small">(PEAK ${esc(g.code)})</span></label><select id="cls-${esc(g.code)}" data-g="${esc(g.code)}" onchange="this.dataset.touched='1'"><option value="">— ไม่ติด —</option>${g.items.map((i) => `<option value="${esc(i.code)}">${esc(i.name)}</option>`).join('')}</select><div class="sub">ตัวเลือกจาก PEAK · ระบบเลือกให้ตามประเภทลูกค้า เปลี่ยนได้</div></div>`).join('');
   box.hidden = !CLS.length;
   prefillClasses();
   return CLS;
@@ -459,7 +479,7 @@ function changeSegment() {
   CART = CART.filter((it) => KINDS[seg].includes(kindOf(it)));
   const dropped = before - CART.length;
   if (dropped) saveCart();
-  if (seg === 'B2S') { $('q-opp-y').value = ''; $('q-opp-n').value = ''; paintOpp('q'); }
+  if (!oppOf(seg)) { $('q-opp-y').value = ''; $('q-opp-n').value = ''; paintOpp('q'); }
   onSegment();
   msg('q-msg', dropped ? 'info' : '', dropped ? `เปลี่ยนเป็น ${seg} แล้ว ระบบลบ ${dropped} รายการที่ ${seg} ใช้ไม่ได้ออก` : '');
   saveDraft();
@@ -478,23 +498,39 @@ const catVf = () => (vatIn($('q-segment').value) ? 1.07 : 1);
 function onSegment() {
   const seg = $('q-segment').value;
   syncCatalogVat(seg);
-  $('q-opp-wrap').hidden = seg === 'B2S';
+  $('q-opp-wrap').hidden = !oppOf(seg);
+  const T = typeOf(seg);
+  if ($('q-type-sub')) $('q-type-sub').textContent = T ? `${T.vat === 'incl' ? 'ราคารวม VAT' : 'ราคาก่อน VAT'}${T.opp ? '' : ' · ไม่ต้องใส่ Opportunity ID'}` : '';
   $('q-opp-label').textContent = 'Opportunity ID ใน CRM *';
   const k = KINDS[seg];
   const add = [];
   if (k.includes('catalog') && !(ME && ME.catalog === false)) add.push('<a class="btn btn-o" href="/catalog?return=request" data-keep="1" onclick="saveDraft()">➕ เลือกจาก B2B Catalog</a>');
   if (k.includes('keyhs')) add.push('<button class="btn btn-o" type="button" onclick="addLine(\'keyhs\')">➕ Customized Package (Key H.S.)</button>');
   if (k.includes('surcharge')) add.push('<button class="btn btn-o" type="button" onclick="addLine(\'surcharge\')">➕ ค่าเพิ่ม (โค้ชต่างชาติ / เดินทาง)</button>');
-  if (k.includes('service')) add.push('<button class="btn btn-o" type="button" onclick="addLine(\'service\')">➕ แพ็กเกจ Whitehouse / รหัสบริการ PEAK</button>');
+  if (k.includes('service')) add.push(T && T.prefix ? `<button class="btn btn-o" type="button" onclick="addLine('service')">➕ บริการ ${esc(T.prefix)} จาก PEAK</button>` : '<button class="btn btn-o" type="button" onclick="addLine(\'service\')">➕ แพ็กเกจ Whitehouse / รหัสบริการ PEAK</button>');
+  if (T && T.prefix) loadPrefixSvcs(T.prefix);
   $('q-adders').innerHTML = add.join('');
-  $('q-items-hint').innerHTML = seg === 'B2B'
-    ? 'B2B: เลือกแพ็กเกจจาก Catalog หรือใส่ Key H.S. ที่ทีม Product ให้ (Customized Package) ราคาใน Catalog เป็นราคาอ้างอิง แก้ราคาและส่วนลดได้'
-    : seg === 'Others'
-      ? 'ใช้ได้ทุกแบบ: แพ็กเกจจาก Catalog, Key H.S. หรือ Package ID ของ Whitehouse / รหัสบริการใน PEAK'
-      : `${seg}: ใส่ Package ID จาก Whitehouse (ตัวเลข เช่น 3822 ระบบใช้เป็นรหัสบริการใน PEAK) หรือรหัสบริการที่มีใน PEAK อยู่แล้ว (เช่น B2SCAMP001)`;
+  const hints = [];
+  if (k.includes('catalog') || k.includes('keyhs')) hints.push('เลือกแพ็กเกจจาก Catalog หรือใส่ Key H.S. ที่ทีม Product ให้ (Customized Package) ราคาใน Catalog เป็นราคาอ้างอิง แก้ราคาและส่วนลดได้');
+  if (k.includes('service')) hints.push(T && T.prefix ? `เลือกบริการจาก PEAK (รหัสขึ้นต้นด้วย ${esc(T.prefix)}) ชื่อและรายละเอียดลง QT ตามที่ตั้งไว้ใน PEAK` : 'ใส่ Package ID จาก Whitehouse (ตัวเลข เช่น 3822 ระบบใช้เป็นรหัสบริการใน PEAK) หรือรหัสบริการที่มีใน PEAK อยู่แล้ว');
+  $('q-items-hint').innerHTML = `${esc(seg)}: ${hints.join(' · ')}`;
   renderItems();
 }
 
+// Services picked from PEAK for types with a code prefix (e.g. B2S), loaded once per prefix.
+const PSVC = {};
+async function loadPrefixSvcs(p) {
+  if (PSVC[p]) return;
+  PSVC[p] = [];
+  try { const r = await fetch('/api/services?prefix=' + encodeURIComponent(p), { cache: 'no-store' }); const d = await r.json(); if (r.ok) PSVC[p] = d.services || []; } catch {}
+  renderItems();
+}
+function pickPrefixSvc(el) {
+  const i = Number(el.dataset.i), it = CART[i]; if (!it) return;
+  const P = (typeOf($('q-segment').value) || {}).prefix, x = (PSVC[P] || []).find((s) => s.code === el.value);
+  it.code = el.value; it.name = x ? x.name : ''; it.svc = x ? 'ok' : ''; it.preview = x ? [x.name, x.description].filter(Boolean).join('\n') : '';
+  saveCart(); showSvc(i); recalc();
+}
 function addLine(kind) {
   if (CART.length >= 20) { msg('q-msg', 'err', 'ใส่ได้ไม่เกิน 20 รายการต่อคำขอ'); return; }
   CART.push(kind === 'keyhs' ? { kind, keyHS: '', name: '', qty: 1, unitPrice: '', discount: '' } : kind === 'surcharge' ? { kind, type: 'coach', note: '', qty: 1, unitPrice: '', discount: '' } : { kind, code: '', name: '', qty: 1, unitPrice: '', discount: '' });
@@ -630,6 +666,12 @@ function renderItems() {
             <option value="travel"${it.type === 'travel' ? ' selected' : ''}>ค่าเดินทางนอกกรุงเทพฯ</option></select>
           <input type="text" placeholder="รายละเอียด เช่น Native coach สำหรับ Workshop 2 ครั้ง / ชลบุรี" maxlength="120" style="margin-top:4px" ${inp(i, 'note', it.note)}>
           <div class="small">ใช้กับ Customized Package ที่มีค่าเพิ่ม (แพ็กเกจจาก Catalog คิดค่าเพิ่มให้เอง)</div>`;
+      } else if ((typeOf($('q-segment').value) || {}).prefix) {
+        const P = typeOf($('q-segment').value).prefix, list = PSVC[P] || [];
+        desc = `<span class="kind service" id="svk-${i}">บริการ ${esc(P)} (PEAK)</span>
+          <select class="mono" data-i="${i}" onchange="pickPrefixSvc(this)"><option value="">${list.length ? '— เลือกบริการ —' : 'กำลังโหลดจาก PEAK…'}</option>${list.map((x) => `<option value="${esc(x.code)}"${x.code === it.code ? ' selected' : ''}>${esc(x.code)} · ${esc(x.name)}</option>`).join('')}${it.code && !list.some((x) => x.code === it.code) ? `<option value="${esc(it.code)}" selected>${esc(it.code)}</option>` : ''}</select>
+          <div class="svc-name" id="svc-${i}"></div>
+          <input type="text" maxlength="300" placeholder="🎁 ของแถม (ถ้ามี)" style="margin-top:4px" ${inp(i, 'freebie', it.freebie)}>`;
       } else {
         desc = `<span class="kind service" id="svk-${i}">Whitehouse Package</span>
           <input type="text" class="mono" placeholder="Package ID เช่น 3822" maxlength="40" autocomplete="off" ${inp(i, 'code', it.code)}>
@@ -649,7 +691,7 @@ function renderItems() {
   }).join('');
   el.innerHTML = `<div style="overflow-x:auto"><table class="items"><thead><tr><th>รายการ</th><th class="num">จำนวน</th><th class="num">ราคา/หน่วย<br><span class="small">(${basisOf($('q-segment').value)})</span></th><th class="num">ส่วนลด</th><th class="num">รวม</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="total"><span>ยอดรวม${basisOf($('q-segment').value) === 'รวม VAT' ? ' (รวม VAT แล้ว)' : 'ก่อน VAT'}<br><span class="small" id="q-total-sub"></span></span><strong id="q-total">0</strong></div>`;
-  CART.forEach((it, i) => { if (kindOf(it) === 'service') { showSvc(i); if (it.code && !it.svc) lookupSvc(i); } });
+  CART.forEach((it, i) => { if (kindOf(it) === 'service') { const P = (typeOf($('q-segment').value) || {}).prefix; const x = P && (PSVC[P] || []).find((s) => s.code === it.code); if (x && !it.svc) { it.name = x.name; it.svc = 'ok'; it.preview = [x.name, x.description].filter(Boolean).join('\n'); } showSvc(i); if (it.code && !it.svc && !(P && PSVC[P] && PSVC[P].length)) lookupSvc(i); } });
   recalc();
   CART.forEach((it, i) => { if (kindOf(it) === 'keyhs' && it.keyHS && !it.heading) khsName(i); });
 }
@@ -736,7 +778,7 @@ async function submitQT() {
   const v = (id) => $(id).value.trim();
   const seg = v('q-segment');
   const body = {
-    segment: seg, dealType: v('q-deal'), opportunityId: seg === 'B2S' ? '' : getOpp('q'),
+    segment: seg, customerType: ($('q-segment').selectedOptions[0] || {}).dataset ? $('q-segment').selectedOptions[0].dataset.code : '', dealType: v('q-deal'), opportunityId: oppOf(seg) ? getOpp('q') : '',
     taxId: v('q-tax'), branch: v('q-branch'), clientCode: v('q-client'), company: v('q-company'),
     docLang: v('q-lang'), wantedQtDate: v('q-date'), creditTermDays: v('q-term'), whtRate: v('q-wht'), poRequired: v('q-po') === 'yes', note: v('q-note'), customerEmail: v('q-email'), replaces: v('q-replaces'),
     items: CART, newContact: newContactOf(), classPicks: classPicksOf(),
@@ -750,7 +792,7 @@ async function submitQT() {
     if (!/^\d{5}$/.test(nc.postCode)) return msg('q-msg', 'err', 'รหัสไปรษณีย์ลูกค้าใหม่ต้องมี 5 หลัก');
   }
   if (CART.some((it) => !KINDS[seg].includes(kindOf(it)))) return msg('q-msg', 'err', `มีรายการที่ลูกค้า ${seg} ใช้ไม่ได้ ลบออกก่อนส่ง`);
-  if (seg !== 'B2S' && !body.opportunityId) return msg('q-msg', 'err', `ใส่ Opportunity ID จาก CRM สำหรับลูกค้า ${seg}`);
+  if (oppOf(seg) && !body.opportunityId) return msg('q-msg', 'err', `ใส่ Opportunity ID จาก CRM สำหรับลูกค้า ${seg}`);
   if (!body.wantedQtDate) return msg('q-msg', 'err', 'ใส่วันที่ต้องการให้ลงใน QT');
   if (body.creditTermDays === '') return msg('q-msg', 'err', 'ใส่เครดิตเทอม (วัน)');
   if (body.whtRate === '') return msg('q-msg', 'err', 'เลือกหัก ณ ที่จ่าย (ไม่หัก / 1% / 2% / 3% / 5%)');
@@ -907,7 +949,7 @@ function onPickQT() {
   $('i-qt-hint').textContent = !q ? '' : q.peakQtNo ? '✓ ดึงจาก Revenue Hub' : 'ฝ่ายบัญชียังไม่ได้ใส่เลข QT ของคำขอนี้ ใส่เลขที่ได้รับเองได้';
   renderInvs();
 }
-function onInvSeg() { $('i-opp-wrap').hidden = $('i-seg').value === 'B2S'; if (typeof INVS !== 'undefined' && $('i-list')) renderInvs(); }
+function onInvSeg() { $('i-opp-wrap').hidden = !!$('i-seg').value && !oppOf($('i-seg').value); if (typeof INVS !== 'undefined' && $('i-list')) renderInvs(); }
 function startInvFor(requestId) { go('inv'); $('i-req').value = requestId; INVS = [blankInv()]; onPickQT(); prefillAmount(); renderInvs(); window.scrollTo(0, 0); }
 
 function readFileB64(file) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] || ''); r.onerror = () => rej(new Error('อ่านไฟล์ไม่สำเร็จ')); r.readAsDataURL(file); }); }
@@ -915,7 +957,7 @@ function readFileB64(file) { return new Promise((res, rej) => { const r = new Fi
 async function submitINV() {
   const v = (id) => $(id).value.trim();
   const body = {
-    requestId: v('i-req'), qtNo: v('i-qt'), segment: v('i-seg'), whtRate: v('i-wht'), opportunityId: v('i-seg') === 'B2S' ? '' : getOpp('i'), company: v('i-company'),
+    requestId: v('i-req'), qtNo: v('i-qt'), segment: v('i-seg'), customerType: ($('i-seg').selectedOptions[0] || { dataset: {} }).dataset.code || '', whtRate: v('i-wht'), opportunityId: v('i-seg') && !oppOf(v('i-seg')) ? '' : getOpp('i'), company: v('i-company'),
     taxId: v('i-tax'), branch: v('i-branch'),
     evidenceType: v('i-evtype'), evidenceOther: v('i-evother'),
     financeContact: v('i-fin-name'), financeEmail: v('i-fin-email'), financePhone: v('i-fin-phone'), note: v('i-note'),
@@ -928,7 +970,7 @@ async function submitINV() {
   if (body.taxId.length !== 13) return msg('i-msg', 'err', 'กรอกเลขผู้เสียภาษี 13 หลักของลูกค้าตาม QT');
   if (!body.segment) return msg('i-msg', 'err', 'เลือกกลุ่มลูกค้า');
   if (body.whtRate === '') return msg('i-msg', 'err', 'เลือกหัก ณ ที่จ่าย (ไม่หัก / 1% / 2% / 3% / 5%)');
-  if (body.segment !== 'B2S' && !body.opportunityId) return msg('i-msg', 'err', 'ใส่ Opportunity ID จาก CRM (ยกเว้นลูกค้า B2S)');
+  if (oppOf(body.segment) && !body.opportunityId) return msg('i-msg', 'err', `ใส่ Opportunity ID จาก CRM สำหรับลูกค้า ${body.segment}`);
   if (body.opportunityId && !OPP_OK(body.opportunityId)) return msg('i-msg', 'err', 'Opportunity ID ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN');
   const badInv = INVS.findIndex((x) => !x.students || !x.wantedIssueDate || x.creditTermDays === '' || x.creditTermDays === undefined);
   if (badInv >= 0) return msg('i-msg', 'err', `INV ใบที่ ${badInv + 1}: ใส่จำนวนผู้เรียน วันที่ต้องการให้ลงใน INV และเครดิตเทอมให้ครบ`);
@@ -1124,7 +1166,7 @@ async function rebuildQT(id) {
   const q = REQS.find((x) => x.requestId === id); if (!q) return;
   if ((CART.length || $('q-company').value.trim()) && !(await ask({ kind: 'warn', title: 'แทนที่ข้อมูลในฟอร์ม QT?', ok: 'แทนที่', html: '<p>ฟอร์ม QT มีข้อมูลค้างอยู่ จะถูกแทนด้วยข้อมูลจากคำขอที่ถูกตีกลับ</p>' }))) return;
   const set = (k, v) => { if ($(k)) $(k).value = v ?? ''; };
-  set('q-segment', q.segment); set('q-deal', q.dealType); setOpp('q', q.opportunityId);
+  set('q-segment', { MaoMao: 'B2C', B2E: 'B2C', Others: 'B2C' }[q.segment] || q.segment); set('q-deal', q.dealType); setOpp('q', q.opportunityId);
   loadClasses().then(() => { let p = {}; try { p = JSON.parse(q.classPicks || '{}'); } catch {} prefillClasses(true); Object.entries(p).forEach(([g, v]) => { const el = $('cls-' + g); if (el) { el.value = v; el.dataset.touched = '1'; } }); });
   set('q-tax', q.taxId); set('q-branch', q.branch); set('q-client', q.clientCode); set('q-company', q.company);
   set('q-lang', q.docLang || 'TH'); set('q-term', q.creditTermDays); set('q-wht', q.whtRate); set('q-po', q.poRequired === 'Yes' ? 'yes' : 'no');
@@ -1169,11 +1211,11 @@ async function rtTax() {
 function taxHintEl(el, t) { el.textContent = t.length === 13 && !validTax(t) ? '⚠️ หลักสุดท้ายไม่ตรง ตรวจเลขอีกครั้ง' : ''; }
 async function submitRT() {
   const v = (id) => $(id).value.trim();
-  const body = { action: 'receipt', segment: v('r-seg'), docKind: v('r-kind'), docLang: v('r-lang'), taxId: v('r-tax'), branch: v('r-kind') === 'person' ? '00000' : v('r-branch').padStart(5, '0'),
+  const body = { action: 'receipt', segment: v('r-seg'), customerType: ($('r-seg').selectedOptions[0] || { dataset: {} }).dataset.code || '', classPicks: Object.fromEntries((CLS || []).map((g) => [g.code, ($('rcls-' + g.code) || {}).value || ''])), docKind: v('r-kind'), docLang: v('r-lang'), taxId: v('r-tax'), branch: v('r-kind') === 'person' ? '00000' : v('r-branch').padStart(5, '0'),
     billName: v('r-name'), address: v('r-addr'), whStudent: v('r-stu'), packages: v('r-pkg'), refDoc: v('r-ref'), description: v('r-desc'),
     price: v('r-price'), discount: v('r-disc'), whtRate: v('r-wht'), paidDate: v('r-paid'), deliveryChannel: v('r-ch'), email: v('r-email'), deliveryAddress: v('r-dlv'), note: v('r-note') };
   const need = [[body.taxId.length === 13, 'กรอกเลข 13 หลัก'], [body.billName, 'ใส่ชื่อที่ออกในเอกสาร'], [body.address, 'ใส่ที่อยู่ตามเอกสาร'],
-    [!['B2C', 'B2E', 'MaoMao'].includes(body.segment) || body.whStudent, 'ใส่ชื่อ / ID ผู้เรียนใน Whitehouse'], [!['B2C', 'B2E', 'MaoMao'].includes(body.segment) || body.packages, 'ใส่ Package ID / รหัสคอร์ส'], [body.packages || body.description, 'ใส่ชื่อคอร์ส / รายละเอียดที่ให้ขึ้นในเอกสาร'],
+    [!whNeeded(body.segment) || body.whStudent, 'ใส่ชื่อ / ID ผู้เรียนใน Whitehouse'], [!whNeeded(body.segment) || body.packages, 'ใส่ Package ID / รหัสคอร์ส'], [body.packages || body.description, 'ใส่ชื่อคอร์ส / รายละเอียดที่ให้ขึ้นในเอกสาร'],
     [toNum(body.price) > 0, 'ใส่ราคาขาย'], [body.whtRate !== '', 'เลือกหัก ณ ที่จ่าย'], [body.paidDate, 'ใส่วันที่ลูกค้าชำระ'],
     [!/email/.test(body.deliveryChannel) || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email), 'ใส่อีเมลลูกค้าให้ถูกต้อง']];
   const miss = need.find((x) => !x[0]); if (miss) return msg('r-msg', 'err', miss[1]);
@@ -1559,7 +1601,7 @@ function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch {} }
   buildOpp('q'); buildOpp('i');
   restoreDraft(); paintOpp('q');
   let hasDraft = false; try { hasDraft = !!localStorage.getItem(DRAFT_KEY); } catch {}
-  if (!hasDraft && CART.length && CART.every((it) => kindOf(it) === 'service')) $('q-segment').value = 'B2E';
+  if (!hasDraft && CART.length && CART.every((it) => kindOf(it) === 'service')) $('q-segment').value = 'B2C';
   ['input', 'change'].forEach((ev) => $('tab-qt').addEventListener(ev, saveDraft));
   $('tab-inv').addEventListener('input', () => { INV_DIRTY = true; });
   // INV form isn't kept as a draft: warn before leaving with unsent data, or while something is still saving.

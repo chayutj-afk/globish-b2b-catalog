@@ -135,12 +135,33 @@ const MODE_TH = { segment: 'เซลเลือกในฟอร์มขอ 
 function renderClasses() {
   const C = CLASSES;
   $('cls').innerHTML = (C.live ? '' : `<p class="small warn">ยังอ่านจาก PEAK ไม่ได้ (${esc(C.error || 'PEAK_MODE = off')}) แสดงกติกาเดิมไว้ก่อน แก้ได้เมื่อเปิด PEAK API</p>`)
-    + `<table style="margin-top:8px"><thead><tr><th>กลุ่ม</th><th>ติดยังไง</th><th>ค่าที่ระบบเติมให้ก่อน ตามกลุ่มลูกค้า (เซลเปลี่ยนได้)</th><th></th></tr></thead><tbody>${C.groups.map((g) => `<tr>
+    + renderTypes()
+    + `<div style="margin-top:14px"><b>กลุ่มอื่น</b></div><table style="margin-top:6px"><thead><tr><th>กลุ่ม</th><th>ติดยังไง</th><th>ค่าที่ระบบเติมให้ก่อน ตามประเภทลูกค้า (เซลเปลี่ยนได้)</th><th></th></tr></thead><tbody>${C.groups.filter((g) => g.code !== 'G012').map((g) => `<tr>
       <td class="who"><b>${esc(g.name)}</b><br><span class="small">${esc(g.code)}${g.description ? ' · ' + esc(g.description) : ''}</span></td>
       <td><select class="sel" id="cm-${esc(g.code)}" onchange="clsPaint('${esc(g.code)}')" ${C.live ? '' : 'disabled'}>${Object.entries(MODE_TH).map(([m, t]) => `<option value="${m}"${g.mode === m ? ' selected' : ''}>${t}</option>`).join('')}</select></td>
       <td><div id="cs-${esc(g.code)}" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;min-width:420px">${C.segments.map((sg) => { const cur = g.segments[sg] || ''; return `<label class="small">${esc(sg)}<select class="sel" data-s="${esc(sg)}" ${C.live ? '' : 'disabled'}><option value="">— ไม่ติด —</option>${(g.items || []).map((i) => `<option value="${esc(i.code)}"${cur === i.code ? ' selected' : ''}>${esc(i.name)} · ${esc(i.code)}</option>`).join('')}${cur && !(g.items || []).some((i) => i.code === cur) ? `<option value="${esc(cur)}" selected>${esc(cur)} (ไม่มีใน PEAK แล้ว)</option>` : ''}</select></label>`; }).join('')}</div></td>
       <td style="text-align:right">${C.live ? `<button class="btn btn-o btn-sm" type="button" onclick="clsSave('${esc(g.code)}')">บันทึก</button>` : ''}<div class="small" id="cmsg-${esc(g.code)}"></div></td></tr>`).join('')}</tbody></table>`;
-  C.groups.forEach((g) => clsPaint(g.code));
+  C.groups.filter((g) => g.code !== 'G012').forEach((g) => clsPaint(g.code));
+}
+// Customer types (PEAK G012): what each type decides in the request forms.
+const KIND_TH = { catalog: 'B2B Catalog', keyhs: 'Key H.S. (Customized)', surcharge: 'ค่าเพิ่ม', service: 'แพ็กเกจ WH / บริการ PEAK' };
+function renderTypes() {
+  const T = CLASSES.types || [], live = CLASSES.live;
+  return `<div style="margin-top:14px"><b>ประเภทลูกค้า (PEAK G012)</b> <span class="small">เซลเลือกในฟอร์มขอ QT / INV / ใบเสร็จ แต่ละประเภทกำหนด VAT, สินค้าที่เลือกได้ และ Opportunity ID · ประเภทที่บัญชีเพิ่มใน PEAK ต้องตั้งกติกาก่อนจึงจะเลือกได้</span>
+    <table style="margin-top:6px"><thead><tr><th>ประเภท</th><th>VAT</th><th>สินค้าที่เลือกได้</th><th>Opportunity ID</th><th></th></tr></thead><tbody>${T.map((t) => `<tr id="ty-${esc(t.code)}">
+      <td class="who"><b>${esc(t.name)}</b><br><span class="small">${esc(t.code)}${t.ready ? '' : ' · <span class="warn">ยังไม่ได้ตั้ง (เซลยังเลือกไม่ได้)</span>'}</span></td>
+      <td><select class="sel" data-f="vat" ${live ? '' : 'disabled'}><option value="incl"${t.vat === 'incl' ? ' selected' : ''}>ราคารวม VAT</option><option value="excl"${t.vat === 'excl' ? ' selected' : ''}>ราคาก่อน VAT</option></select></td>
+      <td>${Object.entries(KIND_TH).map(([k, l]) => `<label class="ck"><input type="checkbox" data-k="${k}"${t.kinds.includes(k) ? ' checked' : ''} ${live ? '' : 'disabled'}> ${l}</label>`).join('')}
+        <label class="small" style="display:block;margin-top:4px">บริการจาก PEAK เฉพาะรหัสขึ้นต้นด้วย <input data-f="prefix" value="${esc(t.prefix)}" maxlength="20" placeholder="เช่น B2S (ว่าง = ใส่ Package ID เอง)" style="width:200px" ${live ? '' : 'disabled'}></label></td>
+      <td><label class="ck"><input type="checkbox" data-f="opp"${t.opp ? ' checked' : ''} ${live ? '' : 'disabled'}> ต้องใส่</label></td>
+      <td style="text-align:right">${live ? `<button class="btn btn-o btn-sm" type="button" onclick="typeSave('${esc(t.code)}')">บันทึก</button>` : ''}<div class="small" id="tymsg-${esc(t.code)}"></div></td></tr>`).join('')}</tbody></table></div>`;
+}
+async function typeSave(code) {
+  const row = $('ty-' + code), q = (sel) => row.querySelector(sel);
+  const body = { action: 'type', code, vat: q('[data-f=vat]').value, opp: q('[data-f=opp]').checked, prefix: q('[data-f=prefix]').value.trim(), kinds: [...row.querySelectorAll('[data-k]')].filter((x) => x.checked).map((x) => x.dataset.k) };
+  $('tymsg-' + code).textContent = 'กำลังบันทึก…';
+  try { await api('/api/users', { method: 'PATCH', body: JSON.stringify(body) }); await load(); $('tymsg-' + code).innerHTML = '<span class="ok">✓ บันทึกแล้ว</span>'; }
+  catch (e) { $('tymsg-' + code).textContent = e.message; }
 }
 function clsPaint(code) { const m = $('cm-' + code).value; $('cs-' + code).style.display = m === 'segment' ? 'grid' : 'none'; }
 async function clsSave(code) {

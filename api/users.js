@@ -20,7 +20,8 @@ async function classView(list) {
     groups = Object.keys(rules).map((code) => ({ code, name: code === 'G014' ? 'Sales Performance' : code, items: code === 'G014' ? perf : [...new Set([...Object.values(rules[code].segments), ...Object.values(rules[code].users)])].map((c) => ({ code: c, name: c })) }));
   }
   groups = groups.map((g) => ({ ...g, mode: (rules[g.code] || {}).mode || 'off', segments: (rules[g.code] || {}).segments || {} }));
-  return { rules, groups, live, error, segments: cr.SEGMENTS };
+  const types = await require('../lib/types').list();
+  return { rules, groups, live, error, segments: types.map((t) => t.name), types };
 }
 
 module.exports = async function handler(req, res) {
@@ -51,7 +52,7 @@ module.exports = async function handler(req, res) {
       const list = await users.list();
       const classes = await classView(list);
       for (const u of list) u.classItems = Object.fromEntries(Object.entries(classes.rules).filter(([, r]) => r.mode === 'seller').map(([g, r]) => [g, r.users[u.email.toLowerCase()] || '']));
-      return res.status(200).json({ ok: true, users: list, classes: { live: classes.live, error: classes.error, groups: classes.groups, segments: classes.segments }, chat: require('../lib/notify').configured(), roles: users.ROLES.map((r) => ({ id: r, label: users.ROLE_LABEL[r], perms: users.ROLE_PERMS[r] })), perms: users.PERMS });
+      return res.status(200).json({ ok: true, users: list, classes: { live: classes.live, error: classes.error, groups: classes.groups, segments: classes.segments, types: classes.types }, chat: require('../lib/notify').configured(), roles: users.ROLES.map((r) => ({ id: r, label: users.ROLE_LABEL[r], perms: users.ROLE_PERMS[r] })), perms: users.PERMS });
     }
     if (req.method === 'PATCH') {
       checkOrigin(req);
@@ -64,6 +65,10 @@ module.exports = async function handler(req, res) {
         const r = await require('../lib/peak').testConnection(String(b.taxId || '').replace(/\D/g, '').slice(0, 13));
         await require('../lib/hub').log('catalog', 'peak_test', '', `${me.email} · ${r.ok ? 'ok' : r.error}`).catch(() => {});
         return res.status(200).json({ ok: true, peak: r });
+      }
+      if (b.action === 'type') {
+        await require('../lib/types').save(String(b.code || ''), { vat: b.vat, kinds: b.kinds, opp: b.opp, prefix: b.prefix }, me.email);
+        return res.status(200).json({ ok: true });
       }
       if (b.action === 'classes') {
         await require('../lib/classrules').saveGroup(String(b.group || ''), { mode: b.mode, segments: b.segments }, await users.list(), me.email);

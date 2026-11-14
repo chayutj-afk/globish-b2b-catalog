@@ -1,3 +1,4 @@
+// GET /api/services?prefix=B2S → PEAK services with that code prefix (live from PEAK when the API is on).
 // GET /api/services?code=3822 → the PEAK service for a Whitehouse Package ID or PEAK service code.
 //   { ok, found, code, name, group, inactive }  — the form shows the PEAK name (read-only), so the
 //   name on the QT always comes from PEAK, not from what sales typed.
@@ -39,6 +40,17 @@ module.exports = async function handler(req, res) {
       const k = String(sp.get('keyHS')).slice(0, 400), lang = sp.get('lang') === 'EN' ? 'EN' : 'TH';
       const name = heroName(k, lang);
       return res.status(200).json({ ok: true, name, heading: name ? describeKeyHS(k, { lang }).split('\n')[0] : '' });
+    }
+    // ?prefix=B2S → services in PEAK whose code starts with it (customer types that pick from PEAK).
+    if (sp.get('prefix')) {
+      const pre = String(sp.get('prefix')).toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 20);
+      const peak = require('../lib/peak');
+      if (peak.mode() !== 'off') {
+        try { return res.status(200).json({ ok: true, source: 'peak', services: await peak.listServicesByPrefix(pre) }); }
+        catch (e) { console.error('PEAK services failed', e.message); }
+      }
+      const list = [...(await services()).values()].filter((x) => x.code.startsWith(pre)).map((x) => ({ code: x.code, name: x.name, description: '' }));
+      return res.status(200).json({ ok: true, source: 'sheet', services: list });
     }
     const code = new URL(req.url, 'http://x').searchParams.get('code') || '';
     if (!/^[A-Za-z0-9_-]{1,40}$/.test(code)) return res.status(400).json({ ok: false, error: 'รหัสไม่ถูกต้อง' });

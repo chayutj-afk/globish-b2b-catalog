@@ -15,6 +15,8 @@ const { OPP_RE, normaliseOppId } = require('../lib/crm');
 const { services } = require('./services');
 
 const SEGMENTS = ['B2B', 'B2C', 'MaoMao', 'B2S', 'B2E', 'Others'];
+// The rules the old segments had (requests made before customer types came from PEAK, and tests).
+const LEGACY_TYPE = (seg) => SEGMENTS.includes(seg) ? { name: seg, vat: vatIncluded(seg) ? 'incl' : 'excl', kinds: KINDS[seg], opp: !OPP_NONE.includes(seg), prefix: '' } : null;
 // Withholding tax the customer deducts from the payment: 0 = none, otherwise percent (services to a company: usually 3%).
 const WHT_RATES = ['0', '1', '2', '3', '5'];
 const DEAL_TYPES = ['New Logo', 'Retention', 'Others'];
@@ -35,8 +37,10 @@ function newId(now = new Date()) {
   return `REQ-${String(t.getUTCFullYear()).slice(2)}${p(t.getUTCMonth() + 1)}${p(t.getUTCDate())}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
 }
 
-function validate(b) {
+function validate(b, type) {
   if (!b || typeof b !== 'object') throw bad('ข้อมูลคำขอไม่ถูกต้อง');
+  // Customer type = PEAK G012 (lib/types.js); older callers/tests pass the old segment rules.
+  type = type || LEGACY_TYPE(text(b.segment, 20));
   const r = {
     segment: text(b.segment, 20),
     dealType: text(b.dealType, 20),
@@ -57,11 +61,12 @@ function validate(b) {
   // Customer not in PEAK yet: its details, created in PEAK when accounting approves (lib/newcontact.js).
   const nc = !text(b.clientCode, 20) && b.newContact ? require('../lib/newcontact').clean(b.newContact) : null;
   r.newContact = nc ? JSON.stringify(nc) : '';
-  if (!SEGMENTS.includes(r.segment)) throw bad('เลือกกลุ่มลูกค้า (B2B / B2C / MaoMao / B2E / B2S / Others)');
+  if (!type) throw bad('เลือกประเภทลูกค้า');
+  r.segment = type.name;
   if (!DEAL_TYPES.includes(r.dealType)) throw bad('เลือกประเภทดีล (New Logo / Retention / Others)');
-  if (OPP_NONE.includes(r.segment)) r.opportunityId = '';
+  if (!type.opp) r.opportunityId = '';
   if (r.opportunityId && !OPP_RE.test(r.opportunityId)) throw bad('Opportunity ID ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN');
-  if (OPP_REQUIRED.includes(r.segment) && !r.opportunityId) throw bad(`ใส่ Opportunity ID จาก CRM (CRM-OPP-YYYY-NNNNN) สำหรับลูกค้า ${r.segment}`);
+  if (type.opp && !r.opportunityId) throw bad(`ใส่ Opportunity ID จาก CRM (CRM-OPP-YYYY-NNNNN) สำหรับลูกค้า ${r.segment}`);
   if (!r.company) throw bad('กรอกชื่อบริษัทหรือหน่วยงาน');
   // The 13-digit tax ID (+ branch) is the single source of truth for the customer in every segment.
   // Client code is only a hint; the PEAK sync matches on tax ID and flags a mismatch.
@@ -84,13 +89,13 @@ function validate(b) {
   if (items.length > 20) throw bad('ใส่แพ็กเกจได้ไม่เกิน 20 รายการต่อคำขอ');
   for (const it of items) {
     const kind = (it && it.kind) || 'catalog';
-    if (!KINDS[r.segment].includes(kind)) {
+    if (!type.kinds.includes(kind)) {
       throw bad(kind === 'service'
         ? `ลูกค้า ${r.segment} ใช้แพ็กเกจจาก Catalog หรือ Key H.S. เท่านั้น`
         : `ลูกค้า ${r.segment} ใช้ Package ID ของ Whitehouse หรือรหัสบริการใน PEAK`);
     }
   }
-  return { r, items };
+  return { r, items, type };
 }
 
 function toYmdDisplay(s) {
@@ -101,7 +106,8 @@ function toYmdDisplay(s) {
 async function create(req, res, user) {
   checkOrigin(req);
   if (!can(user, 'request')) throw bad('ไม่มีสิทธิ์ขอเอกสาร', 403);
-  const { r, items } = validate(req.body);
+  const type = await require('../lib/types').resolve(req.body && (req.body.customerType || req.body.segment));
+  const { r, items } = validate(req.body, type);
 
   // Rate limit, counted from the sheet so it holds across serverless instances.
   const existing = await hub.readTable('Requests');
@@ -117,9 +123,19 @@ async function create(req, res, user) {
   const dupCheck = req.body && req.body.confirmDuplicate !== true;
 
   // Whitehouse Package ID / PEAK service code must exist in PEAK; the name always comes from PEAK.
-  if (items.some((it) => it.kind === 'service')) {
-    const svc = await services();
+  // Types whose services come from PEAK (e.g. B2S: codes starting with B2S): checked in PEAK, name + text from PEAK.
+  if (type.prefix && items.some((it) => it.kind === 'service') && peak.mode() !== 'off') {
     for (const it of items.filter((x) => x.kind === 'service')) {
+      const code = String(it.code || '').trim().toUpperCase();
+      if (!code.startsWith(type.prefix)) throw bad(`ลูกค้า ${type.name} เลือกได้เฉพาะบริการใน PEAK ที่รหัสขึ้นต้นด้วย ${type.prefix}`);
+      const s = await peak.getServiceByCode(code);
+      if (!s) throw bad(`ไม่พบบริการ ${code} ใน PEAK`);
+      Object.assign(it, { code, name: String(s.name || '').trim(), peakDesc: String(s.description || '').trim(), fromPeak: true });
+    }
+  }
+  if (items.some((it) => it.kind === 'service' && !it.fromPeak)) {
+    const svc = await services();
+    for (const it of items.filter((x) => x.kind === 'service' && !x.fromPeak)) {
       const code = String(it.code || '').trim().toUpperCase();
       const s = svc.get(code);
       if (!s) throw bad(`ไม่พบรหัส ${code || '(ว่าง)'} ใน PEAK ตรวจ Package ID อีกครั้ง (ถ้าเพิ่งสร้างใน PEAK แจ้งฝ่ายบัญชี)`);
@@ -129,7 +145,7 @@ async function create(req, res, user) {
     // Customer-readable description from the Whitehouse package details (WHPackages tab, imported on /import-wh).
     let wh = new Map();
     try { wh = new Map((await hub.readTable('WHPackages')).map((x) => [String(x.id), x])); } catch (e) { console.error('WHPackages read failed', e); }
-    for (const it of items.filter((x) => x.kind === 'service')) { it.wh = wh.get(it.code.replace(/_.*$/, '')) || null; it.name = require('../lib/pricing').fullServiceName(it.name, it.wh); }
+    for (const it of items.filter((x) => x.kind === 'service' && !x.fromPeak)) { it.wh = wh.get(it.code.replace(/_.*$/, '')) || null; it.name = require('../lib/pricing').fullServiceName(it.name, it.wh); }
   }
 
   const priced = items.map((it) => {
@@ -137,10 +153,10 @@ async function create(req, res, user) {
     const lang = r.docLang;
     if (kind === 'keyhs') return priceCustomKeyHS({ keyHS: it.keyHS, name: it.name, qty: it.qty, unitPrice: it.unitPrice, discount: it.discount, lang });
     if (kind === 'surcharge') return priceSurcharge({ type: it.type, note: it.note, qty: it.qty, unitPrice: it.unitPrice, discount: it.discount, lang });
-    if (kind === 'service') return priceService({ code: it.code, name: it.name, qty: it.qty, unitPrice: it.unitPrice, discount: it.discount, wh: it.wh, lang });
+    if (kind === 'service') return priceService({ code: it.code, name: it.name, qty: it.qty, unitPrice: it.unitPrice, discount: it.discount, wh: it.wh, peakDesc: it.peakDesc, lang });
     return priceItem({
       packageId: text(it.packageId, 60), students: it.students, classes: it.classes,
-      unitPrice: it.unitPrice, discount: it.discount, intl: it.intl, loc: it.loc, lang, vatIncl: vatIncluded(r.segment),
+      unitPrice: it.unitPrice, discount: it.discount, intl: it.intl, loc: it.loc, lang, vatIncl: type.vat === 'incl',
     });
   });
   // Sales' extra description for a package goes on its first (priced) line. The PEAK sync (Claude)
@@ -152,7 +168,7 @@ async function create(req, res, user) {
   });
   const lines = priced.flatMap((p) => p.lines);
   // Line prices are in the segment's basis: before VAT (B2B / B2S) or VAT-inclusive (B2C / B2E / MaoMao / Others).
-  const incl = vatIncluded(r.segment);
+  const incl = type.vat === 'incl';
   const entered = Math.round(priced.reduce((s, p) => s + p.total, 0) * 100) / 100;
   const { preVat: total, inclVat: totalInclVat } = vatSplit(entered, incl);
   const catalogTotal = priced.reduce((s, p) => s + p.catalogTotal, 0);
@@ -172,14 +188,14 @@ async function create(req, res, user) {
   }
 
   // PEAK classification Sales picked on the form (G012 / G013 …), checked against PEAK's own items.
-  const picks = await require('../lib/classrules').cleanPicks(req.body && req.body.classPicks, await hub.readTable('Users').catch(() => []));
+  const picks = { ...(await require('../lib/classrules').cleanPicks(req.body && req.body.classPicks, await hub.readTable('Users').catch(() => [])) || {}), ...(type.code ? { G012: type.code } : {}) };
   const now = new Date();
   const request = {
     requestId: newId(now), createdAt: hub.sheetDateTime(now), requestedBy: user.email, salesName: user.name,
     ...r, wantedQtDate: toYmdDisplay(r.wantedQtDate), status: 'new', peakQtNo: '', peakQtId: '',
     totalPreVat: total, qtApprovedAt: '', ivRequestedAt: '', updatedAt: hub.sheetDateTime(now),
     catalogTotal, belowFloor, vatMode: incl ? 'incl' : 'excl', totalInclVat, voidedQts: '',
-    classPicks: picks ? JSON.stringify(picks) : '',
+    classPicks: Object.keys(picks).length ? JSON.stringify(picks) : '',
   };
 
   // The QT Draft is made when accounting approves the request (live via the PEAK API when
@@ -365,7 +381,7 @@ module.exports = async function handler(req, res) {
     const user = await requireUser(req);
     if (req.method === 'POST') return await create(req, res, user);
     if (req.method === 'GET' && req.query && req.query.view === 'qt-live') return await qtLive(req, res, user);
-    if (req.method === 'GET' && req.query && req.query.view === 'classes') return res.status(200).json({ ok: true, groups: await require('../lib/classrules').formGroups(await hub.readTable('Users').catch(() => [])) });
+    if (req.method === 'GET' && req.query && req.query.view === 'classes') return res.status(200).json({ ok: true, types: await require('../lib/types').list(), groups: await require('../lib/classrules').formGroups(await hub.readTable('Users').catch(() => [])) });
     if (req.method === 'GET') return await list(req, res, user);
     if (req.method === 'PATCH') return await update(req, res, user);
     res.status(405).json({ ok: false, error: 'Method not allowed' });

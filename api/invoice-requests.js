@@ -172,15 +172,20 @@ async function create(req, res, user) {
     if (!r.opportunityId) r.opportunityId = linked.opportunityId || '';
     r.segment = linked.segment || r.segment;
   }
+  // Customer type (PEAK G012): the QT's own, or picked on the form for a QT outside the app.
+  const T = require('../lib/types');
+  const ctype = linked ? ((await T.list()).find((t) => t.name === linked.segment) || { name: linked.segment, vat: vatIncluded(linked.segment) ? 'incl' : 'excl', opp: linked.segment !== 'B2S' })
+    : await T.resolve(b.customerType || b.segment);
+  r.segment = ctype.name;
   // A QT typed by hand (not a request in this app): no balance or approval check is possible, so a reason is required.
   if (!r.requestId && !r.offReason) throw bad('เลือก QT จากระบบ หรือใส่เหตุผลที่ใช้ QT นอกระบบ');
   // A QT keeps the basis it was made in (AG); rows without AG follow the segment.
-  const incl = linked && linked.vatMode ? linked.vatMode === 'incl' : vatIncluded(r.segment);
+  const incl = linked && linked.vatMode ? linked.vatMode === 'incl' : ctype.vat === 'incl';
   invoices.forEach((v) => { const sp = vatSplit(v.amount, incl); v.amountPreVat = sp.preVat; v.amountInclVat = sp.inclVat; });
   const basis = incl ? 'รวม VAT' : 'ก่อน VAT';
-  // CRM Opportunity ID: required for every segment except B2S.
-  if (r.segment === 'B2S') r.opportunityId = '';
-  else if (!r.opportunityId) throw bad('ใส่ Opportunity ID จาก CRM (CRM-OPP-YYYY-NNNNN) ยกเว้นลูกค้า B2S');
+  // CRM Opportunity ID: as the customer type says (B2S has none).
+  if (ctype.opp === false) r.opportunityId = '';
+  else if (!r.opportunityId) throw bad(`ใส่ Opportunity ID จาก CRM (CRM-OPP-YYYY-NNNNN) สำหรับลูกค้า ${ctype.name}`);
 
   // Same QT + same billed tax ID + same amount already requested (not rejected) → probably sent twice.
   if (b.confirmDuplicate !== true) {
@@ -671,7 +676,12 @@ async function createReceipt(req, res, user) {
     price: num(b.price), discount: num(b.discount) || 0, paidDate: text(b.paidDate, 10), deliveryChannel: text(b.deliveryChannel, 20),
     docLang: text(b.docLang, 2).toUpperCase() || 'TH', note: text(b.note, 1000),
   };
-  if (!RT_SEGMENTS.includes(r.segment)) throw bad('เลือกกลุ่มลูกค้า');
+  // Customer type (PEAK G012) + other PEAK classification picked on the form (e.g. Business Unit).
+  const ctype = await require('../lib/types').resolve(b.customerType || b.segment);
+  r.segment = ctype.name;
+  const picks = { ...(await require('../lib/classrules').cleanPicks(b.classPicks, await hub.readTable('Users').catch(() => [])) || {}), G012: ctype.code };
+  r.classPicks = JSON.stringify(picks);
+  const whStudentNeeded = ctype.kinds.includes('service') && !ctype.prefix; // WH packages (B2C)
   if (!RT_KIND[r.docKind]) throw bad('เลือกประเภทเอกสาร (ในนามบริษัท / ในนามบุคคล)');
   if (!r.billName) throw bad('ใส่ชื่อที่จะออกในเอกสาร');
   if (!/^\d{13}$/.test(r.taxId)) throw bad(r.docKind === 'person' ? 'ใส่เลขบัตรประชาชน 13 หลักของผู้ที่ออกในนาม' : 'ใส่เลขประจำตัวผู้เสียภาษี 13 หลัก');
@@ -679,8 +689,8 @@ async function createReceipt(req, res, user) {
   if (br === null) throw bad('สาขาต้องเป็นรหัส 5 หลัก เช่น 00000');
   r.branch = br;
   if (!r.address) throw bad('ใส่ที่อยู่ตามที่จะออกในเอกสาร');
-  if (['B2C', 'B2E', 'MaoMao'].includes(r.segment) && !r.whStudent) throw bad('ใส่ชื่อ / ID ผู้เรียนใน Whitehouse');
-  if (['B2C', 'B2E', 'MaoMao'].includes(r.segment) && !r.packages) throw bad('ใส่ Package ID / รหัสคอร์ส');
+  if (whStudentNeeded && !r.whStudent) throw bad('ใส่ชื่อ / ID ผู้เรียนใน Whitehouse');
+  if (whStudentNeeded && !r.packages) throw bad('ใส่ Package ID / รหัสคอร์ส');
   if (!r.packages && !r.description) throw bad('ใส่ชื่อคอร์ส / รายละเอียดที่ให้ขึ้นในเอกสาร');
   if (!(r.price > 0 && r.price < 1e9)) throw bad('ใส่ราคาขาย (ก่อนหักส่วนลด)');
   if (!(r.discount >= 0 && r.discount < r.price)) throw bad('ส่วนลดไม่ถูกต้อง');

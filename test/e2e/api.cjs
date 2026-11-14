@@ -297,6 +297,12 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
   [s, j] = await call(ADMIN, 'PATCH', '/api/users', { email: ADMIN, role: 'sales' }); ok(s >= 400, 'fixed admin cannot be demoted ' + s);
   [s, j] = await call(ADMIN, 'PATCH', '/api/users', { email: BEE, role: 'superuser' }); ok(s === 400, 'unknown role refused');
   [s, j] = await call(ADMIN, 'GET', '/api/users?view=health'); ok(s === 200 && Array.isArray(j.items || (j.health && j.health.items)), 'health view loads');
+  console.log('── 9b. PEAK Client-Token replaced elsewhere (another server instance) while requests run');
+  for (let round = 0; round < 3; round++) {
+    setPeak((p) => { p.tok = (p.tok || 0) + 1; }); // someone else got a newer token: ours is now invalid
+    const rs = await Promise.all([call(ACCT, 'GET', '/api/invoice-requests?view=pay-methods'), call(ACCT, 'GET', '/api/invoice-requests?view=pay-methods'), call(BENZ, 'GET', '/api/contacts?taxId=0105555555554'), call(BENZ, 'GET', '/api/requests?view=classes'), call(ACCT, 'GET', '/api/requests?view=qt-live&id=LEGACY-QO-20261100020')]);
+    ok(rs.every((x) => x[0] === 200), `round ${round + 1}: 5 requests at once after the token was replaced → ${rs.map((x) => x[0]).join(',')}` + (rs.find((x) => x[0] !== 200) ? ' ' + (rs.find((x) => x[0] !== 200)[1].error || '') : ''));
+  }
   console.log('── 10. webhook with only an id (partial payload) and number reuse');
   [s, j] = await call(BENZ, 'POST', '/api/requests', qtBody({ items: [{ kind: 'service', code: '5136', qty: 7, unitPrice: 15900 }] })); const q9 = j.requestId;
   await call(ACCT, 'PATCH', '/api/requests', { requestId: q9, action: 'approve' }); const r9 = req(q9);

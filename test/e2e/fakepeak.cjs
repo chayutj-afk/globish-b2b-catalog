@@ -35,7 +35,9 @@ global.fetch = async (url, opts = {}) => {
   for (const f of ['quotations', 'invoices', 'receipts', 'contacts', 'services', 'classes']) s[f] = s[f] || (f === 'classes' ? {} : []);
   if (s.fail && new RegExp(s.fail).test(`${m} ${path}`)) { save(s); return json({ error: 'boom' }, 500); }
   let out;
-  if (path === '/ClientToken') out = { PeakClientToken: { token: 'tok', resCode: '200' } };
+  // Like PEAK: only the newest Client-Token works; an older one answers 600.
+  if (path !== '/ClientToken' && (opts.headers || {})['Client-Token'] !== 'tok' + (s.tok || 0)) { save(s); return json({ PeakError: { resCode: '600', resDesc: 'Invalid Client Token' } }); }
+  if (path === '/ClientToken') { s.tok = (s.tok || 0) + 1; out = { PeakClientToken: { token: 'tok' + s.tok, resCode: '200' } }; }
   else if (m === 'GET' && path === '/Contacts') out = { PeakContacts: { resCode: '200', contacts: s.contacts.filter((c) => c.taxNumber === q.taxId && (!q.branchCode || (c.branchCode || '00000') === q.branchCode)) } };
   else if (m === 'POST' && path === '/Contacts') {
     const c = { ...body.PeakContacts.contacts[0] }; c.id = 'c' + (s.contacts.length + 1); c.code = 'CN' + String(s.contacts.length + 1).padStart(4, '0'); c.resCode = '200';

@@ -41,6 +41,11 @@ module.exports = async function handler(req, res) {
         const r = await require('../lib/notify').send(`✅ ทดสอบการแจ้งเตือนจาก Globish Sales Desk โดย ${me.name || me.email}`);
         return res.status(200).json({ ok: true, chat: r });
       }
+      if (b.action === 'test_peak') {
+        const r = await require('../lib/peak').testConnection(String(b.taxId || '').replace(/\D/g, '').slice(0, 13));
+        await require('../lib/hub').log('catalog', 'peak_test', '', `${me.email} · ${r.ok ? 'ok' : r.error}`).catch(() => {});
+        return res.status(200).json({ ok: true, peak: r });
+      }
       await users.setRole(me, b.email, { role: b.role, team: b.team, salesPerf: b.salesPerf, extra: b.extra });
       return res.status(200).json({ ok: true });
     }

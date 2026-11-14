@@ -34,6 +34,7 @@ td.who{white-space:normal}
   <p class="sub">ทุกคนที่เคยเข้าสู่ระบบด้วย @globish.co.th อยู่ในรายการนี้ โดยเริ่มเป็น Sales ทีม Both · กด <b>⚙ ตั้งค่า</b> เพื่อเลือก Role และติ๊กสิทธิ์เพิ่มให้คนที่ทำงานนอก role · ทีม B2C ไม่เห็น B2B Catalog · หัวหน้าเซลเห็นคำขอของทีมตัวเอง · มีผลภายใน 1 นาที · finance@ และ chayut.j@ เป็น Admin เสมอ</p>
   <div class="card tbl" id="matrix"></div>
   <div class="card" style="padding:12px 16px;margin:12px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>แจ้งเตือน Google Chat:</b> <span id="chat-st">…</span><button class="btn btn-g btn-sm" type="button" onclick="testChat()">ส่งข้อความทดสอบ</button><span id="chat-msg" class="small"></span></div>
+  <div class="card" style="padding:12px 16px;margin:12px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>เชื่อมต่อ PEAK API:</b> <input id="peak-tax" placeholder="เลขภาษีลูกค้าที่ใช้ทดสอบ (ไม่บังคับ)" inputmode="numeric" maxlength="17" style="width:240px"><button class="btn btn-g btn-sm" type="button" onclick="testPeak()">ทดสอบเชื่อมต่อ (อ่านอย่างเดียว)</button><span id="peak-msg" class="small" style="white-space:pre-line"></span></div>
   <div class="filters" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><input type="search" id="q" placeholder="ค้นหาชื่อหรืออีเมล" oninput="render()" style="flex:1;min-width:200px"><select id="fr" class="sel" onchange="render()" style="width:auto"><option value="">ทุก role</option></select></div>
   <div class="card tbl"><table><thead><tr><th>ผู้ใช้</th><th>เข้าใช้ล่าสุด</th><th>Role</th><th>ทีม</th><th>สิทธิ์เพิ่ม</th><th>Sales Performance (PEAK)</th><th></th></tr></thead><tbody id="rows"><tr><td colspan="7" class="small">กำลังโหลด…</td></tr></tbody></table></div>
 </main></div></div>
@@ -140,6 +141,13 @@ async function testChat() {
   try { const d = await api('/api/users', { method: 'PATCH', body: JSON.stringify({ action: 'test_chat' }) }); const c = d.chat || {};
     $('chat-msg').textContent = c.ok ? '✓ ส่งแล้ว ดูใน Google Chat' : c.state !== 'ok' ? '✗ ยังไม่ได้ตั้งค่า webhook' : `✗ Google Chat ตอบกลับ ${c.status || c.error}`; }
   catch (e) { $('chat-msg').textContent = e.message; }
+}
+async function testPeak() {
+  $('peak-msg').textContent = 'กำลังทดสอบ…';
+  try { const d = await api('/api/users', { method: 'PATCH', body: JSON.stringify({ action: 'test_peak', taxId: $('peak-tax').value }) }); const p = d.peak || {};
+    const env = Object.entries(p.env || {}).map(([k, v]) => `${k} ${v ? '✓' : '✗'}`).join(' · ');
+    $('peak-msg').textContent = (p.ok ? `✓ เชื่อมต่อ PEAK ได้ (${p.target})` : `✗ ${p.error}`) + `\nPEAK_MODE = ${p.mode} · ${env}` + (p.contacts ? `\nลูกค้าที่พบ: ${p.contacts.length ? p.contacts.join(', ') : 'ไม่พบ'}` : ''); }
+  catch (e) { $('peak-msg').textContent = e.message; }
 }
 </script>
 </body>

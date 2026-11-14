@@ -304,6 +304,46 @@ async function update(req, res, user) {
     return res.status(200).json({ ok: true, originalStatus: 'sent' });
   }
 
+  // PEAK API on. iv_make: accounting checked the evidence → INV Draft in PEAK from the QT.
+  // iv_check: "approved in PEAK" → read the INV from PEAK (number, date, link) instead of typing it.
+  if (b.action === 'iv_make' || b.action === 'iv_check') {
+    if (!can(user, 'approve')) throw bad('ไม่มีสิทธิ์อนุมัติเอกสาร', 403);
+    const peak = require('../lib/peak');
+    if (peak.mode() === 'off') throw bad('ยังไม่ได้เปิดการเชื่อมต่อ PEAK API', 409);
+    const who = user.name || user.email;
+    if (b.action === 'iv_make') {
+      if (row.status !== 'new' || row.peakIvId) throw bad(`คำขอนี้มี INV ใน PEAK แล้ว (${row.peakIvNo || row.status}) รีเฟรชหน้า`, 409);
+      const [reqs, users] = await Promise.all([hub.readTable('Requests'), hub.readTable('Users')]);
+      const qt = reqs.find((x) => x.requestId === row.requestId);
+      // Claim the row first so a double click can't make two INVs.
+      await hub.writeChecked('InvoiceRequests', 'ivRequestId', row, { status: 'iv_creating', updatedAt: at });
+      let out;
+      try { out = (await require('../lib/ivdraft').createForIvRequest(row, qt, users)).fields; }
+      catch (e) {
+        await hub.updateRow('InvoiceRequests', row._row, { status: 'new', updatedAt: hub.sheetDateTime(), accountNote: `สร้าง INV ใน PEAK ไม่สำเร็จ: ${String(e.message).slice(0, 300)}` });
+        await hub.log('peak', 'iv_live_error', id, String(e.message).slice(0, 200));
+        throw bad(`สร้าง INV ใน PEAK ไม่สำเร็จ: ${String(e.message).slice(0, 300)}`, e.status === 409 ? 409 : 502);
+      }
+      out.updatedAt = hub.sheetDateTime();
+      out.accountNote = `${out.accountNote} — ${who}`.slice(0, 500);
+      await hub.updateRow('InvoiceRequests', row._row, out);
+      // The evidence Sales attached goes on the INV too.
+      const ev = await drive.download(row.evidenceLink).catch(() => null);
+      if (ev) await attachToPeak('invoice', out.peakIvId, ev, `INV-EVIDENCE_${row.ivRequestId}`);
+      await hub.log('peak', 'iv_live_draft', id, `${user.email} · ${out.peakIvNo}`);
+      return res.status(200).json({ ok: true, status: 'iv_draft', peakIvNo: out.peakIvNo, message: out.accountNote });
+    }
+    if (!['iv_draft', 'new'].includes(row.status) || !row.peakIvId) throw bad('คำขอนี้ยังไม่มี INV Draft ใน PEAK', 409);
+    const d = await peak.getInvoice(row.peakIvId);
+    if (!d) throw bad('ไม่พบ INV นี้ใน PEAK', 404);
+    if (Number(d.isVoid) === 1 || /void/i.test(d.status || '')) throw bad(`INV ${d.code} ถูกยกเลิกใน PEAK แล้ว`, 409);
+    if (/draft/i.test(d.status || '')) throw bad(`INV ${d.code} ใน PEAK ยังเป็น Draft อนุมัติใน PEAK ก่อน แล้วกดอีกครั้ง`, 409);
+    const dmyOf = (x) => { const m = /^(\d{4})(\d{2})(\d{2})/.exec(String(x || '').replace(/-/g, '')); return m ? `${m[3]}/${m[2]}/${m[1]}` : ''; };
+    await issueInv(row, { ivNo: String(d.code).toUpperCase(), link: d.documentLink || row.peakDocLink, issueDate: dmyOf(d.issuedDate) || row.wantedIssueDate, note: `อนุมัติ INV ใน PEAK แล้ว — ${who}`, peakIvId: d.id }, { checked: true });
+    await hub.log('catalog', 'iv_check', id, `${user.email} · ${d.code}`);
+    return res.status(200).json({ ok: true, status: 'iv_issued', peakIvNo: d.code });
+  }
+
   // Accounting: INV issued from the QT in PEAK (fallback when the sync hasn't picked it up), or rejected.
   if (b.action === 'issued' || b.action === 'reject' || b.action === 'reopen') {
     if (!can(user, 'approve')) throw bad('ไม่มีสิทธิ์อนุมัติเอกสาร', 403);
@@ -341,7 +381,7 @@ async function update(req, res, user) {
 //   opts.checked: the row came from the page (status/updatedAt guard); the webhook writes directly.
 // Live PEAK only: put the file on the PEAK document too, so accounting sees it there (POST insertfile).
 // Never blocks the action: a failure goes to SyncLog + chat for accounting to attach by hand.
-async function attachToPeak(kind, transactionId, file, label) {
+async function attachToPeak(kind, transactionId, file, label) { // kind: quotation | invoice | receipt
   const peak = require('../lib/peak');
   if (peak.mode() === 'off' || !transactionId || !file) return 'skipped';
   try {
@@ -712,16 +752,99 @@ async function rtFromInv(req, res, user) {
   res.status(200).json({ ok: true, rtRequestId: id });
 }
 
+// PEAK API on: RT Draft from the paid INV (POST /Receipts/createbyinvoice), with the payment accounting
+// confirmed (date, amount, the PEAK account the money went to). Accounting approves it in PEAK; then the
+// webhook or "อนุมัติใน PEAK แล้ว" (rt_check) finishes it like rt_from_inv.
+async function rtMake(req, res, user) {
+  const peak = require('../lib/peak');
+  if (peak.mode() === 'off') throw bad('ยังไม่ได้เปิดการเชื่อมต่อ PEAK API', 409);
+  const b = req.body || {};
+  const ivNo = text(b.ivNo, 40).toUpperCase();
+  const [invs, ivreqs, rts, users] = await Promise.all([hub.readTable('Invoices'), hub.readTable('InvoiceRequests'), hub.readTable('ReceiptRequests'), hub.readTable('Users')]);
+  const a = invs.find((x) => String(x.ivNo).toUpperCase() === ivNo);
+  if (!a) throw bad('ไม่พบ INV นี้ในหน้าติดตามหนี้', 404);
+  if (!a.paidDate) throw bad('ยังไม่ได้บันทึกรับเงินของ INV นี้', 409);
+  if (a.rtNo || rts.some((x) => x.refDoc === ivNo && x.status !== 'rejected')) throw bad(`INV นี้มีใบเสร็จแล้ว${a.rtNo ? ' (' + a.rtNo + ')' : ''} รีเฟรชหน้า`, 409);
+  const iv = ivreqs.find((x) => x.ivRequestId === a.ivRequestId) || {};
+  const ivId = a.peakIvId || iv.peakIvId;
+  if (!ivId) throw bad('INV นี้ไม่มีรหัสใน PEAK (ออกก่อนเชื่อม API) ออกใบเสร็จใน PEAK เอง แล้วใส่เลข', 409);
+  const methods = await peak.listPaymentMethods();
+  const pm = methods.find((m) => m.code === text(b.paymentMethodCode, 40));
+  if (!pm) throw bad('เลือกบัญชีที่รับเงินใน PEAK');
+  const ch = text(b.deliveryChannel, 20);
+  if (!RT_CHANNEL[ch]) throw bad('เลือกช่องทางส่งใบเสร็จ');
+  const email = text(b.email, 120), addr = text(b.deliveryAddress, 600);
+  if (needsEmail(ch) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw bad('ใส่อีเมลลูกค้า');
+  if (needsPost(ch) && !addr) throw bad('ใส่ที่อยู่ส่งใบเสร็จตัวจริง');
+
+  // Payment vs. the INV in PEAK: the customer pays the net, or the net less withholding tax.
+  const d = await peak.getInvoice(ivId);
+  if (!d) throw bad('ไม่พบ INV นี้ใน PEAK', 404);
+  if (/draft/i.test(d.status || '') || Number(d.isVoid) === 1) throw bad(`INV ${d.code} ใน PEAK ${Number(d.isVoid) === 1 ? 'ถูกยกเลิกแล้ว' : 'ยังเป็น Draft'}`, 409);
+  const net = ar.num(d.netAmount), paid = round2(ar.num(a.paidAmount));
+  const wht = round2(net - paid);
+  if (wht < -0.01 || wht > net * 0.06) throw bad(`ยอดรับเงิน ${money(paid)} ไม่ตรงกับ INV ${d.code} (${money(net)}${wht > 0 ? ` ส่วนต่าง ${money(wht)} เกินหัก ณ ที่จ่ายปกติ` : ''}) ตรวจยอดที่บันทึกรับเงิน`, 409);
+  const ymd = (dmy) => { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(String(dmy || '')); return m ? `${m[3]}${m[2].padStart(2, '0')}${m[1].padStart(2, '0')}` : ''; };
+  const payDate = ymd(a.paidDate);
+  const qt = a.requestId ? (await hub.readTable('Requests')).find((x) => x.requestId === a.requestId) : null;
+  const body = { PeakReceipts: { invoiceId: ivId, receipts: {
+    issuedDate: payDate, status: 'Draft', isTaxInvoice: 1, reference: ivNo.slice(0, 32),
+    tags: [a.requestId, a.ivRequestId].filter(Boolean),
+    paidPayments: { paymentDate: payDate, payments: [{ paymentMethodCode: pm.code, amount: paid }], ...(wht > 0.009 ? { withHoldingTaxAmount: wht.toFixed(2) } : {}) },
+  } } };
+  const made = await peak.createReceiptFromInvoiceDraft(body);
+  const notes = [`RT Draft ${made.code} รอฝ่ายบัญชีอนุมัติใน PEAK`, `รับเงินเข้า ${pm.name}`];
+  if (qt) notes.push(...await require('../lib/qtdraft').classifyDoc(made.id, 103, qt, users));
+  // The payment slip goes on the receipt too.
+  const notice = (await hub.readTable('PaymentNotices').catch(() => [])).filter((n) => String(n.ivNo).toUpperCase() === ivNo && n.slipLink && ['confirmed', 'matched'].includes(n.status)).pop();
+  const slip = notice ? await drive.download(notice.slipLink).catch(() => null) : null;
+  if (slip) await attachToPeak('receipt', made.id, slip, `PAYMENT_${ivNo}`);
+
+  const at = hub.sheetDateTime(); const id = shortId('RTREQ');
+  await hub.appendRows('ReceiptRequests', [{ rtRequestId: id, createdAt: at, requestedBy: iv.requestedBy || a.salesEmail || user.email, salesName: a.salesName || iv.salesName || '',
+    segment: a.segment || 'B2B', docKind: RT_KIND.company, refDoc: ivNo, whStudent: '', billName: a.company, taxId: a.taxId, branch: a.branch || '00000', address: '', deliveryAddress: addr, email,
+    whtRate: String(Math.round(ar.num(a.whtRate) < 1 ? ar.num(a.whtRate) * 100 : ar.num(a.whtRate))), packages: a.keyHS || '', description: a.packageName || '', price: ar.num(a.preVat), discount: 0,
+    paidDate: a.paidDate, paymentProof: notice ? notice.slipLink : '', deliveryChannel: RT_CHANNEL[ch], docLang: 'TH', note: `ออกจาก INV ${ivNo}`, status: 'rt_draft', peakRtNo: made.code || '', peakDocLink: made.documentLink || '',
+    sentStatus: '', sentAt: '', trackingNo: '', accountNote: `${notes.join(' · ')} — ${user.name || user.email}`.slice(0, 500), updatedAt: at, peakRtId: made.id || '' }]);
+  await hub.log('peak', 'rt_live_draft', ivNo, `${user.email} · ${made.code}`);
+  res.status(200).json({ ok: true, rtRequestId: id, peakRtNo: made.code, message: notes.join(' · ') });
+}
+
+// RT approved in PEAK → issued (number, link), AR gets the receipt number, delivery as chosen. Used by
+// rt_check and by the PEAK webhook.
+async function finishRt(row, d, who, opts = {}) {
+  const at = hub.sheetDateTime();
+  const sent = !/ตัวจริง/.test(row.deliveryChannel || '');
+  const f = { status: 'issued', peakRtNo: String(d.code || row.peakRtNo).toUpperCase(), peakDocLink: d.documentLink || row.peakDocLink, sentStatus: sent ? 'sent' : 'waiting', sentAt: sent ? at : '', accountNote: `${row.accountNote || ''} · อนุมัติใน PEAK แล้ว — ${who}`.slice(0, 500), updatedAt: at };
+  if (opts.checked) await hub.writeChecked('ReceiptRequests', 'rtRequestId', row, f); else await hub.updateRow('ReceiptRequests', row._row, f);
+  const invs = await hub.readTable('Invoices');
+  const a = invs.find((x) => String(x.ivNo).toUpperCase() === String(row.refDoc).toUpperCase());
+  if (a && !a.rtNo) await hub.updateRow('Invoices', a._row, { rtNo: f.peakRtNo });
+  await notify.chat(`🧾 ออกใบเสร็จ ${f.peakRtNo} จาก ${row.refDoc} · ${row.billName}${sent ? '' : ' · รอส่งตัวจริง'}`);
+}
+
 async function updateReceipt(req, res, user) {
   checkOrigin(req);
   if (!can(user, 'approve')) throw bad('ไม่มีสิทธิ์อนุมัติเอกสาร', 403);
   const b = req.body || {};
   if (b.action === 'rt_from_inv') return rtFromInv(req, res, user);
+  if (b.action === 'rt_make') return rtMake(req, res, user);
   const rows = await hub.readTable('ReceiptRequests');
   const row = rows.find((x) => x.rtRequestId === text(b.rtRequestId, 40));
   if (!row) throw bad('ไม่พบคำขอนี้', 404);
   hub.checkSeen(row, text(b.seen, 80));
   const at = hub.sheetDateTime(); const who = user.name || user.email; const note = text(b.note, 500);
+  if (b.action === 'rt_check') {
+    const peak = require('../lib/peak');
+    if (row.status !== 'rt_draft' || !row.peakRtId) throw bad('ใบเสร็จนี้ไม่ได้รออนุมัติใน PEAK', 409);
+    const d = await peak.getReceipt(row.peakRtId);
+    if (!d) throw bad('ไม่พบใบเสร็จนี้ใน PEAK', 404);
+    if (Number(d.isVoid) === 1 || /void/i.test(d.status || '')) throw bad(`ใบเสร็จ ${d.code} ถูกยกเลิกใน PEAK แล้ว`, 409);
+    if (/draft/i.test(d.status || '')) throw bad(`ใบเสร็จ ${d.code} ใน PEAK ยังเป็น Draft อนุมัติใน PEAK ก่อน แล้วกดอีกครั้ง`, 409);
+    await finishRt(row, d, who, { checked: true });
+    await hub.log('catalog', 'rt_check', row.rtRequestId, `${user.email} · ${d.code}`);
+    return res.status(200).json({ ok: true, peakRtNo: d.code });
+  }
   if (b.action === 'rt_issued') {
     if (row.status !== 'new') throw bad(`คำขอนี้อยู่ในสถานะ ${row.status} แล้ว รีเฟรชหน้า`, 409);
     const no = text(b.peakRtNo, 40).toUpperCase();
@@ -896,6 +1019,12 @@ async function list(req, res, user) {
   if (req.query && req.query.view === 'receipts') return listReceipts(req, res, user);
   if (req.query && req.query.view === 'edits') return listEdits(req, res, user);
   if (req.query && req.query.view === 'payments') return listPayNotices(req, res, user);
+  if (req.query && req.query.view === 'pay-methods') {
+    if (!can(user, 'approve')) throw bad('ไม่มีสิทธิ์', 403);
+    const peak = require('../lib/peak');
+    if (peak.mode() === 'off') throw bad('ยังไม่ได้เปิดการเชื่อมต่อ PEAK API', 503);
+    return res.status(200).json({ ok: true, methods: await peak.listPaymentMethods() });
+  }
   const [rows, invs, notices] = await Promise.all([hub.readTable('InvoiceRequests'), hub.readTable('Invoices').catch(() => []), hub.readTable('PaymentNotices').catch(() => [])]);
   const lastNotice = new Map();
   for (const n of notices) if (n.ivRequestId) lastNotice.set(n.ivRequestId, n);
@@ -934,4 +1063,5 @@ module.exports = async function handler(req, res) {
 };
 
 module.exports.issueInv = issueInv;
+module.exports.finishRt = finishRt;
 module.exports._test = { validate, alreadyInvoiced };

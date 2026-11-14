@@ -67,3 +67,27 @@ test('B2B before VAT → taxStatus 0, exact pre-VAT check', async () => {
   assert.equal(r.fields.status, 'qt_draft');
   assert.equal(calls.create[0].PeakQuotations.quotations[0].taxStatus, 0);
 });
+
+test('customer not in PEAK + new-customer details → contact created first, then the Draft', async () => {
+  const made = [];
+  const calls = stub({ findContacts: async () => [], createContact: async (c) => { made.push(c); return { id: 'n1', code: 'C20001', name: c.name }; } });
+  const nc = JSON.stringify({ type: 2, address: '1 ถนนสุขุมวิท', province: 'กรุงเทพมหานคร', postCode: '10110' });
+  const r = await qtdraft.createForRequest({ ...row, clientCode: '', company: 'บริษัท ใหม่ จำกัด', customerEmail: 'a@b.co', newContact: nc }, lines, users);
+  assert.equal(r.fields.status, 'qt_draft');
+  assert.equal(r.fields.clientCode, 'C20001');
+  assert.match(r.fields.peakNote, /สร้างลูกค้าใหม่ใน PEAK C20001/);
+  assert.deepEqual([made[0].name, made[0].type, made[0].taxNumber, made[0].branchCode, made[0].contactFinanceType], ['บริษัท ใหม่ จำกัด', 2, '1999999990011', '00000', 1]);
+  assert.equal(calls.create[0].PeakQuotations.quotations[0].contactCode, 'C20001');
+  // A request with notes is still deferred to the sync, but the contact is already made.
+  const d = await qtdraft.createForRequest({ ...row, clientCode: '', company: 'X', newContact: nc }, [{ ...lines[0], salesNote: 'n' }], users);
+  assert.equal(d.defer, 'notes');
+  assert.equal(d.fields.clientCode, 'C20001');
+});
+
+test('new-customer details are checked', () => {
+  const nc = require('../lib/newcontact');
+  assert.throws(() => nc.clean({ type: 99 }), /ประเภทลูกค้า/);
+  assert.throws(() => nc.clean({ type: 5, address: 'a', province: 'b', postCode: '10110' }), /คำนำหน้า/);
+  assert.throws(() => nc.clean({ type: 2, address: 'a', province: 'b', postCode: '101' }), /5 หลัก/);
+  assert.deepEqual(nc.clean({ type: '2', address: ' a ', province: 'b', postCode: '10110', prefixNameType: '2' }), { type: 2, address: 'a', province: 'b', postCode: '10110' });
+});

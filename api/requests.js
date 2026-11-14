@@ -54,6 +54,9 @@ function validate(b) {
     customerEmail: text(b.customerEmail, 120),
     replaces: text(b.replaces, 40),
   };
+  // Customer not in PEAK yet: its details, created in PEAK when accounting approves (lib/newcontact.js).
+  const nc = !text(b.clientCode, 20) && b.newContact ? require('../lib/newcontact').clean(b.newContact) : null;
+  r.newContact = nc ? JSON.stringify(nc) : '';
   if (!SEGMENTS.includes(r.segment)) throw bad('เลือกกลุ่มลูกค้า (B2B / B2C / MaoMao / B2E / B2S / Others)');
   if (!DEAL_TYPES.includes(r.dealType)) throw bad('เลือกประเภทดีล (New Logo / Retention / Others)');
   if (OPP_NONE.includes(r.segment)) r.opportunityId = '';
@@ -223,10 +226,11 @@ async function list(req, res, user) {
   const byId = {};
   lines.filter((l) => ids.has(l.requestId)).forEach((l) => { (byId[l.requestId] = byId[l.requestId] || []).push(l); });
   res.status(200).json({
-    ok: true,
+    ok: true, peakLive: peak.mode() !== 'off',
     requests: mine.map(({ _row, _createdMs, _invoicedPreVat, _remainingPreVat, ...r }) => ({ ...r,
       // AG empty (rows from before the VAT split): the segment decides.
       vatMode: r.vatMode || (vatIncluded(r.segment) ? 'incl' : 'excl'),
+      newContact: r.newContact && !r.clientCode ? require('../lib/newcontact').summary(require('../lib/newcontact').parse(r.newContact)) : '',
       totalInclVat: n(r.totalInclVat) || Math.round(n(r.totalPreVat) * 107) / 100,
       invoicedInclVat: Math.round((invoicedIncl[r.requestId] || 0) * 100) / 100,
       invoicedPreVat: Math.round((invoiced[r.requestId] || 0) * 100) / 100, lines: (byId[r.requestId] || []).map(({ _row: _, ...l }) => l) })),
@@ -243,10 +247,32 @@ async function list(req, res, user) {
 //                 number cleared, so the PEAK sync drafts a new QT from the same request and lines.
 //                 The old number goes to voidedQts (AI) so it is never written back.
 const OP_ACTIONS = { approve: 'approved', reject: 'rejected', reopen: 'approved', qt_approved: 'qt_approved', qt_voided: 'approved', qt_fixed: 'qt_draft' };
+// GET ?view=qt-live&id=REQ-…  → the QT as PEAK has it now (lines, totals, status). Read-only.
+async function qtLive(req, res, user) {
+  if (peak.mode() === 'off') throw bad('ยังไม่ได้เปิดการเชื่อมต่อ PEAK API', 503);
+  const id = text(req.query && req.query.id, 40);
+  const row = (await hub.readTable('Requests')).find((x) => x.requestId === id);
+  const sees = await visibility(user);
+  if (!row || (!sees(row.requestedBy) && !can(user, 'approve'))) throw bad('ไม่พบคำขอนี้', 404);
+  if (!row.peakQtId) throw bad('คำขอนี้ยังไม่มี QT ใน PEAK', 404);
+  const q = peak.quotationView(await peak.getQuotation(row.peakQtId));
+  if (!q) throw bad('ไม่พบ QT นี้ใน PEAK', 404);
+  res.status(200).json({ ok: true, qt: q, editedAt: row.qtEditedAt || '' });
+}
+
 async function update(req, res, user) {
   checkOrigin(req);
   if (!can(user, 'approve')) throw bad('ไม่มีสิทธิ์อนุมัติเอกสาร', 403);
   const b = req.body || {};
+  // Accounting pressed refresh in PEAK after an edit: the public PDF is current again.
+  if (b.action === 'qt_refreshed') {
+    const r = (await hub.readTable('Requests')).find((x) => x.requestId === text(b.requestId, 40));
+    if (!r) throw bad('ไม่พบคำขอนี้', 404);
+    if (!r.qtEditedAt) return res.status(200).json({ ok: true, status: r.status });
+    await hub.updateRow('Requests', r._row, { qtEditedAt: '', updatedAt: hub.sheetDateTime() });
+    await hub.log('catalog', 'qt_refreshed', r.requestId, user.email);
+    return res.status(200).json({ ok: true, status: r.status });
+  }
   const status = OP_ACTIONS[b.action];
   if (!status) throw bad('คำสั่งไม่ถูกต้อง');
   const note = text(b.note, 500);
@@ -316,7 +342,7 @@ async function update(req, res, user) {
     const [lines, users] = await Promise.all([hub.readTable('RequestLines'), hub.readTable('Users')]);
     const r = await qtdraft.createForRequest(merged, lines, users);
     out = r.defer
-      ? { status: 'approved', peakNote: r.defer === 'notes' ? `${fields.peakNote} · มีโน้ตเซล / ของแถม ระบบจะเรียบเรียงคำอธิบายแล้วสร้าง QT รอบ 10:49 / 17:49` : `${fields.peakNote} · ${r.defer}` }
+      ? { ...(r.fields || {}), status: 'approved', peakNote: [r.defer === 'notes' ? `${fields.peakNote} · มีโน้ตเซล / ของแถม ระบบจะเรียบเรียงคำอธิบายแล้วสร้าง QT รอบ 10:49 / 17:49` : `${fields.peakNote} · ${r.defer}`, ...(r.notes || [])].join(' · ') }
       : r.fields;
   } catch (e) {
     // PEAK down / busy: leave it approved so the scheduled sync retries. A PEAK validation error needs a person.
@@ -335,6 +361,7 @@ module.exports = async function handler(req, res) {
   try {
     const user = await requireUser(req);
     if (req.method === 'POST') return await create(req, res, user);
+    if (req.method === 'GET' && req.query && req.query.view === 'qt-live') return await qtLive(req, res, user);
     if (req.method === 'GET') return await list(req, res, user);
     if (req.method === 'PATCH') return await update(req, res, user);
     res.status(405).json({ ok: false, error: 'Method not allowed' });

@@ -30,20 +30,21 @@ test('signature: HMAC-SHA1 of the timestamp keyed by connectId, hex unless PEAK_
 
 test('client token is fetched once with connectId + password, then sent with the user token', async () => {
   peak._test.reset();
-  const calls = fakePeak([tokenOk,
-    () => [200, { PeakContacts: { contacts: [{ id: 'c1', code: 'C01401', name: 'A', taxNumber: '0105557083391', branchCode: '00000' }], resCode: '200' } }],
-    () => [200, { PeakContacts: { contacts: [], resCode: '200' } }]]);
+  const hit = () => [200, { PeakContacts: { contacts: [{ id: 'c1', code: 'C01401', name: 'A', taxNumber: '0105557083391', branchCode: '00000' }], resCode: '200' } }];
+  const none = () => [200, { PeakContacts: { contacts: [], resCode: '200' } }];
+  const calls = fakePeak([tokenOk, hit, hit, none, none]);
   const found = await peak.findContacts('0-1055-57083-39-1');
   await peak.findContacts('0105557083391', '00001');
-  assert.equal(calls.length, 3, 'token cached');
+  assert.equal(calls.length, 5, 'token cached; plain + dashed tax ID per lookup');
   assert.deepEqual(calls[0].body, { PeakClientToken: { connectId: 'cid', password: 'pw' } });
   assert.match(calls[0].url, /peakengineapidev.*\/ClientToken$/);
   assert.equal(calls[1].method, 'GET');
-  assert.match(calls[1].url, /\/Contacts\?taxId=0105557083391&branchCode=00000$/);
-  assert.match(calls[2].url, /branchCode=00001$/);
+  assert.match(calls[1].url, /\/Contacts\?taxId=0105557083391$/, 'no branch = every branch');
+  assert.match(calls[2].url, /taxId=0-1055-57083-39-1$/);
+  assert.match(calls[3].url, /branchCode=00001$/);
   assert.equal(calls[1].headers['Client-Token'], 'ct-1');
   assert.equal(calls[1].headers['User-Token'], 'ut');
-  assert.deepEqual(found, [{ id: 'c1', code: 'C01401', name: 'A', taxNumber: '0105557083391', branchCode: '00000', type: undefined }]);
+  assert.deepEqual(found, [{ id: 'c1', code: 'C01401', name: 'A', taxNumber: '0105557083391', branchCode: '00000', type: undefined }], 'same contact from both searches counted once');
   await assert.rejects(peak.findContacts('123'), /13 หลัก/);
 });
 

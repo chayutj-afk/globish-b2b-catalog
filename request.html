@@ -31,6 +31,7 @@
 .opp .od:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft)}
 .opp-dash{color:var(--muted);padding:0 2px}
 .note-box{margin-top:5px;padding:5px 8px;background:var(--primary-soft);border:1px solid var(--primary-line);border-radius:4px}
+.newc{border:1px dashed var(--accent,#f60);border-radius:10px;padding:10px 12px;margin:6px 0 10px}.newc-h{font-size:13px;margin-bottom:6px;color:var(--accent,#c50)}
 </style>
 </head>
 <body data-page="request">
@@ -66,6 +67,25 @@
     </div>
     <div class="row c1">
       <div class="fg"><label>ชื่อบริษัท / หน่วยงาน (ตามที่จะออกเอกสาร) *</label><input id="q-company" type="text" maxlength="200"></div>
+    </div>
+    <div id="q-newc" class="newc" hidden>
+      <div class="newc-h">🆕 ลูกค้าใหม่ (ยังไม่มีใน PEAK) · กรอกตามหนังสือรับรอง / ภ.พ.20 ระบบจะสร้างลูกค้าใน PEAK ให้ตอนฝ่ายบัญชีอนุมัติคำขอ</div>
+      <div class="row c3">
+        <div class="fg"><label>ประเภทลูกค้า *</label><select id="nc-type" onchange="ncType()"><option value="">— เลือก —</option><option value="2">บริษัทจำกัด</option><option value="3">บริษัทมหาชนจำกัด</option><option value="1">ห้างหุ้นส่วนจำกัด</option><option value="8">ห้างหุ้นส่วนสามัญ</option><option value="5">บุคคลธรรมดา</option><option value="9">มูลนิธิ</option><option value="10">สมาคม</option><option value="6">คณะบุคคล</option><option value="4">ร้านค้า</option><option value="11">กิจการร่วมค้า</option><option value="7">อื่นๆ (เช่น หน่วยงานรัฐ)</option></select></div>
+        <div class="fg" id="nc-prefix-w" hidden><label>คำนำหน้า *</label><select id="nc-prefix"><option value="">— เลือก —</option><option value="1">คุณ</option><option value="2">นาย</option><option value="3">นาง</option><option value="4">นางสาว</option></select></div>
+        <div class="fg"><label>เบอร์โทรบริษัท</label><input id="nc-phone" type="tel" maxlength="40"></div>
+      </div>
+      <div class="row c1"><div class="fg"><label>ที่อยู่ (เลขที่ อาคาร ถนน) *</label><input id="nc-addr" type="text" maxlength="250"></div></div>
+      <div class="row c3">
+        <div class="fg"><label>แขวง / ตำบล</label><input id="nc-sub" type="text" maxlength="100"></div>
+        <div class="fg"><label>เขต / อำเภอ</label><input id="nc-dist" type="text" maxlength="100"></div>
+        <div class="fg"><label>จังหวัด *</label><input id="nc-prov" type="text" maxlength="100"></div>
+      </div>
+      <div class="row c3">
+        <div class="fg"><label>รหัสไปรษณีย์ *</label><input id="nc-post" type="text" inputmode="numeric" maxlength="5" oninput="digits(this)"></div>
+        <div class="fg"><label>ชื่อผู้ติดต่อ</label><input id="nc-cname" type="text" maxlength="120"></div>
+        <div class="fg"><label>เบอร์ผู้ติดต่อ</label><input id="nc-cphone" type="tel" maxlength="40"></div>
+      </div>
     </div>
     <div class="row c3">
       <div class="fg"><label>ภาษาเอกสาร</label><select id="q-lang"><option value="TH">ภาษาไทย</option><option value="EN">English</option></select></div>
@@ -345,7 +365,7 @@ function autoTab() {
 }
 async function signOut() { try { await fetch('/api/auth/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' } }); } catch {} location.href = '/signin.html'; }
 
-let ME = null, PKGS = [], REQS = [], IVS = [], RTS = [], EDITS = [];
+let ME = null, PKGS = [], REQS = [], IVS = [], RTS = [], EDITS = [], PEAK_LIVE = false;
 
 
 // doc.peakaccount.com/?emi=…&eti=… (view) → secure.peakaccount.com/income/<doc>Edit?emi=…&eii=… (edit / approve page)
@@ -630,6 +650,7 @@ async function onTaxInput(p) {
   const tax = $(p + '-tax').value;
   const pick = $(p + '-branch-pick'), typed = $(p + '-branch');
   if (tax.length !== 13) {
+    showNewC(p, false);
     TAX_HITS = []; pick.innerHTML = '<option value="">กรอกเลขภาษีก่อน</option>'; pick.disabled = true; pick.hidden = false;
     typed.hidden = true; $(p + '-client').value = ''; $(p + '-branch-hint').textContent = ''; return;
   }
@@ -645,8 +666,9 @@ async function onTaxInput(p) {
   if (!branches.length) {
     pick.hidden = true; typed.hidden = false; if (!typed.value) typed.value = '00000';
     $(p + '-client').value = '';
-    $(p + '-branch-hint').textContent = 'ยังไม่มีเลขนี้ใน PEAK กรอกรหัสสาขาเอง (00000 = สำนักงานใหญ่) ฝ่ายบัญชีจะสร้างลูกค้าให้';
+    $(p + '-branch-hint').textContent = 'ยังไม่มีเลขนี้ใน PEAK กรอกรหัสสาขาเอง (00000 = สำนักงานใหญ่) แล้วกรอกข้อมูลลูกค้าใหม่ด้านล่าง';
     $(p + '-branch-hint').className = 'sub warn';
+    showNewC(p, true);
     return;
   }
   const label = (b) => { const xs = byBranch[b]; const nm = b === '00000' ? 'สำนักงานใหญ่' : 'สาขา ' + b; return xs.length === 1 ? `${b} · ${nm} · ${xs[0].code} ${xs[0].name}` : `${b} · ${nm} · มี ${xs.length} รหัสใน PEAK (ฝ่ายบัญชีเลือก)`; };
@@ -657,8 +679,8 @@ async function onTaxInput(p) {
 }
 function onBranchPick(p) {
   const pick = $(p + '-branch-pick'), typed = $(p + '-branch'), hint = $(p + '-branch-hint');
-  if (pick.value === '__other') { typed.hidden = false; typed.value = ''; typed.focus(); $(p + '-client').value = ''; hint.textContent = 'สาขานี้ยังไม่มีใน PEAK ฝ่ายบัญชีจะสร้างให้'; hint.className = 'sub warn'; return; }
-  typed.hidden = true; typed.value = pick.value;
+  if (pick.value === '__other') { typed.hidden = false; typed.value = ''; typed.focus(); $(p + '-client').value = ''; hint.textContent = 'สาขานี้ยังไม่มีใน PEAK กรอกข้อมูลลูกค้าใหม่ด้านล่าง'; hint.className = 'sub warn'; showNewC(p, true); return; }
+  typed.hidden = true; typed.value = pick.value; showNewC(p, false);
   const xs = TAX_HITS.filter((h) => h.branch === pick.value);
   if (xs.length === 1) {
     $(p + '-client').value = xs[0].code;
@@ -675,6 +697,14 @@ function onBranchTyped(p) {
   if (xs.length) { $(p + '-branch-pick').value = t.value; onBranchPick(p); }
 }
 
+function showNewC(p, on) { const b = $(p + '-newc'); if (b) b.hidden = !on; }
+function ncType() { $('nc-prefix-w').hidden = $('nc-type').value !== '5'; }
+// New customer details (only when PEAK has no contact for this tax ID + branch).
+function newContactOf() {
+  if ($('q-newc').hidden || $('q-client').value.trim()) return null;
+  const g = (id) => $(id).value.trim();
+  return { type: g('nc-type'), prefixNameType: g('nc-prefix'), phone: g('nc-phone'), address: g('nc-addr'), subDistrict: g('nc-sub'), district: g('nc-dist'), province: g('nc-prov'), postCode: g('nc-post'), contactName: g('nc-cname'), contactPhone: g('nc-cphone') };
+}
 async function submitQT() {
   const v = (id) => $(id).value.trim();
   const seg = v('q-segment');
@@ -682,9 +712,16 @@ async function submitQT() {
     segment: seg, dealType: v('q-deal'), opportunityId: seg === 'B2S' ? '' : getOpp('q'),
     taxId: v('q-tax'), branch: v('q-branch'), clientCode: v('q-client'), company: v('q-company'),
     docLang: v('q-lang'), wantedQtDate: v('q-date'), creditTermDays: v('q-term'), whtRate: v('q-wht'), poRequired: v('q-po') === 'yes', note: v('q-note'), customerEmail: v('q-email'), replaces: v('q-replaces'),
-    items: CART,
+    items: CART, newContact: newContactOf(),
   };
   if (!CART.length) return msg('q-msg', 'err', 'ยังไม่มีรายการสินค้า');
+  const nc = body.newContact;
+  if (nc) {
+    if (!nc.type) return msg('q-msg', 'err', 'เลือกประเภทลูกค้าใหม่');
+    if (nc.type === '5' && !nc.prefixNameType) return msg('q-msg', 'err', 'เลือกคำนำหน้าชื่อลูกค้า');
+    if (!nc.address || !nc.province) return msg('q-msg', 'err', 'ใส่ที่อยู่และจังหวัดของลูกค้าใหม่');
+    if (!/^\d{5}$/.test(nc.postCode)) return msg('q-msg', 'err', 'รหัสไปรษณีย์ลูกค้าใหม่ต้องมี 5 หลัก');
+  }
   if (CART.some((it) => !KINDS[seg].includes(kindOf(it)))) return msg('q-msg', 'err', `มีรายการที่ลูกค้า ${seg} ใช้ไม่ได้ ลบออกก่อนส่ง`);
   if (seg !== 'B2S' && !body.opportunityId) return msg('q-msg', 'err', `ใส่ Opportunity ID จาก CRM สำหรับลูกค้า ${seg}`);
   if (!body.wantedQtDate) return msg('q-msg', 'err', 'ใส่วันที่ต้องการให้ลงใน QT');
@@ -698,7 +735,7 @@ async function submitQT() {
   if (badSvc) return msg('q-msg', 'err', `รหัส ${badSvc.code || '(ว่าง)'} ไม่พบใน PEAK แก้ก่อนส่ง`);
   if (!body.company) return msg('q-msg', 'err', 'กรอกชื่อบริษัทหรือหน่วยงาน');
   const ok = await ask({ title: 'ยืนยันส่งคำขอใบเสนอราคา', ok: '📨 ส่งคำขอ', html: `<table>
-    <tr><td>ลูกค้า</td><td><b>${esc(body.company)}</b> (${esc(seg)})</td></tr>
+    <tr><td>ลูกค้า</td><td><b>${esc(body.company)}</b> (${esc(seg)})${body.newContact ? '<br><span class="small">🆕 ลูกค้าใหม่ ระบบจะสร้างใน PEAK เมื่อฝ่ายบัญชีอนุมัติ</span>' : ''}</td></tr>
     <tr><td>เลขภาษี / สาขา</td><td>${esc(body.taxId)} / ${esc(body.branch)}${body.clientCode ? ' · ' + esc(body.clientCode) : ''}</td></tr>
     <tr><td>รายการ</td><td>${CART.length} รายการ · ยอด${basisOf(seg)} <b>${esc($('q-total').textContent)}</b>${vatIn(seg) ? ' <span class="small">(QT ใน PEAK เป็นราคารวม VAT)</span>' : ''}</td></tr>
     <tr><td>วันที่ QT / เครดิต</td><td>${esc(body.wantedQtDate)} · ${esc(body.creditTermDays)} วัน</td></tr>
@@ -711,7 +748,7 @@ async function submitQT() {
     if (!d) { msg('q-msg', 'info', 'ยังไม่ได้ส่ง ดูคำขอเดิมได้ที่ "คำขอของฉัน"'); return; }
     $('q-msg').innerHTML = `<div class="done-card"><b>✓ ส่งคำขอ ${esc(d.requestId)} แล้ว</b><div style="margin:6px 0 10px">${d.vatMode === 'incl' ? `ยอดรวม VAT ${fmt(d.totalInclVat)} (ก่อน VAT ${fmt(d.total)})` : `ยอดก่อน VAT ${fmt(d.total)}`} · ${esc(d.message)}${d.belowFloor ? '<br>มีรายการต่ำกว่าราคาขั้นต่ำ Catalog (บันทึกไว้ให้ผู้อนุมัติเห็น)' : ''}</div><button class="btn btn-o btn-sm" onclick="go('mine')">ดูสถานะในคำขอของฉัน</button></div>`;
     CART = []; saveCart(); renderItems();
-    ['q-opp-y', 'q-opp-n', 'q-tax', 'q-branch', 'q-client', 'q-company', 'q-date', 'q-term', 'q-wht', 'q-note', 'q-email', 'q-replaces'].forEach((id) => { $(id).value = ''; }); paintOpp('q');
+    ['q-opp-y', 'q-opp-n', 'q-tax', 'q-branch', 'q-client', 'q-company', 'q-date', 'q-term', 'q-wht', 'q-note', 'q-email', 'q-replaces', 'nc-type', 'nc-prefix', 'nc-phone', 'nc-addr', 'nc-sub', 'nc-dist', 'nc-prov', 'nc-post', 'nc-cname', 'nc-cphone'].forEach((id) => { $(id).value = ''; }); paintOpp('q'); showNewC('q', false);
     onTaxInput('q');
     clearDraft();
     taxHint('q'); loadAll();
@@ -923,7 +960,7 @@ const QT_ST = { new: ['รอฝ่ายบัญชีอนุมัติ', 
   accepted: ['ลูกค้าตอบรับ', 'green'], iv_requested: ['ขอ INV แล้ว', 'green'], iv_issued: ['ออก INV แล้ว', 'green'], cancelled: ['ยกเลิก', 'red'] };
 // Payment status from AR (Invoices tab) once the INV is issued.
 const payChip = (v) => { const a = v.ar; if (!a) return ''; const m = { Paid: ['green', 'ลูกค้าจ่ายแล้ว' + (a.paidDate ? ' ' + a.paidDate : '') + (a.rtNo ? ' · ใบเสร็จ ' + a.rtNo : ' · รอออกใบเสร็จ')], Overdue: ['red', `เกินกำหนด ${a.daysOverdue} วัน`], Outstanding: ['blue', 'ครบกำหนด ' + a.dueDate], Closed: ['', 'INV ปิดแล้ว'] }[a.state]; return m ? `<span class="st ${m[0]}" title="${esc(a.followStatus || '')}${a.commitDate ? ' · นัดจ่าย ' + esc(a.commitDate) : ''}">${esc(m[1])}</span>` : ''; };
-const IV_ST = { new: ['รอฝ่ายบัญชีออก INV', 'new'], iv_draft: ['INV Draft · รอบัญชีอนุมัติ', 'blue'], iv_issued: ['ออก INV แล้ว', 'green'], rejected: ['ตีกลับ', 'red'] };
+const IV_ST = { new: ['รอฝ่ายบัญชีออก INV', 'new'], iv_creating: ['กำลังสร้าง INV ใน PEAK', 'blue'], iv_draft: ['INV Draft · รอบัญชีอนุมัติ', 'blue'], iv_issued: ['ออก INV แล้ว', 'green'], rejected: ['ตีกลับ', 'red'] };
 const ORIG_ST = { not_needed: ['ไม่ต้องส่งตัวจริง', ''], pending_decision: ['ยังไม่ทราบเรื่องตัวจริง', 'new'], requested: ['รอส่งตัวจริง', 'blue'], sent: ['ส่งตัวจริงแล้ว', 'green'] };
 const st = (map, k) => { const [t, c] = map[k] || [k || '-', '']; return `<span class="st ${c}">${esc(t)}</span>`; };
 
@@ -959,7 +996,7 @@ function paintNews() {
 async function loadAll() {
   try {
     const [a, b, c, d] = await Promise.all([api('/api/requests'), api('/api/invoice-requests'), api('/api/invoice-requests?view=receipts'), api('/api/invoice-requests?view=edits')]);
-    REQS = a.requests; IVS = b.requests; RTS = c.requests; EDITS = d.requests;
+    REQS = a.requests; PEAK_LIVE = !!a.peakLive; IVS = b.requests; RTS = c.requests; EDITS = d.requests;
     fillQTPicker(); renderMine(); renderPending(); updateSum(); autoTab();
   } catch (e) {
     $('mine-qt').innerHTML = $('mine-inv').innerHTML = `<div class="empty">${esc(e.message)}</div>`;
@@ -1023,6 +1060,8 @@ function renderMine() {
       <div class="list-head"><div>${q.peakQtNo ? `<span class="list-id">QT ${qtLink(q)}</span>` : '<span class="small">ยังไม่มีเลข QT</span>'} · ${esc(q.company)}</div>${st(QT_ST, q.status)}</div>
       <div class="list-sub">${esc(q.requestId)}${q.replaces ? ` <span class="small">(แทนคำขอ ${esc(q.replaces)} ที่ถูกตีกลับ)</span>` : ''} · ${esc(q.createdAt)} · ${esc(q.segment)}${q.opportunityId ? ' · ' + esc(q.opportunityId) : ''}${op ? ' · ' + esc(q.salesName) : ''}<br>
         ${heroes}<br>ยอด${lbl} <b>${fmt(total)}</b> · ขอ INV แล้ว ${fmt(done)} · คงเหลือ <b>${fmt(total - done)}</b>${q.peakNote ? `<br><span class="small">หมายเหตุ: ${esc(q.peakNote)}</span>` : ''}</div>
+      ${q.qtEditedAt && QT_LIVE.includes(q.status) ? `<div class="pc-note warn" style="margin-top:8px">✏️ QT นี้ถูกแก้ไขใน PEAK เมื่อ ${esc(q.qtEditedAt)} ไฟล์ที่เปิดจากลิงก์อาจยังเป็นเวอร์ชันเก่า จนกว่าฝ่ายบัญชีจะกดรีเฟรชใน PEAK กด "ดู QT ล่าสุดจาก PEAK" เพื่อดูข้อมูลจริงก่อนส่งลูกค้า</div>` : ''}
+      ${PEAK_LIVE && q.peakQtId && q.peakQtNo ? `<details class="qlive" ontoggle="if(this.open)liveQt('${esc(q.requestId)}')"><summary class="small" style="cursor:pointer;margin-top:6px">🔎 ดู QT ล่าสุดจาก PEAK</summary><div id="qlv-${esc(q.requestId)}" class="small">กำลังโหลด…</div></details>` : ''}
       ${mineIvs.length ? `<div class="inv-mini">${mineIvs.map((v) => `<div class="inv-mini-row"><span class="mono">${esc(v.ivRequestId)}</span><span>${esc(v.company)} · ${fmt(ivAmt(v).amt)}</span><span>${st(IV_ST, v.status)} ${st(ORIG_ST, v.originalStatus)}</span></div>`).join('')}</div>` : ''}
       ${q.status === 'rejected' && ME && q.requestedBy === ME.email && !replaced.has(q.requestId) ? `<div style="margin-top:8px"><button class="btn btn-p btn-sm" onclick="rebuildQT('${esc(q.requestId)}')">↻ สร้างคำขอใหม่จากข้อมูลเดิม</button></div>` : ''}
       ${q.peakQtNo && QT_LIVE.includes(q.status) ? `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${qtLeft(q) > 0.01 ? `<button class="btn btn-o btn-sm" onclick="startInvFor('${esc(q.requestId)}')">🧾 ขอ INV จาก QT นี้</button>` : '<span class="st green">ขอ INV ครบยอดแล้ว</span>'}${mineIvs.some((v) => v.status !== 'rejected') ? '' : `<button class="btn btn-g btn-sm" onclick="askEdit('QT','${esc(q.peakQtNo)}','${esc(q.requestId)}')">✏️ ขอแก้ไข QT</button>`}</div><span id="qm-${esc(q.requestId)}"></span>` : ''}
@@ -1083,7 +1122,7 @@ async function rebuildQT(id) {
 }
 
 // ─── receipts + edit requests ───────────────────────────────
-const RT_ST = { new: ['รอฝ่ายบัญชีออก', 'new'], issued: ['ออกแล้ว', 'green'], rejected: ['ตีกลับ', 'red'] };
+const RT_ST = { new: ['รอฝ่ายบัญชีออก', 'new'], rt_draft: ['Draft · รอบัญชีอนุมัติใน PEAK', 'blue'], issued: ['ออกแล้ว', 'green'], rejected: ['ตีกลับ', 'red'] };
 const ED_ST = { new: ['รอฝ่ายบัญชีแก้', 'new'], done: ['แก้แล้ว', 'green'], rejected: ['ตีกลับ', 'red'] };
 function onRtSeg() { $('r-price-l').textContent = `ราคาขาย ${basisOf($('r-seg').value)} (ก่อนหักส่วนลด) *`; }
 function onRtKind() { const per = $('r-kind').value === 'person'; $('r-branch-wrap').hidden = per; $('r-tax-l').textContent = per ? 'เลขบัตรประชาชน (13 หลัก) *' : 'เลขประจำตัวผู้เสียภาษี (13 หลัก) *'; }
@@ -1141,30 +1180,61 @@ function renderMineMore() {
 function renderPendingMore() {
   const waitR = RTS.filter((r) => r.status === 'new'), postR = RTS.filter((r) => r.status === 'issued' && r.sentStatus === 'waiting');
   const waitE = EDITS.filter((e) => e.status === 'new');
-  const paidI = IVS.filter((v) => v.ar && v.ar.state === 'Paid' && !v.ar.rtNo);
-  $('pend-rt-n').textContent = waitR.length + postR.length + paidI.length ? `(${waitR.length + postR.length + paidI.length})` : '';
+  const rtDraft = RTS.filter((r) => r.status === 'rt_draft');
+  const paidI = IVS.filter((v) => v.ar && v.ar.state === 'Paid' && !v.ar.rtNo && !rtDraft.some((r) => r.refDoc === v.peakIvNo));
+  $('pend-rt-n').textContent = waitR.length + postR.length + paidI.length + rtDraft.length ? `(${waitR.length + postR.length + paidI.length + rtDraft.length})` : '';
   $('pend-edit-n').textContent = waitE.length ? `(${waitE.length})` : '';
   const F = (label, val) => (val ? `<div class="f"><span>${label}</span><b>${val}</b></div>` : '');
   const card = (r) => `<div class="pcard"><div class="pc-body"><div class="pc-top"><div class="pc-title">${esc(r.billName)}<small>${esc(r.rtRequestId)} · ${esc(r.createdAt)} · โดย ${esc(r.salesName)}</small></div><div class="pc-amt"><b>${fmt(toNum(r.price) - toNum(r.discount))}</b><span>ราคาหลังส่วนลด</span></div></div>
     <div class="facts">${F('ประเภท', esc(r.docKind))}${F('กลุ่ม', esc(r.segment))}${F('เลขภาษี / สาขา', esc(r.taxId) + ' / ' + esc(r.branch))}${F('ผู้เรียน WH', esc(r.whStudent))}${F('Package', esc(r.packages))}${F('ราคา / ส่วนลด', fmt(toNum(r.price)) + (toNum(r.discount) ? ' / ' + fmt(toNum(r.discount)) : ''))}${F('หัก ณ ที่จ่าย', whtShort(r.whtRate))}${F('ชำระเมื่อ', esc(r.paidDate))}${F('อ้างอิง', esc(r.refDoc))}${F('ส่งเอกสาร', esc(r.deliveryChannel) + (r.email ? ' · ' + esc(r.email) : ''))}${F('ภาษา', esc(r.docLang))}${F('หลักฐาน', /^https:\/\//.test(r.paymentProof || '') ? `<a href="${esc(r.paymentProof)}" target="_blank" rel="noopener">เปิดดู ↗</a>` : '')}</div>
     <div class="pc-note">ที่อยู่: ${esc(r.address)}${r.deliveryAddress ? '<br>ส่งที่: ' + esc(r.deliveryAddress) : ''}${r.description ? '<br>รายละเอียด: ' + esc(r.description) : ''}${r.note ? '<br>💬 ' + esc(r.note) : ''}</div></div>`;
-  const paidHtml = paidI.length ? `<div class="sec-h">รับเงินแล้ว รอออกใบเสร็จจาก INV <span class="n">${paidI.length} รายการ</span></div><p class="hint">ยืนยันเงินเข้าแล้ว (เซลแจ้ง หรือบัญชีบันทึกเอง) ออกใบเสร็จจาก INV ใน PEAK แล้วใส่เลขและลิงก์ ช่องทางส่งตั้งตามที่เซลแจ้งไว้</p>` + paidI.map((v) => { const k = esc(v.peakIvNo); return `<div class="pcard"><div class="pc-body"><div class="pc-top"><div class="pc-title">${esc(v.company)}<small>${docLink(v.peakIvNo, v.peakDocLink)} · ${esc(v.salesName)}</small></div><div class="pc-amt"><b>${fmt(toNum(v.ar.paidAmount))}</b><span>รับเงิน ${esc(v.ar.paidDate)}${v.ar.paymentMethod ? ' · ' + esc(PAY_METHOD_TH[v.ar.paymentMethod] || v.ar.paymentMethod) : ''}</span></div></div>${v.payNotice ? `<div class="pc-note small">${v.payNotice.source === 'sales' ? `แจ้งโดย ${esc(v.payNotice.salesName)}` : 'ลูกค้าแจ้งบัญชีโดยตรง'}${/^https:\/\//.test(v.payNotice.slipLink || '') ? ` · <a href="${esc(v.payNotice.slipLink)}" target="_blank" rel="noopener">ดูสลิป ↗</a>` : ''}</div>` : ''}</div>
-    <div class="pc-act" style="flex-wrap:wrap"><label class="small" for="pin-${k}">เลขใบเสร็จ *</label><input id="pin-${k}" type="text" maxlength="40" placeholder="RT-20261100001" style="width:180px"><label class="small" for="pil-${k}">ลิงก์ใน PEAK *</label><input id="pil-${k}" class="grow" type="text" maxlength="500" placeholder="https://doc.peakaccount.com/…">
+  const paidHtml = paidI.length ? `<div class="sec-h">รับเงินแล้ว รอออกใบเสร็จจาก INV <span class="n">${paidI.length} รายการ</span></div><p class="hint">ยืนยันเงินเข้าแล้ว (เซลแจ้ง หรือบัญชีบันทึกเอง) ${PEAK_LIVE ? 'เลือกบัญชีที่เงินเข้าแล้วสร้างใบเสร็จ Draft ใน PEAK' : 'ออกใบเสร็จจาก INV ใน PEAK แล้วใส่เลขและลิงก์'} ช่องทางส่งตั้งตามที่เซลแจ้งไว้</p>` + paidI.map((v) => { const k = esc(v.peakIvNo); return `<div class="pcard"><div class="pc-body"><div class="pc-top"><div class="pc-title">${esc(v.company)}<small>${docLink(v.peakIvNo, v.peakDocLink)} · ${esc(v.salesName)}</small></div><div class="pc-amt"><b>${fmt(toNum(v.ar.paidAmount))}</b><span>รับเงิน ${esc(v.ar.paidDate)}${v.ar.paymentMethod ? ' · ' + esc(PAY_METHOD_TH[v.ar.paymentMethod] || v.ar.paymentMethod) : ''}</span></div></div>${v.payNotice ? `<div class="pc-note small">${v.payNotice.source === 'sales' ? `แจ้งโดย ${esc(v.payNotice.salesName)}` : 'ลูกค้าแจ้งบัญชีโดยตรง'}${/^https:\/\//.test(v.payNotice.slipLink || '') ? ` · <a href="${esc(v.payNotice.slipLink)}" target="_blank" rel="noopener">ดูสลิป ↗</a>` : ''}</div>` : ''}</div>
+    <div class="pc-act" style="flex-wrap:wrap">${PEAK_LIVE && v.peakIvId ? `<label class="small" for="pacc-${k}">เงินเข้าบัญชี (PEAK) *</label><select id="pacc-${k}" class="paym" data-m="${esc(v.ar.paymentMethod || '')}" style="max-width:320px"><option value="">กำลังโหลด…</option></select>` : `<label class="small" for="pin-${k}">เลขใบเสร็จ *</label><input id="pin-${k}" type="text" maxlength="40" placeholder="RT-20261100001" style="width:180px"><label class="small" for="pil-${k}">ลิงก์ใน PEAK *</label><input id="pil-${k}" class="grow" type="text" maxlength="500" placeholder="https://doc.peakaccount.com/…">`}
       ${dlvSummary(v, k)}<span id="pid-${k}" ${v.payNotice && v.payNotice.deliveryChannel ? 'hidden' : ''}><select id="pic-${k}" onchange="document.getElementById('pia-${k}').hidden=!/post/.test(this.value);document.getElementById('pie-${k}').hidden=!/email/.test(this.value)">${(() => { const c = (v.payNotice && v.payNotice.deliveryChannel) || 'sales'; return [['sales', 'ส่งไฟล์ให้ Sales'], ['email', 'ส่งอีเมลลูกค้า'], ['post', 'ส่งตัวจริงตามที่อยู่'], ['email_post', 'ส่งอีเมลและตัวจริง']].map(([x, t]) => `<option value="${x}"${x === c ? ' selected' : ''}>${t}</option>`).join(''); })()}</select>
       <input id="pie-${k}" type="email" maxlength="120" placeholder="อีเมลลูกค้า" value="${esc((v.payNotice && v.payNotice.email) || v.financeEmail || '')}" ${/email/.test((v.payNotice && v.payNotice.deliveryChannel) || '') ? '' : 'hidden'} style="width:200px"><input id="pia-${k}" type="text" maxlength="600" placeholder="ที่อยู่ส่งตัวจริง" value="${esc((v.payNotice && v.payNotice.deliveryAddress) || v.originalAddress || v.deliveryAddress || '')}" ${/post/.test((v.payNotice && v.payNotice.deliveryChannel) || '') ? '' : 'hidden'} style="width:260px"></span>
-      <button class="btn btn-p btn-sm" onclick="rtFromInv('${k}')">🧾 ออกใบเสร็จแล้ว</button><span id="pim-${k}"></span></div></div>`; }).join('') : '';
-  $('pend-rt').innerHTML = paidHtml + (waitR.length ? waitR.map((r) => card(r) + `<div class="pc-act"><input id="rtn-${esc(r.rtRequestId)}" type="text" maxlength="40" placeholder="เลขใบเสร็จ เช่น 202611A00020" style="width:210px"><input id="rtl-${esc(r.rtRequestId)}" class="grow" type="text" maxlength="500" placeholder="ลิงก์เอกสารใน PEAK *"><button class="btn btn-p btn-sm" onclick="rtAction('${esc(r.rtRequestId)}','rt_issued')">✓ ออกแล้ว</button><span id="rtm-${esc(r.rtRequestId)}"></span>
+      ${PEAK_LIVE && v.peakIvId ? `<button class="btn btn-p btn-sm" onclick="rtMake('${k}')" title="สร้างใบเสร็จ/ใบกำกับภาษี Draft จาก INV นี้ใน PEAK พร้อมรายการรับเงินและสลิป">🧾 สร้างใบเสร็จ Draft ใน PEAK</button>` : `<button class="btn btn-p btn-sm" onclick="rtFromInv('${k}')">🧾 ออกใบเสร็จแล้ว</button>`}<span id="pim-${k}"></span></div></div>`; }).join('') : '';
+  const rtDraftHtml = rtDraft.length ? `<div class="sec-h">ใบเสร็จ Draft รออนุมัติใน PEAK <span class="n">${rtDraft.length} รายการ</span></div><p class="hint">ตรวจใบเสร็จใน PEAK (ยอด หัก ณ ที่จ่าย บัญชีที่รับเงิน) อนุมัติแล้วกดปุ่มนี้ (เมื่อ PEAK แจ้งอัตโนมัติได้ ระบบจะอัปเดตเอง)</p>` + rtDraft.map((r) => `<div class="pcard"><div class="pc-body"><div class="pc-top"><div class="pc-title">${esc(r.billName)}<small>${esc(r.peakRtNo)} · จาก ${esc(r.refDoc)} · ${esc(r.salesName)}</small></div><div class="pc-amt"><b>${esc(r.deliveryChannel)}</b><span>ส่งใบเสร็จ</span></div></div>${r.accountNote ? `<div class="pc-note small">${esc(r.accountNote)}</div>` : ''}</div>
+      <div class="pc-act">${r.peakDocLink ? `<a class="btn btn-o btn-sm" href="${esc(peakEdit(r.peakDocLink, 'receipt'))}" target="_blank" rel="noopener">ตรวจ / อนุมัติใน PEAK ↗</a>` : ''}<span class="sp"></span><button class="btn btn-p btn-sm" onclick="rtCheck('${esc(r.rtRequestId)}')">✓ อนุมัติใน PEAK แล้ว</button><span id="rtm-${esc(r.rtRequestId)}"></span></div></div>`).join('') : '';
+  $('pend-rt').innerHTML = paidHtml + rtDraftHtml + (waitR.length ? waitR.map((r) => card(r) + `<div class="pc-act"><input id="rtn-${esc(r.rtRequestId)}" type="text" maxlength="40" placeholder="เลขใบเสร็จ เช่น 202611A00020" style="width:210px"><input id="rtl-${esc(r.rtRequestId)}" class="grow" type="text" maxlength="500" placeholder="ลิงก์เอกสารใน PEAK *"><button class="btn btn-p btn-sm" onclick="rtAction('${esc(r.rtRequestId)}','rt_issued')">✓ ออกแล้ว</button><span id="rtm-${esc(r.rtRequestId)}"></span>
       <details class="rej"><summary>ตีกลับ</summary><div class="in"><input id="rtr-${esc(r.rtRequestId)}" type="text" maxlength="500" placeholder="เหตุผล"><button class="btn btn-danger btn-sm" onclick="rtAction('${esc(r.rtRequestId)}','rt_reject')">ตีกลับ</button></div></details></div></div>`).join('') : '<div class="empty">ไม่มีคำขอใบเสร็จรอออก</div>')
     + (postR.length ? `<div class="sec-h">รอส่งตัวจริง <span class="n">${postR.length} รายการ</span></div>` + postR.map((r) => `<div class="pcard"><div class="pc-body"><div class="pc-top"><div class="pc-title">${esc(r.billName)}<small>${docLink(r.peakRtNo, r.peakDocLink)} · ${esc(r.salesName)}</small></div></div><div class="pc-note">ส่งที่: ${esc(r.deliveryAddress || r.address)}</div></div><div class="pc-act"><input id="rtk-${esc(r.rtRequestId)}" class="grow" type="text" maxlength="60" placeholder="เลขพัสดุ (ถ้ามี)"><button class="btn btn-p btn-sm" onclick="rtAction('${esc(r.rtRequestId)}','rt_sent')">✅ ส่งแล้ว</button><span id="rtm-${esc(r.rtRequestId)}"></span></div></div>`).join('') : '');
   $('pend-edit').innerHTML = waitE.length ? waitE.map((e) => `<div class="pcard"><div class="pc-body"><div class="pc-top"><div class="pc-title">${esc(e.docType)} ${esc(e.docNo)} · ${esc(e.company)}<small>${esc(e.editId)} · ${esc(e.createdAt)} · โดย ${esc(e.salesName)}</small></div></div><div class="pc-note">${esc(e.detail).replace(/\n/g, '<br>')}</div></div>
     ${editForm(e)}</div>`).join('') : '<div class="empty">ไม่มีคำขอแก้ไข</div>';
-  return waitR.length + postR.length + waitE.length + paidI.length;
+  if (PEAK_LIVE && paidI.some((v) => v.peakIvId)) fillPayMethods();
+  return waitR.length + postR.length + waitE.length + paidI.length + rtDraft.length;
 }
 // Where the receipt goes, as chosen when the payment was reported / recorded. 'เปลี่ยน' reveals the inputs.
 const DLV_TH = { sales: 'ส่งไฟล์ให้ Sales', email: 'ส่งอีเมลลูกค้า', post: 'ส่งตัวจริงตามที่อยู่', email_post: 'ส่งอีเมลและตัวจริง' };
 function dlvSummary(v, k) {
   const n = v.payNotice; if (!n || !n.deliveryChannel) return '';
   return `<span class="small" style="flex-basis:100%">ส่งใบเสร็จ: <b>${esc(DLV_TH[n.deliveryChannel] || n.deliveryChannel)}</b>${/email/.test(n.deliveryChannel) && n.email ? ' · ' + esc(n.email) : ''}${/post/.test(n.deliveryChannel) && n.deliveryAddress ? ' · ' + esc(n.deliveryAddress) : ''} <a href="#" onclick="document.getElementById('pid-${k}').hidden=false;this.remove();return false">เปลี่ยน</a></span>`;
+}
+// PEAK accounts money can come into (cash / bank / e-wallet), loaded once; the last pick per payment method is remembered.
+let PAYM = null;
+async function fillPayMethods() {
+  try { if (!PAYM) PAYM = (await api('/api/invoice-requests?view=pay-methods')).methods || []; }
+  catch (e) { document.querySelectorAll('select.paym').forEach((el) => { el.innerHTML = `<option value="">${esc(e.message)}</option>`; }); return; }
+  const TY = { 1: 'เงินสด', 2: 'บัญชีธนาคาร', 4: 'e-Wallet' };
+  document.querySelectorAll('select.paym').forEach((el) => {
+    let last = ''; try { last = localStorage.getItem('paym:' + el.dataset.m) || ''; } catch {}
+    el.innerHTML = '<option value="">— เลือกบัญชีที่รับเงิน —</option>' + PAYM.map((m) => `<option value="${esc(m.code)}"${m.code === last ? ' selected' : ''}>${esc(m.code)} · ${esc(m.name)} (${TY[m.type] || ''})</option>`).join('');
+  });
+}
+async function rtMake(ivNo) {
+  const v = IVS.find((x) => x.peakIvNo === ivNo) || {};
+  const g = (p) => (($(p + '-' + ivNo) || {}).value || '').trim();
+  const body = { action: 'rt_make', ivNo, paymentMethodCode: g('pacc'), deliveryChannel: g('pic'), email: g('pie'), deliveryAddress: g('pia') };
+  if (!body.paymentMethodCode) { $('pim-' + ivNo).innerHTML = '<span class="err-line">เลือกบัญชีที่รับเงินใน PEAK</span>'; return; }
+  const acc = $('pacc-' + ivNo).selectedOptions[0].text;
+  if (!(await ask({ title: 'สร้างใบเสร็จ Draft ใน PEAK?', ok: '🧾 สร้าง Draft', html: `<p><b>${esc(v.company)}</b> · ${esc(ivNo)}</p><p>รับเงิน <b>${fmt(toNum(v.ar.paidAmount))}</b> เมื่อ ${esc(v.ar.paidDate)}<br>เข้าบัญชี ${esc(acc)}<br>ส่งใบเสร็จ: ${esc($('pic-' + ivNo).selectedOptions[0].text)}</p><p class="small">ระบบจะสร้างใบเสร็จ/ใบกำกับภาษี สถานะ Draft จาก INV นี้ใน PEAK (หัก ณ ที่จ่ายคิดจากยอด INV − ยอดที่รับ) แนบสลิป แล้วอนุมัติใน PEAK</p>` }))) return;
+  try { localStorage.setItem('paym:' + ((v.ar || {}).paymentMethod || ''), body.paymentMethodCode); } catch {}
+  try { await withLoading('กำลังสร้างใบเสร็จใน PEAK…', async () => { const d = await api('/api/invoice-requests', { method: 'PATCH', body: JSON.stringify(body) }); await loadAll(); alertMsg(`สร้าง ${d.peakRtNo} ใน PEAK แล้ว ตรวจและอนุมัติใน PEAK`, true); }); }
+  catch (e) { const el = $('pim-' + ivNo); if (el) el.innerHTML = `<span class="err-line">${esc(e.message)}</span>`; }
+}
+async function rtCheck(id) {
+  const r = RTS.find((x) => x.rtRequestId === id) || {};
+  try { await withLoading('กำลังตรวจกับ PEAK…', async () => { const d = await api('/api/invoice-requests', { method: 'PATCH', body: JSON.stringify({ action: 'rt_check', rtRequestId: id, seen: seenOf(r) }) }); await loadAll(); alertMsg(`${d.peakRtNo} อนุมัติแล้ว`, true); }); }
+  catch (e) { $('rtm-' + id).innerHTML = `<span class="err-line">${esc(e.message)}</span>`; }
 }
 async function rtFromInv(ivNo) {
   const v = IVS.find((x) => x.peakIvNo === ivNo) || {};
@@ -1222,11 +1292,19 @@ function renderPending() {
   if (!op) return;
   const waitQ = REQS.filter((q) => q.status === 'new');
   const fixQ = REQS.filter((q) => ['needs_contact', 'needs_service_code', 'needs_review', 'qt_error'].includes(q.status));
+  const editedQ = REQS.filter((q) => q.qtEditedAt && QT_LIVE.includes(q.status));
   const waitI = IVS.filter((v) => v.status === 'new');
+  const draftI = PEAK_LIVE ? IVS.filter((v) => v.status === 'iv_draft' && v.peakIvId) : [];
   const waitO = IVS.filter((v) => v.originalStatus === 'requested');
   const readyO = waitO.filter((v) => v.status === 'iv_issued');
   const draftQ = REQS.filter((q) => q.status === 'qt_draft');
-  const n = waitQ.length + waitI.length + readyO.length;
+  // PEAK API on: the app makes the Drafts itself, so the hints say so.
+  if (PEAK_LIVE) {
+    $('pend-hint-qt').innerHTML = 'ตรวจคำขอแล้วกด <b>อนุมัติ</b> ระบบสร้าง QT Draft ใน PEAK ทันที (ลูกค้าใหม่จะถูกสร้างใน PEAK ก่อน) ถ้าไม่ถูกต้องให้ <b>ตีกลับ</b> พร้อมเหตุผล';
+    $('pend-hint-inv').innerHTML = 'ตรวจหลักฐานแล้วกด <b>สร้าง INV Draft ใน PEAK</b> ระบบสร้าง INV จาก QT ใบเดิม แนบหลักฐาน แล้วอนุมัติใน PEAK';
+    $('pend-hint-rt').innerHTML = 'INV ที่รับเงินแล้ว: เลือกบัญชีที่เงินเข้า แล้วกด <b>สร้างใบเสร็จ Draft ใน PEAK</b> · คำขอใบเสร็จจาก Sales (ไม่มี INV) ยังออกใน PEAK แล้วใส่เลขเหมือนเดิม';
+  }
+  const n = waitQ.length + waitI.length + readyO.length + editedQ.length + draftI.length;
   $('pend-orig-n').textContent = readyO.length ? `(${readyO.length})` : '';
   $('pend-orig').innerHTML = waitO.length ? waitO.map((v) => `<div class="pcard"><div class="pc-body">
       <div class="pc-top"><div class="pc-title">${esc(v.company)}<small>${esc(v.ivRequestId)} · โดย ${esc(v.salesName)}${v.originalRequestedAt ? ' · ขอเมื่อ ' + esc(v.originalRequestedAt) : ''}</small></div>${st(ORIG_ST, v.originalStatus)}</div>
@@ -1241,8 +1319,8 @@ function renderPending() {
     </div>`).join('') : '<div class="empty">ไม่มีเอกสารตัวจริงที่ต้องส่ง</div>';
   const extra = renderPendingMore();
   $('pend-count').textContent = n + extra; $('pend-count').hidden = !(n + extra);
-  $('pend-qt-n').textContent = waitQ.length ? `(${waitQ.length})` : '';
-  $('pend-inv-n').textContent = waitI.length ? `(${waitI.length})` : '';
+  $('pend-qt-n').textContent = waitQ.length + editedQ.length ? `(${waitQ.length + editedQ.length})` : '';
+  $('pend-inv-n').textContent = waitI.length + draftI.length ? `(${waitI.length + draftI.length})` : '';
   const lineRows = (q) => (q.lines || []).map((l) => `<tr><td>${esc(l.qtDescription || l.description).replace(/\n/g, '<br>')}${l.salesNote && !l.qtDescription ? `<div class="small note-box">✍️ Sales เขียนเพิ่ม (จะเรียบเรียงรวมกับคำอธิบายใน QT): ${esc(l.salesNote)}</div>` : ''}${l.freebie ? `<div class="small note-box">🎁 ของแถม: ${esc(l.freebie)}</div>` : ''}${l.peakServiceCode ? `<div class="small mono">${esc(l.peakServiceCode)}</div>` : '<div class="err-line">ยังไม่มีรหัสบริการ PEAK</div>'}</td><td class="num">${esc(l.qty)}</td><td class="num">${esc(l.unitPrice)}</td><td class="num">${esc(l.discount || '')}</td></tr>`).join('');
   const F = (label, val, cls) => (val === '' || val === undefined || val === null ? '' : `<div class="f"><span>${label}</span><b${cls ? ` class="${cls}"` : ''}>${val}</b></div>`);
   const rej = (id, fn, pref) => `<details class="rej"><summary>✕ ตีกลับคำขอนี้…</summary><div class="in"><input id="${pref}-${esc(id)}" class="grow" type="text" maxlength="300" placeholder="เหตุผลที่ตีกลับ (Sales จะเห็น)"><button class="btn btn-danger btn-sm" onclick="${fn}('${esc(id)}','reject')">ตีกลับ</button></div></details>`;
@@ -1251,14 +1329,14 @@ function renderPending() {
       <div class="pc-amt"><b>${fmt(qtAmt(q).total)}</b><span>ยอด${qtAmt(q).lbl}</span></div></div>
     <div class="facts">
       ${F('เลขภาษี / สาขา', esc(q.taxId) + ' / ' + esc(q.branch))}
-      ${F('รหัส PEAK', esc(q.clientCode || '(ระบบหาให้)'))}
+      ${F('รหัส PEAK', esc(q.clientCode || (q.newContact ? 'ลูกค้าใหม่ · สร้างใน PEAK ตอนอนุมัติ' : '(ระบบหาให้)')), q.newContact && !q.clientCode ? 'hl' : '')}
       ${F('หัก ณ ที่จ่าย', whtShort(q.whtRate), 'hl')}
       ${F('เครดิต', q.creditTermDays ? esc(q.creditTermDays) + ' วัน' : '')}
       ${F('วันที่ใน QT', esc(q.wantedQtDate))}
       ${F('ภาษา / PO', esc(q.docLang) + (q.poRequired === 'Yes' ? ' · ต้องมี PO' : ''))}
       ${F('Opportunity', esc(q.opportunityId))}
     </div>
-    ${q.note ? `<div class="pc-note">💬 Sales: ${esc(q.note)}</div>` : ''}${(q.lines || []).filter((l) => l.salesNote && !l.qtDescription).map((l) => `<div class="pc-note warn">✍️ Sales เขียนเพิ่มในรายการ (จะเรียบเรียงรวมกับคำอธิบายใน QT): ${esc(l.salesNote)}</div>`).join('')}${q.belowFloor ? `<div class="pc-note warn">ต่ำกว่าราคาขั้นต่ำ Catalog: ${esc(q.belowFloor)}</div>` : ''}${fix && q.peakNote ? `<div class="pc-note err">${esc(q.peakNote)}</div>` : ''}
+    ${q.newContact && !q.clientCode ? `<div class="pc-note">🆕 ลูกค้าใหม่: ${esc(q.company)} · ${esc(q.taxId)} / ${esc(q.branch)} · ${esc(q.newContact)}<br><span class="small">กดอนุมัติแล้วระบบจะสร้างลูกค้านี้ใน PEAK ก่อนสร้าง QT ตรวจชื่อ เลขภาษี และที่อยู่ให้ตรงเอกสารลูกค้า</span></div>` : ''}${q.note ? `<div class="pc-note">💬 Sales: ${esc(q.note)}</div>` : ''}${(q.lines || []).filter((l) => l.salesNote && !l.qtDescription).map((l) => `<div class="pc-note warn">✍️ Sales เขียนเพิ่มในรายการ (จะเรียบเรียงรวมกับคำอธิบายใน QT): ${esc(l.salesNote)}</div>`).join('')}${q.belowFloor ? `<div class="pc-note warn">ต่ำกว่าราคาขั้นต่ำ Catalog: ${esc(q.belowFloor)}</div>` : ''}${fix && q.peakNote ? `<div class="pc-note err">${esc(q.peakNote)}</div>` : ''}
     <details style="margin-top:12px"><summary class="small" style="cursor:pointer">ดูรายการสินค้า (${(q.lines || []).length} บรรทัด)</summary>
       <div style="overflow-x:auto;margin-top:6px"><table class="items"><thead><tr><th>รายการ (ข้อความที่จะลงใน QT)</th><th class="num">จำนวน</th><th class="num">ราคา/หน่วย</th><th class="num">ส่วนลด</th></tr></thead><tbody>${lineRows(q)}</tbody></table></div></details>
     </div>
@@ -1274,11 +1352,13 @@ function renderPending() {
     </div></div>`;
   const secH = (t, n) => `<div class="sec-h">${t} <span class="n">${n} รายการ</span></div>`;
   $('pend-qt').innerHTML = (waitQ.length ? waitQ.map((q) => qCard(q, false)).join('') : '<div class="empty">ไม่มีคำขอ QT รออนุมัติ</div>')
+    + (editedQ.length ? secH('QT ถูกแก้ใน PEAK · รอรีเฟรชเอกสาร', editedQ.length) + '<p class="hint">ลิงก์เอกสารที่ Sales เปิดยังเป็นไฟล์ก่อนแก้ เปิด QT ใน PEAK กดรีเฟรชเอกสาร แล้วกด "รีเฟรชแล้ว"</p>' + editedQ.map((q) => `<div class="pcard"><div class="pc-body"><div class="pc-top"><div class="pc-title">${esc(q.company)}<small>${esc(q.peakQtNo)} · ${esc(q.requestId)} · แก้เมื่อ ${esc(q.qtEditedAt)} · โดย ${esc(q.salesName)}</small></div><div class="pc-amt"><b>${fmt(qtAmt(q).total)}</b><span>ยอดใหม่${qtAmt(q).lbl}</span></div></div></div>
+      <div class="pc-act">${q.peakDocLink ? `<a class="btn btn-o btn-sm" href="${esc(peakEdit(q.peakDocLink, 'quotation'))}" target="_blank" rel="noopener">เปิดใน PEAK ↗</a>` : ''}<span class="sp"></span><button class="btn btn-p btn-sm" onclick="qtRefreshed('${esc(q.requestId)}')">✓ รีเฟรชแล้ว</button><span id="qm-${esc(q.requestId)}"></span></div></div>`).join('') : '')
     + (fixQ.length ? secH('ต้องแก้ใน PEAK ก่อนสร้าง QT', fixQ.length) + fixQ.map((q) => qCard(q, true)).join('') : '')
     + (draftQ.length ? secH('QT Draft รออนุมัติใน PEAK', draftQ.length) + '<p class="hint">อนุมัติใน PEAK แล้วกดปุ่มนี้ (หรือรอระบบอัปเดตรอบ 10:49 / 17:49) จากนั้น Sales จะเปิดลิงก์ QT ส่งลูกค้าได้</p>' + draftQ.map((q) => `<div class="pcard"><div class="pc-body">
       <div class="pc-top"><div class="pc-title">${esc(q.company)}<small>${esc(q.peakQtNo)} · ${esc(q.requestId)} · โดย ${esc(q.salesName)}</small></div><div class="pc-amt"><b>${fmt(qtAmt(q).total)}</b><span>ยอด${qtAmt(q).lbl}</span></div></div></div>
       <div class="pc-act">${q.peakDocLink ? `<a class="btn btn-o btn-sm" href="${esc(peakEdit(q.peakDocLink, 'quotation'))}" target="_blank" rel="noopener">แก้ไข / อนุมัติใน PEAK ↗</a>` : ''}<details class="rej"><summary>เผลอยกเลิก QT นี้ใน PEAK?</summary><div class="in"><span class="small">ระบบจะสร้าง QT Draft ใหม่จากข้อมูลเดิม</span><button class="btn btn-danger btn-sm" onclick="qtAction('${esc(q.requestId)}','qt_voided')">QT ถูกยกเลิกแล้ว สร้างใหม่</button></div></details><span class="sp"></span><button class="btn btn-p btn-sm" onclick="qtAction('${esc(q.requestId)}','qt_approved')">✓ อนุมัติ QT ใน PEAK แล้ว</button><span id="qm-${esc(q.requestId)}"></span></div></div>`).join('') : '');
-  $('pend-inv').innerHTML = waitI.length ? waitI.map((v) => {
+  $('pend-inv').innerHTML = (waitI.length ? waitI.map((v) => {
     const q = REQS.find((x) => x.requestId === v.requestId);
     const ev = v.evidenceLink && /^https:\/\//.test(v.evidenceLink) ? `<a href="${esc(v.evidenceLink)}" target="_blank" rel="noopener">${esc(v.evidenceType || 'เปิดดู')} ↗</a>` : esc(v.evidenceType);
     return `<div class="pcard"><div class="pc-body">
@@ -1300,16 +1380,19 @@ function renderPending() {
       </div>
       ${v.note ? `<div class="pc-note">💬 Sales: ${esc(v.note)}</div>` : ''}${v.overReason ? `<div class="pc-note warn">${/^QT นอกระบบ/.test(v.overReason) ? '' : 'เกินยอด QT: '}${esc(v.overReason)}</div>` : ''}
       </div>
-      <div class="pc-act">
-        <input id="ivn-${esc(v.ivRequestId)}" type="text" maxlength="40" placeholder="เลข INV เช่น IV-20261100014" style="width:200px">
-        <label class="small" for="ivd-${esc(v.ivRequestId)}" style="white-space:nowrap">วันที่ออก INV (ตาม PEAK)</label>
-        <input id="ivd-${esc(v.ivRequestId)}" type="date" title="วันที่ออก INV ตามเอกสารใน PEAK · วันครบกำหนด = วันนี้ + เครดิตเทอม" value="${isoD(v.wantedIssueDate)}" style="width:150px">
-        <input id="ivl-${esc(v.ivRequestId)}" class="grow" type="text" maxlength="500" placeholder="ลิงก์เอกสาร INV ใน PEAK *">
-        <button class="btn btn-p btn-sm" onclick="ivAction('${esc(v.ivRequestId)}','issued')">✓ อนุมัติ (ออก INV แล้ว)</button>
+      ${v.accountNote && /ไม่สำเร็จ/.test(v.accountNote) ? `<div class="pc-note err" style="margin:0 16px 8px">${esc(v.accountNote)}</div>` : ''}
+      <div class="pc-act">${PEAK_LIVE && q && q.peakQtId ? `
+        <button class="btn btn-p btn-sm" onclick="ivMake('${esc(v.ivRequestId)}')" title="สร้าง INV Draft จาก QT ${esc(v.qtNo)} ใน PEAK พร้อมแนบหลักฐาน แล้วอนุมัติใน PEAK">🧾 ตรวจแล้ว สร้าง INV Draft ใน PEAK</button>
+        <span id="ivm-${esc(v.ivRequestId)}"></span><span class="sp"></span>
+        ${rej(v.ivRequestId, 'ivAction', 'ivr')}
+      </div><details class="rej" style="margin:0 16px 12px"><summary class="small">ออก INV เองใน PEAK แล้ว (ใส่เลขเอง)</summary><div class="pc-act" style="padding:8px 0 0">${ivManual(v)}</div></details></div>` : `
+        ${ivManual(v)}
         <span id="ivm-${esc(v.ivRequestId)}"></span>
         ${rej(v.ivRequestId, 'ivAction', 'ivr')}
-      </div></div>`;
-  }).join('') : '<div class="empty">ไม่มีคำขอ INV รออนุมัติ</div>';
+      </div></div>`}`;
+  }).join('') : '<div class="empty">ไม่มีคำขอ INV รออนุมัติ</div>')
+    + (draftI.length ? `<div class="sec-h">INV Draft รออนุมัติใน PEAK <span class="n">${draftI.length} รายการ</span></div><p class="hint">อนุมัติใน PEAK แล้วกดปุ่มนี้ (เมื่อ PEAK แจ้งอัตโนมัติได้ ระบบจะอัปเดตเอง) ระบบจะดึงเลข วันที่ และลิงก์จาก PEAK แล้วส่ง INV เข้าหน้าติดตามหนี้</p>` + draftI.map((v) => `<div class="pcard"><div class="pc-body"><div class="pc-top"><div class="pc-title">${esc(v.company)}<small>${esc(v.peakIvNo)} · QT ${esc(v.qtNo)} · ${esc(v.ivRequestId)} · โดย ${esc(v.salesName)}</small></div><div class="pc-amt"><b>${fmt(ivAmt(v).amt)}</b><span>${esc(ivAmt(v).lbl || '')}</span></div></div>${v.accountNote ? `<div class="pc-note small">${esc(v.accountNote)}</div>` : ''}</div>
+      <div class="pc-act">${v.peakDocLink ? `<a class="btn btn-o btn-sm" href="${esc(peakEdit(v.peakDocLink, 'invoice'))}" target="_blank" rel="noopener">ตรวจ / อนุมัติใน PEAK ↗</a>` : ''}<span class="sp"></span><button class="btn btn-p btn-sm" onclick="ivCheck('${esc(v.ivRequestId)}')">✓ อนุมัติใน PEAK แล้ว</button><span id="ivm-${esc(v.ivRequestId)}"></span></div></div>`).join('') : '');
 }
 
 // PEAK document link (the public doc.peakaccount.com link PEAK returns), opens / downloads the document.
@@ -1332,6 +1415,23 @@ const QT_ASK = {
   qt_fixed: { title: 'แก้ QT ใน PEAK แล้ว?', ok: '✓ แก้แล้ว', body: 'QT กลับไปเป็น Draft ระบบจะตรวจยอดและรหัสบัญชีใหม่ในรอบถัดไป (10:49 / 17:49)' },
   qt_voided: { title: 'QT นี้ถูกยกเลิกใน PEAK?', ok: 'ยืนยัน ให้สร้าง QT ใหม่', kind: 'warn', note: true, body: 'ใช้เมื่อเผลอกดยกเลิก (Void) QT ใน PEAK ระบบจะล้างเลข QT เดิม แล้วสร้าง QT Draft ใหม่จากข้อมูลและรายการเดิมในรอบถัดไป (10:49 / 17:49) เลขเดิมเก็บไว้ในประวัติ ระบบจะไม่นำกลับมาใช้อีก' },
 };
+async function qtRefreshed(id) {
+  try { await withLoading('กำลังบันทึก…', async () => { await api('/api/requests', { method: 'PATCH', body: JSON.stringify({ requestId: id, action: 'qt_refreshed' }) }); await loadAll(); }); }
+  catch (e) { $('qm-' + id).innerHTML = `<span class="err-line">${esc(e.message)}</span>`; }
+}
+async function liveQt(id) {
+  const box = $('qlv-' + id); if (!box || box.dataset.done) return;
+  try {
+    const { qt } = await api('/api/requests?view=qt-live&id=' + encodeURIComponent(id));
+    const ST = { Draft: 'Draft (ยังไม่อนุมัติ)', Approve: 'อนุมัติแล้ว', Approved: 'อนุมัติแล้ว', Accepted: 'ลูกค้าตอบรับ' };
+    box.innerHTML = `<div style="margin:6px 0">${esc(qt.code)} · ${esc(qt.isVoid ? 'ยกเลิกแล้ว (Void)' : ST[qt.status] || qt.status)}${qt.taxStatus == 1 ? ' · ราคารวม VAT' : ''}</div>
+      <div style="overflow-x:auto"><table class="items"><thead><tr><th>รายการใน PEAK ตอนนี้</th><th class="num">จำนวน</th><th class="num">ราคา/หน่วย</th><th class="num">ส่วนลด/หน่วย</th><th class="num">รวม</th></tr></thead><tbody>
+      ${qt.lines.map((l) => `<tr><td>${esc(l.description).replace(/\n/g, '<br>')}${l.code ? `<div class="mono small">${esc(l.code)}</div>` : ''}</td><td class="num">${fmt(l.qty)}</td><td class="num">${fmt(l.price)}</td><td class="num">${l.discount ? fmt(l.discount) : ''}</td><td class="num">${fmt(l.total)}</td></tr>`).join('')}
+      </tbody></table></div>
+      <div style="margin-top:6px">ก่อน VAT <b>${fmt(qt.preTaxAmount)}</b> · VAT ${fmt(qt.vatAmount)} · รวม <b>${fmt(qt.netAmount)}</b>${qt.whtAmount ? ` · หัก ณ ที่จ่าย ${fmt(qt.whtAmount)}` : ''}${qt.discountTotal ? ` · ส่วนลดรวม ${fmt(qt.discountTotal)}` : ''}</div>`;
+    box.dataset.done = '1';
+  } catch (e) { box.innerHTML = `<span class="err-line">${esc(e.message)}</span>`; }
+}
 async function qtAction(id, action) {
   const q = REQS.find((x) => x.requestId === id) || {};
   const note0 = (($('qn-' + id) || {}).value || '').trim();
@@ -1352,6 +1452,25 @@ async function qtActionDo(id, action) {
     if (d.message && ['qt_draft', 'qt_error', 'needs_contact', 'needs_service_code'].includes(d.status)) alertMsg(d.status === 'qt_draft' ? `สร้าง ${d.peakQtNo} ใน PEAK แล้ว` : d.message, d.status === 'qt_draft');
   }
   catch (e) { $('qm-' + id).innerHTML = `<span class="err-line">${esc(e.message)}</span>`; }
+}
+function ivManual(v) {
+  return `<input id="ivn-${esc(v.ivRequestId)}" type="text" maxlength="40" placeholder="เลข INV เช่น IV-20261100014" style="width:200px">
+        <label class="small" for="ivd-${esc(v.ivRequestId)}" style="white-space:nowrap">วันที่ออก INV (ตาม PEAK)</label>
+        <input id="ivd-${esc(v.ivRequestId)}" type="date" title="วันที่ออก INV ตามเอกสารใน PEAK · วันครบกำหนด = วันนี้ + เครดิตเทอม" value="${isoD(v.wantedIssueDate)}" style="width:150px">
+        <input id="ivl-${esc(v.ivRequestId)}" class="grow" type="text" maxlength="500" placeholder="ลิงก์เอกสาร INV ใน PEAK *">
+        <button class="btn ${PEAK_LIVE ? 'btn-g' : 'btn-p'} btn-sm" onclick="ivAction('${esc(v.ivRequestId)}','issued')">✓ อนุมัติ (ออก INV แล้ว)</button>`;
+}
+async function ivMake(id) {
+  const v = IVS.find((x) => x.ivRequestId === id) || {};
+  const ok = await ask({ title: 'สร้าง INV Draft ใน PEAK?', ok: '🧾 สร้าง Draft', html: `<p><b>${esc(v.company)}</b> · QT ${esc(v.qtNo)} · ${fmt(ivAmt(v).amt)}</p><p class="small">ระบบจะสร้าง INV สถานะ Draft จาก QT ใบเดิมใน PEAK ตามยอด วันที่ และเครดิตเทอมที่ Sales ขอ แนบหลักฐาน และติดกลุ่มจัดประเภทให้ จากนั้นตรวจและอนุมัติใน PEAK</p>` });
+  if (!ok) return;
+  try { await withLoading('กำลังสร้าง INV ใน PEAK…', async () => { const d = await api('/api/invoice-requests', { method: 'PATCH', body: JSON.stringify({ ivRequestId: id, action: 'iv_make', seen: seenOf(v) }) }); await loadAll(); alertMsg(`สร้าง ${d.peakIvNo} ใน PEAK แล้ว ตรวจและอนุมัติใน PEAK`, true); }); }
+  catch (e) { await loadAll().catch(() => {}); const m = $('ivm-' + id); if (m) m.innerHTML = `<span class="err-line">${esc(e.message)}</span>`; else alertMsg(e.message, false); }
+}
+async function ivCheck(id) {
+  const v = IVS.find((x) => x.ivRequestId === id) || {};
+  try { await withLoading('กำลังตรวจกับ PEAK…', async () => { const d = await api('/api/invoice-requests', { method: 'PATCH', body: JSON.stringify({ ivRequestId: id, action: 'iv_check', seen: seenOf(v) }) }); await loadAll(); alertMsg(`${d.peakIvNo} อนุมัติแล้ว เข้าหน้าติดตามหนี้แล้ว`, true); }); }
+  catch (e) { $('ivm-' + id).innerHTML = `<span class="err-line">${esc(e.message)}</span>`; }
 }
 async function ivAction(id, action) {
   const v = IVS.find((x) => x.ivRequestId === id) || {};
@@ -1394,7 +1513,7 @@ async function markSent(id) {
 
 // ─── QT draft: kept in this browser so a trip to the catalog doesn't lose it ─
 const DRAFT_KEY = 'gc_qt_draft_v1';
-const DRAFT_FIELDS = ['q-segment', 'q-deal', 'q-opp-y', 'q-opp-n', 'q-tax', 'q-branch', 'q-client', 'q-company', 'q-lang', 'q-date', 'q-term', 'q-wht', 'q-po', 'q-note', 'q-email', 'q-replaces'];
+const DRAFT_FIELDS = ['q-segment', 'q-deal', 'q-opp-y', 'q-opp-n', 'q-tax', 'q-branch', 'q-client', 'q-company', 'q-lang', 'q-date', 'q-term', 'q-wht', 'q-po', 'q-note', 'q-email', 'q-replaces', 'nc-type', 'nc-prefix', 'nc-phone', 'nc-addr', 'nc-sub', 'nc-dist', 'nc-prov', 'nc-post', 'nc-cname', 'nc-cphone'];
 function saveDraft() { try { const d = {}; DRAFT_FIELDS.forEach((id) => { d[id] = $(id).value; }); localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch {} }
 function restoreDraft() { try { const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null'); if (d) DRAFT_FIELDS.forEach((id) => { if (d[id] !== undefined && d[id] !== null) $(id).value = d[id]; }); } catch {} }
 function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch {} }

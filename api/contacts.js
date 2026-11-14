@@ -74,8 +74,10 @@ module.exports = async function handler(req, res) {
     // The sheet stays the fallback (PEAK down, or a tax ID stored with dashes in PEAK).
     if (peak.mode() !== 'off') {
       try {
-        const live = (await peak.findContacts(taxId, branch || '00000')).map((c) => ({ code: c.code, name: c.name, branch: c.branchCode || '00000' }));
-        if (live.length) return res.status(200).json({ matches: live, otherBranches: fromSheet.otherBranches.filter((o) => !live.some((l) => l.code === o.code)), source: 'peak' });
+        // Every branch of this tax ID, so the form can list them (PEAK is the only source).
+        const all = (await peak.findContacts(taxId)).map((c) => ({ code: c.code, name: c.name, branch: c.branchCode || '00000' }));
+        const matches = branch ? all.filter((c) => c.branch === branch) : all;
+        return res.status(200).json({ matches, otherBranches: all.filter((c) => !matches.includes(c)), source: 'peak' });
       } catch { /* fall back to the sheet */ }
     }
     return res.status(200).json({ ...fromSheet, source: 'sheet' });

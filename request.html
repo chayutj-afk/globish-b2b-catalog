@@ -22,6 +22,7 @@
 .balance b{display:block;font-size:17px;margin-top:2px;color:var(--head);font-weight:500}
 .balance .neg b{color:var(--bad-ink)}
 b.neg{color:var(--bad-ink)}
+.list-row.flash{box-shadow:0 0 0 3px var(--primary);transition:box-shadow .3s}
 .next{margin:8px 0 4px;padding:7px 10px;border-radius:6px;font-size:13px;line-height:1.5}
 .next.you{background:var(--primary-soft);border:1px solid var(--primary-line);color:var(--head)}
 .next.wait{background:var(--panel-2);border:1px solid var(--line);color:var(--muted)}
@@ -1076,11 +1077,18 @@ function newsItems() {
     t: `${e.status === 'done' ? '✓ ฝ่ายบัญชีแก้' : '✕ ฝ่ายบัญชีตีกลับคำขอแก้'} ${esc(e.docType)} ${esc(e.docNo)}${e.newDocNo ? ' → ' + esc(e.newDocNo) : ''}${e.accountNote ? ' (' + esc(e.accountNote) + ')' : ''}` }));
   RTS.filter((r) => mine(r) && (r.status === 'issued' || r.status === 'rejected') && s['rt:' + r.rtRequestId] !== r.status).forEach((r) => out.push({ k: 'rt:' + r.rtRequestId, v: r.status, tab: 'rt',
     t: r.status === 'issued' ? `✓ ออกใบเสร็จแล้ว ${docLink(r.peakRtNo, r.peakDocLink)} · ${esc(r.billName)}${r.sentStatus === 'waiting' ? ' · รอส่งตัวจริง' : ''}` : `✕ ฝ่ายบัญชีตีกลับคำขอใบเสร็จ ${esc(r.rtRequestId)} · ${esc(r.billName)}${r.accountNote ? ' (' + esc(r.accountNote) + ')' : ''}` }));
-  IVS.filter((v) => mine(v) && v.ar && v.ar.paidDate && s['pay:' + v.ivRequestId] !== v.ar.paidDate).forEach((v) => out.push({ k: 'pay:' + v.ivRequestId, v: v.ar.paidDate, tab: 'inv',
+  IVS.filter((v) => mine(v) && v.ar && v.ar.paidDate && s['pay:' + v.ivRequestId] !== v.ar.paidDate).forEach((v) => out.push({ k: 'pay:' + v.ivRequestId, v: v.ar.paidDate, tab: 'inv', ref: 'row-' + v.ivRequestId,
     t: `💰 ${v.payNotice && v.payNotice.source === 'sales' && v.payNotice.status === 'confirmed' ? 'บัญชียืนยันเงินเข้า' : 'ลูกค้าจ่ายแล้ว'} ${esc(v.peakIvNo)} · ${esc(v.company)} ${fmt(toNum(v.ar.paidAmount))} บาท (${esc(v.ar.paidDate)})` }));
-  IVS.filter((v) => mine(v) && v.payNotice && v.payNotice.source === 'sales' && v.payNotice.status === 'rejected' && s['payr:' + v.payNotice.noticeId] !== 'r').forEach((v) => out.push({ k: 'payr:' + v.payNotice.noticeId, v: 'r', tab: 'inv',
+  IVS.filter((v) => mine(v) && v.payNotice && v.payNotice.source === 'sales' && v.payNotice.status === 'rejected' && s['payr:' + v.payNotice.noticeId] !== 'r').forEach((v) => out.push({ k: 'payr:' + v.payNotice.noticeId, v: 'r', tab: 'inv', ref: 'row-' + v.ivRequestId,
     t: `✕ บัญชียังไม่ยืนยันเงินเข้า ${esc(v.peakIvNo)} · ${esc(v.company)} (${esc(v.payNotice.accountNote)})` }));
   return out;
+}
+// Open the tab the notice is about and bring its card into view (the list can be long).
+function goNews(t, i) {
+  setMine(t, document.querySelectorAll('#mine-seg button')[i]);
+  const x = newsItems().find((n) => n.tab === t && n.ref);
+  const el = x && document.getElementById(x.ref);
+  if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 2200); }
 }
 function markSeen(tab) { try { const s = seenMap(); newsItems().filter((x) => !tab || x.tab === tab).forEach((x) => { s[x.k] = x.v; }); localStorage.setItem(SEEN_KEY, JSON.stringify(s)); } catch {} paintNews(); }
 function paintNews() {
@@ -1089,7 +1097,7 @@ function paintNews() {
   let rb = document.getElementById('mine-count');
   if (!rb && $('nav-mine')) { rb = document.createElement('span'); rb.className = 'badge'; rb.id = 'mine-count'; $('nav-mine').appendChild(rb); }
   if (rb) { rb.textContent = xs.length; rb.hidden = !xs.length; }
-  const btn = (t, label, i) => n(t) ? ` <button class="btn btn-o btn-sm" onclick="setMine('${t}',document.querySelectorAll('#mine-seg button')[${i}])">${label}</button>` : '';
+  const btn = (t, label, i) => n(t) ? ` <button class="btn btn-o btn-sm" type="button" onclick="goNews('${t}',${i})">${label}</button>` : '';
   $('mine-news').innerHTML = xs.length ? `<div class="msg ok" style="margin-bottom:12px">🔔 ${xs.map((x) => x.t).join('<br>')}<div style="margin-top:6px"><button class="btn btn-g btn-sm" onclick="markSeen()">รับทราบ</button>${btn('inv', 'ดูใบแจ้งหนี้', 1)}${btn('rt', 'ดูใบเสร็จ', 2)}${btn('edit', 'ดูคำขอแก้ไข', 3)}</div></div>` : '';
 }
 

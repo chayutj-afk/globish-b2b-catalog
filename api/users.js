@@ -1,4 +1,5 @@
 // /api/users  (admins only: finance@ / chayut.j@)
+//   POST ?view=peak-hook&type=quotation|invoice → PEAK webhook (x-api-key = PEAK_WEBHOOK_KEY)
 //   GET ?view=health → data health (admins + accounting); ?view=health-cron → daily Chat digest (Vercel cron)
 //   GET   → everyone who has signed in, with their role
 //   PATCH { email, role?: sales|lead|operation|op|collector|admin, extra?: [perm], team?: 'b2b' | 'b2c' | 'both', salesPerf?: G014 code } → change a user's access
@@ -20,7 +21,10 @@ module.exports = async function handler(req, res) {
       const sent = text ? await require('../lib/notify').send(text) : { ok: true, skipped: 'all ok' };
       return res.status(200).json({ ok: true, bad: h.bad, warn: h.warn, sent });
     }
+    // PEAK webhook (no login; checked by its x-api-key header). See lib/peakhook.js.
+    if (view === 'peak-hook') return await require('../lib/peakhook').handle(req, res);
     const me = await users.requireUser(req);
+
     if (view === 'health') {
       if (!users.can(me, 'users') && !users.can(me, 'approve')) return res.status(403).json({ ok: false, error: 'เฉพาะผู้ดูแลหรือฝ่ายบัญชี' });
       return res.status(200).json({ ok: true, ...(await require('../lib/health').collect()) });

@@ -27,6 +27,10 @@
     {
       "source": "/ar",
       "destination": "/ar.html"
+    },
+    {
+      "source": "/api/peak-webhook/:type",
+      "destination": "/api/users?view=peak-hook&type=:type"
     }
   ],
   "functions": {
@@ -43,6 +47,9 @@
       "maxDuration": 30
     },
     "api/users.js": {
+      "maxDuration": 30
+    },
+    "api/requests.js": {
       "maxDuration": 30
     }
   },

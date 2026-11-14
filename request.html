@@ -1345,7 +1345,12 @@ let ASK_NOTE = '';
 async function qtActionDo(id, action) {
   const note = action === 'qt_voided' ? ASK_NOTE : ($('qn-' + id) || {}).value || '';
   if (action === 'reject' && !note.trim()) { $('qm-' + id).innerHTML = '<span class="err-line">ใส่เหตุผลก่อน</span>'; return; }
-  try { await api('/api/requests', { method: 'PATCH', body: JSON.stringify({ requestId: id, action, note, seen: seenOf(REQS.find((x) => x.requestId === id)) }) }); await loadAll(); }
+  try {
+    const d = await api('/api/requests', { method: 'PATCH', body: JSON.stringify({ requestId: id, action, note, seen: seenOf(REQS.find((x) => x.requestId === id)) }) });
+    await loadAll();
+    // PEAK API on: the Draft was made (or not) right now; say what happened.
+    if (d.message && ['qt_draft', 'qt_error', 'needs_contact', 'needs_service_code'].includes(d.status)) alertMsg(d.status === 'qt_draft' ? `สร้าง ${d.peakQtNo} ใน PEAK แล้ว` : d.message, d.status === 'qt_draft');
+  }
   catch (e) { $('qm-' + id).innerHTML = `<span class="err-line">${esc(e.message)}</span>`; }
 }
 async function ivAction(id, action) {

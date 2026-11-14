@@ -10,6 +10,7 @@ const { priceItem, priceCustomKeyHS, priceService, priceSurcharge, vatIncluded, 
 const { validTaxId, normBranch } = require('../lib/taxid');
 const hub = require('../lib/hub');
 const peak = require('../lib/peak');
+const qtdraft = require('../lib/qtdraft');
 const { OPP_RE, normaliseOppId } = require('../lib/crm');
 const { services } = require('./services');
 
@@ -175,32 +176,14 @@ async function create(req, res, user) {
     catalogTotal, belowFloor, vatMode: incl ? 'incl' : 'excl', totalInclVat, voidedQts: '',
   };
 
-  // PEAK Draft quotation (only when PEAK_MODE is uat/prod and every line has a service code).
-  let peakNote = 'ระบบจะสร้าง QT Draft ใน PEAK ให้ฝ่ายบัญชีตรวจและอนุมัติ แล้วเลข QT จะขึ้นในคำขอของฉัน';
+  // The QT Draft is made when accounting approves the request (live via the PEAK API when
+  // PEAK_MODE is on, otherwise by the scheduled sync), never straight from Sales' submit.
+  const peakNote = 'ส่งคำขอแล้ว รอฝ่ายบัญชีตรวจ เมื่ออนุมัติ ระบบจะสร้าง QT Draft ใน PEAK แล้วเลข QT จะขึ้นในคำขอของฉัน';
   // WH packages and PEAK services carry their own code; catalog lines map through Products.
   // Own code (WH package / PEAK service) → per-package override in Products → per-component code
-  // (Components tab). Always resolved, so RequestLines carry the code the PEAK sync will use.
+  // (Components tab). Always resolved, so RequestLines carry the code PEAK will use.
   const codes = await hub.readServiceCodes();
   const serviceCodeOf = (l) => l.peakCode || (l.role === 'hero' && codes.byKeyHS.get(l.keyHS)) || codes.byComponent.get(l.component) || '';
-  if (peak.mode() !== 'off') {
-    const { missing, body } = peak.buildQuotation({ ...request, wantedQtDate: r.wantedQtDate }, lines, serviceCodeOf, now);
-    if (missing.length) {
-      peakNote = `ยังสร้างใน PEAK ไม่ได้: ยังไม่มีรหัสบริการ PEAK ของ ${missing.join(', ')}`;
-      await hub.log('catalog', 'peak_unmapped', request.requestId, missing.join(', '));
-    } else {
-      try {
-        const q = await peak.createQuotationDraft(body);
-        request.status = 'qt_draft';
-        request.peakQtNo = q.code || '';
-        request.peakQtId = q.id || '';
-        peakNote = `สร้างใบเสนอราคา Draft ใน PEAK แล้ว${q.code ? ` (${q.code})` : ''}`;
-        await hub.log('peak', 'qt_draft_created', request.requestId, q.code || q.id || '');
-      } catch (e) {
-        peakNote = 'สร้างใน PEAK ไม่สำเร็จ ฝ่ายบัญชีจะออกเอกสารให้';
-        await hub.log('peak', 'qt_draft_failed', request.requestId, e.message);
-      }
-    }
-  }
 
   await hub.appendRows('Requests', [request]);
   await hub.appendRows('RequestLines', lines.map((l, i) => ({
@@ -293,6 +276,19 @@ async function update(req, res, user) {
   hub.checkSeen(row, text(b.seen, 80));
   if (b.action === 'qt_approved') fields.qtApprovedAt = at;
   const who = user.name || user.email;
+  const live = peak.mode() !== 'off';
+  // With the PEAK API on, check PEAK before trusting the click.
+  if (live && b.action === 'qt_approved' && row.peakQtId) {
+    const q = await peak.getQuotation(row.peakQtId).catch(() => null);
+    if (q && (q.isVoid || /void/i.test(q.status || ''))) throw bad(`QT ${row.peakQtNo} ถูกยกเลิกใน PEAK แล้ว ถ้าเผลอยกเลิก ใช้ "เผลอยกเลิก QT นี้ใน PEAK?"`, 409);
+    if (q && /draft/i.test(q.status || '')) throw bad(`QT ${row.peakQtNo} ใน PEAK ยังเป็น Draft อนุมัติใน PEAK ก่อน แล้วกดอีกครั้ง`, 409);
+  }
+  if (live && b.action === 'qt_fixed' && row.peakQtId) {
+    const q = await peak.getQuotation(row.peakQtId);
+    const acc = await qtdraft.accountProblems(q);
+    if (acc) throw bad(`ใน PEAK ยังไม่ตรง: ${acc}`, 409);
+    fields.peakNote = `Draft ${row.peakQtNo} รอฝ่ายบัญชีอนุมัติใน PEAK (ตรวจแล้ว) — ${who}`;
+  }
   if (b.action === 'qt_fixed' && !row.peakQtId) throw bad('ยังไม่มี QT ใน PEAK ให้ตรวจใหม่ ใช้ "แก้แล้ว ให้ระบบสร้าง QT ใหม่"', 409);
   if (b.action === 'qt_voided') {
     if (!row.peakQtNo && !row.peakQtId) throw bad('คำขอนี้ยังไม่มีเลข QT ใน PEAK', 409);
@@ -306,10 +302,32 @@ async function update(req, res, user) {
     });
   }
   const auto = { approve: `ฝ่ายบัญชีอนุมัติคำขอแล้ว รอระบบสร้าง QT Draft ใน PEAK — ${who}`, reopen: `ให้ระบบสร้าง QT ใหม่ — ${who}`, qt_approved: `อนุมัติ QT ใน PEAK แล้ว — ${who}`, qt_fixed: `แก้ QT ${row.peakQtNo || ''} ใน PEAK แล้ว รอระบบตรวจใหม่รอบถัดไป — ${who}`, qt_voided: `QT ${row.peakQtNo || ''} ถูกยกเลิกใน PEAK ระบบจะสร้าง QT Draft ใหม่จากข้อมูลเดิม — ${who}` };
-  fields.peakNote = b.action === 'qt_voided' ? `${auto.qt_voided}${note ? ` · ${note}` : ''}` : note ? `${note} — ${who}` : (auto[b.action] || row.peakNote);
+  if (!(live && b.action === 'qt_fixed')) fields.peakNote = b.action === 'qt_voided' ? `${auto.qt_voided}${note ? ` · ${note}` : ''}` : note ? `${note} — ${who}` : (auto[b.action] || row.peakNote);
+  // Approved (or sent back to be re-created) and the PEAK API is on: make the Draft now.
+  const makeNow = live && status === 'approved';
+  if (makeNow) fields.status = 'qt_creating';
   await hub.writeChecked('Requests', 'requestId', row, fields);
   await hub.log('catalog', `qt_${b.action}`, row.requestId, `${user.email}${note ? ' · ' + note : ''}`);
-  res.status(200).json({ ok: true, status });
+  if (!makeNow) return res.status(200).json({ ok: true, status });
+
+  const merged = { ...row, ...fields };
+  let out;
+  try {
+    const [lines, users] = await Promise.all([hub.readTable('RequestLines'), hub.readTable('Users')]);
+    const r = await qtdraft.createForRequest(merged, lines, users);
+    out = r.defer
+      ? { status: 'approved', peakNote: r.defer === 'notes' ? `${fields.peakNote} · มีโน้ตเซล / ของแถม ระบบจะเรียบเรียงคำอธิบายแล้วสร้าง QT รอบ 10:49 / 17:49` : `${fields.peakNote} · ${r.defer}` }
+      : r.fields;
+  } catch (e) {
+    // PEAK down / busy: leave it approved so the scheduled sync retries. A PEAK validation error needs a person.
+    out = qtdraft.transient(e)
+      ? { status: 'approved', peakNote: `${fields.peakNote} · สร้างใน PEAK ทันทีไม่สำเร็จ (${String(e.message).slice(0, 120)}) ระบบจะลองอีกครั้งรอบ 10:49 / 17:49` }
+      : { status: 'qt_error', peakNote: `สร้าง QT ใน PEAK ไม่สำเร็จ: ${String(e.message).slice(0, 300)}` };
+  }
+  out.updatedAt = hub.sheetDateTime();
+  await hub.updateRow('Requests', row._row, out);
+  await hub.log('peak', `qt_live_${out.status}`, row.requestId, out.peakQtNo || out.peakNote.slice(0, 200));
+  res.status(200).json({ ok: true, status: out.status, peakQtNo: out.peakQtNo || '', message: out.peakNote });
 }
 
 module.exports = async function handler(req, res) {

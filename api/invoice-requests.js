@@ -235,6 +235,7 @@ async function create(req, res, user) {
       status: 'iv_requested', ivRequestedAt: linked.ivRequestedAt || at, updatedAt: at,
       peakQtNo: linked.peakQtNo || r.qtNo,
     }) : null,
+    linked ? attachToPeak('quotation', linked.peakQtId, b.file, `INV-EVIDENCE_${batchId}`) : null,
     hub.log('catalog', 'invoice_requested', batchId,
       `${user.email} · ${r.qtNo} · ${rows.length} INV · ${asked}${over ? ' · over QT: ' + r.overReason : ''}`),
   ];
@@ -326,25 +327,52 @@ async function update(req, res, user) {
       // Issue date as it is on the INV in PEAK (defaults to the date sales asked for).
       const issueDate = dmy(text(b.issueDate, 10)) || row.wantedIssueDate;
       if (!ar.parseDate(issueDate)) throw bad('ใส่วันที่ออก INV ตามเอกสารใน PEAK');
-      const [invs, requests, lines, users, groups] = await Promise.all([
-        hub.readTable('Invoices'), row.requestId ? hub.readTable('Requests') : [], row.requestId ? hub.readTable('RequestLines') : [],
-        hub.readTable('Users'), ar.readProductGroups(),
-      ]);
-      const dup = invs.find((x) => String(x.ivNo).toUpperCase() === ivNo);
-      if (dup && dup.ivRequestId && dup.ivRequestId !== row.ivRequestId) throw bad(`เลข ${ivNo} ถูกใช้กับคำขอ ${dup.ivRequestId} แล้ว ตรวจเลข INV อีกครั้ง`, 409);
-      await hub.writeChecked('InvoiceRequests', 'ivRequestId', row, { status: 'iv_issued', peakIvNo: ivNo, peakDocLink: link, accountNote: note || row.accountNote, updatedAt: at });
-      // Goes straight into AR (Invoices), so nobody re-types it for debt follow-up.
-      if (!dup) {
-        const request = requests.find((x) => x.requestId === row.requestId);
-        const ls = lines.filter((x) => x.requestId === row.requestId);
-        await hub.appendRows('Invoices', [ar.rowFromRequest(row, { request, lines: ls, users, issueDate, ivNo, peakDocLink: link, productGroups: groups })]);
-      }
+      await issueInv(row, { ivNo, link, issueDate, note }, { checked: true });
     }
     await hub.log('catalog', `iv_${b.action}`, id, `${user.email}${note ? ' · ' + note : ''}`);
     return res.status(200).json({ ok: true });
   }
 
   throw bad('คำสั่งไม่ถูกต้อง');
+}
+
+// INV request → iv_issued, and the INV straight into AR (Invoices) so nobody re-types it for debt
+// follow-up. Used by accounting's "อนุมัติ" and by the PEAK webhook (INV approved in PEAK).
+//   opts.checked: the row came from the page (status/updatedAt guard); the webhook writes directly.
+// Live PEAK only: put the file on the PEAK document too, so accounting sees it there (POST insertfile).
+// Never blocks the action: a failure goes to SyncLog + chat for accounting to attach by hand.
+async function attachToPeak(kind, transactionId, file, label) {
+  const peak = require('../lib/peak');
+  if (peak.mode() === 'off' || !transactionId || !file) return 'skipped';
+  try {
+    await peak.insertFile(kind, transactionId, { ...file, name: `${String(label).replace(/[^\w.\-ก-๙]/g, '_').slice(0, 60)}.${(file.name || '').split('.').pop() || 'pdf'}` });
+    await hub.log('catalog', 'peak_attach', label, `${kind} ${transactionId}`).catch(() => {});
+    return 'attached';
+  } catch (e) {
+    await Promise.all([hub.log('catalog', 'peak_attach_failed', label, String(e.message).slice(0, 200)).catch(() => {}),
+      notify.chat(`⚠️ แนบไฟล์ ${label} เข้า PEAK ไม่สำเร็จ (${String(e.message).slice(0, 80)}) แนบเองใน PEAK`).catch(() => {})]);
+    return 'failed';
+  }
+}
+
+async function issueInv(row, { ivNo, link, issueDate, note, peakIvId }, opts = {}) {
+  const [invs, requests, lines, users, groups] = await Promise.all([
+    hub.readTable('Invoices'), row.requestId ? hub.readTable('Requests') : [], row.requestId ? hub.readTable('RequestLines') : [],
+    hub.readTable('Users'), ar.readProductGroups(),
+  ]);
+  const dup = invs.find((x) => String(x.ivNo).toUpperCase() === ivNo);
+  if (dup && dup.ivRequestId && dup.ivRequestId !== row.ivRequestId) throw bad(`เลข ${ivNo} ถูกใช้กับคำขอ ${dup.ivRequestId} แล้ว ตรวจเลข INV อีกครั้ง`, 409);
+  const f = { status: 'iv_issued', peakIvNo: ivNo, peakDocLink: link, accountNote: note || row.accountNote, updatedAt: hub.sheetDateTime() };
+  if (peakIvId) f.peakIvId = peakIvId;
+  if (opts.checked) await hub.writeChecked('InvoiceRequests', 'ivRequestId', row, f);
+  else await hub.updateRow('InvoiceRequests', row._row, f);
+  if (!dup) {
+    const request = requests.find((x) => x.requestId === row.requestId);
+    const ls = lines.filter((x) => x.requestId === row.requestId);
+    const a = ar.rowFromRequest(row, { request, lines: ls, users, issueDate, ivNo, peakDocLink: link, productGroups: groups });
+    if (peakIvId) a.peakIvId = peakIvId;
+    await hub.appendRows('Invoices', [a]);
+  }
 }
 
 // ---------------------------------------------------------------- AR (debt follow-up)
@@ -462,7 +490,10 @@ async function arUpdate(req, res, user) {
     const slip = newlyPaid && b.file ? await drive.upload(b.file, { kind: 'payment', docNo: row.ivNo, company: row.company, ref: row.ivNo }) : '';
     await hub.updateRow('Invoices', row._row, f);
     await hub.log('catalog', 'ar_update', ivNo, `${user.email} · ${Object.keys(f).join(',')}`);
-    if (newlyPaid) await paidDirectly(row, f, slip, user, delivery);
+    if (newlyPaid) {
+      await paidDirectly(row, f, slip, user, delivery);
+      await attachToPeak('invoice', row.peakIvId, b.file, `PAYMENT_${row.ivNo}`);
+    }
     return res.status(200).json({ ok: true });
   }
   throw bad('คำสั่งไม่ถูกต้อง');
@@ -550,6 +581,10 @@ async function updatePayNotice(req, res, user) {
   await hub.updateRow('Invoices', a._row, { paidDate, paidAmount: round2(amount), paymentMethod: row.paymentMethod,
     note: [a.note, `รับเงินตามที่ ${row.salesName || row.requestedBy} แจ้ง (${row.noticeId}) ยืนยันโดย ${who}`].filter(Boolean).join(' · ').slice(0, 500) });
   await hub.updateRow('PaymentNotices', row._row, { status: 'confirmed', paidDate, amount: round2(amount), accountNote: note, doneBy: who, updatedAt: at });
+  if (a.peakIvId && require('../lib/peak').mode() !== 'off') {
+    const slipFile = await drive.download(row.slipLink).catch(() => null);
+    if (slipFile) await attachToPeak('invoice', a.peakIvId, slipFile, `PAYMENT_${row.ivNo}`);
+  }
   await Promise.all([hub.log('catalog', 'pay_confirm', row.noticeId, `${user.email} · ${row.ivNo} · ${amount}`),
     notify.chat(`✅ ยืนยันเงินเข้า ${row.ivNo} · ${row.company} ${money(amount)} (แจ้งโดย ${row.salesName || row.requestedBy}) · รอออกใบเสร็จ`)]);
   res.status(200).json({ ok: true });
@@ -898,4 +933,5 @@ module.exports = async function handler(req, res) {
   }
 };
 
+module.exports.issueInv = issueInv;
 module.exports._test = { validate, alreadyInvoiced };

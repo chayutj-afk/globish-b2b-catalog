@@ -1,5 +1,5 @@
 // /api/contacts?taxId=0105555555554&branch=00000
-//   GET → PEAK contacts with that tax ID, from the Revenue Hub "PeakContacts" tab.
+//   GET → PEAK contacts with that tax ID: live from PEAK when the API is on, else the Revenue Hub "PeakContacts" tab.
 //   The 13-digit tax ID + branch is the customer key; the form uses this to fill the
 //   PEAK contact code and company name.
 //
@@ -11,6 +11,7 @@ const { checkOrigin, sendError } = require('../lib/session');
 const { requireUser } = require('../lib/users');
 const { normBranch } = require('../lib/taxid');
 const hub = require('../lib/hub');
+const peak = require('../lib/peak');
 
 let cache = null; // { at, rows } per instance, 60 s
 async function contacts() {
@@ -68,7 +69,16 @@ module.exports = async function handler(req, res) {
     const branch = url.searchParams.get('branch') ? normBranch(url.searchParams.get('branch')) : '';
     if (branch === null) return res.status(400).json({ error: 'สาขาต้องเป็น 5 หลัก' });
     res.setHeader('Cache-Control', 'no-store');
-    return res.status(200).json(match(await contacts(), taxId, branch));
+    const fromSheet = match(await contacts(), taxId, branch);
+    // PEAK API on: ask PEAK directly, so a customer accounting just created works right away.
+    // The sheet stays the fallback (PEAK down, or a tax ID stored with dashes in PEAK).
+    if (peak.mode() !== 'off') {
+      try {
+        const live = (await peak.findContacts(taxId, branch || '00000')).map((c) => ({ code: c.code, name: c.name, branch: c.branchCode || '00000' }));
+        if (live.length) return res.status(200).json({ matches: live, otherBranches: fromSheet.otherBranches.filter((o) => !live.some((l) => l.code === o.code)), source: 'peak' });
+      } catch { /* fall back to the sheet */ }
+    }
+    return res.status(200).json({ ...fromSheet, source: 'sheet' });
   } catch (e) {
     return sendError(res, e);
   }

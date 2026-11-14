@@ -35,14 +35,17 @@ td.who{white-space:normal}
   <div class="card tbl" id="matrix"></div>
   <div class="card" style="padding:12px 16px;margin:12px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>แจ้งเตือน Google Chat:</b> <span id="chat-st">…</span><button class="btn btn-g btn-sm" type="button" onclick="testChat()">ส่งข้อความทดสอบ</button><span id="chat-msg" class="small"></span></div>
   <div class="card" style="padding:12px 16px;margin:12px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>เชื่อมต่อ PEAK API:</b> <input id="peak-tax" placeholder="เลขภาษีลูกค้าที่ใช้ทดสอบ (ไม่บังคับ)" inputmode="numeric" maxlength="17" style="width:240px"><button class="btn btn-g btn-sm" type="button" onclick="testPeak()">ทดสอบเชื่อมต่อ (อ่านอย่างเดียว)</button><span id="peak-msg" class="small" style="white-space:pre-line"></span></div>
+  <div class="card" id="cls-card" style="padding:12px 16px;margin:12px 0"><b>กลุ่มจัดประเภทใน PEAK</b> <span class="small">ระบบติดให้อัตโนมัติบน QT / INV / ใบเสร็จที่สร้างจากแอป · กลุ่มและรายการดึงจาก PEAK ถ้าบัญชีเพิ่มหรือแก้ใน PEAK จะขึ้นที่นี่เอง</span><div id="cls"></div></div>
   <div class="filters" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><input type="search" id="q" placeholder="ค้นหาชื่อหรืออีเมล" oninput="render()" style="flex:1;min-width:200px"><select id="fr" class="sel" onchange="render()" style="width:auto"><option value="">ทุก role</option></select></div>
-  <div class="card tbl"><table><thead><tr><th>ผู้ใช้</th><th>เข้าใช้ล่าสุด</th><th>Role</th><th>ทีม</th><th>สิทธิ์เพิ่ม</th><th>Sales Performance (PEAK)</th><th></th></tr></thead><tbody id="rows"><tr><td colspan="7" class="small">กำลังโหลด…</td></tr></tbody></table></div>
+  <div class="card tbl"><table><thead><tr><th>ผู้ใช้</th><th>เข้าใช้ล่าสุด</th><th>Role</th><th>ทีม</th><th>สิทธิ์เพิ่ม</th><th>กลุ่มจัดประเภท (รายเซล)</th><th></th></tr></thead><tbody id="rows"><tr><td colspan="7" class="small">กำลังโหลด…</td></tr></tbody></table></div>
 </main></div></div>
 <div class="ov" id="ov-modal" hidden><div class="modal" role="dialog" aria-modal="true" aria-labelledby="m-title" style="max-width:520px"><h3 id="m-title"></h3><div class="mb" id="m-body"></div><div class="mf"><button class="btn btn-g" id="m-cancel" type="button">ยกเลิก</button><button class="btn btn-p" id="m-ok" type="button">บันทึก</button></div></div></div>
 <script>
 const $ = (id) => document.getElementById(id);
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-let USERS = [], PERF = [], ROLES = [], PERMS = {};
+let USERS = [], CLASSES = { groups: [], segments: [] }, ROLES = [], PERMS = {};
+const sellerGroups = () => CLASSES.groups.filter((g) => g.mode === 'seller');
+const itemName = (g, code) => ((g.items || []).find((i) => i.code === code) || {}).name || code;
 const TEAM = { b2b: 'B2B', b2c: 'B2C (ไม่เห็น Catalog)', both: 'Both' };
 async function api(url, opts = {}) {
   const r = await fetch(url, { cache: 'no-store', ...opts, headers: { 'Content-Type': 'application/json' } });
@@ -64,7 +67,7 @@ function render() {
   $('rows').innerHTML = list.length ? list.map((u) => {
     const e = esc(u.email), all = u.fixedAdmin || u.role === 'admin';
     const extra = (u.extra || []).filter((p) => !roleOf(u.role).perms.includes(p));
-    const perf = u.salesPerf ? ((PERF.find((p) => p.code === u.salesPerf) || {}).name || u.salesPerf) : '';
+    const perf = sellerGroups().map((g) => (u.classItems || {})[g.code] ? itemName(g, u.classItems[g.code]) : '').filter(Boolean).join(' · ');
     return `<tr>
     <td class="who"><b>${esc(u.name)}</b><br><span class="small">${e}</span></td>
     <td class="small">${esc(u.lastLogin)}</td>
@@ -85,7 +88,7 @@ async function openUser(email) {
     <label class="fl">Role<select id="u-role" class="sel">${ROLES.map((r) => opt(r.id, r.label, u.role)).join('')}</select></label>
     <label class="fl" id="u-team-w">ทีม<select id="u-team" class="sel">${Object.entries(TEAM).map(([v, t]) => opt(v, t, u.team)).join('')}</select></label>
     <div class="fl" id="u-extra-w">สิทธิ์เพิ่ม (นอก role)<div id="u-extra"></div></div>
-    <label class="fl">Sales Performance (PEAK)<select id="u-perf" class="sel">${opt('', '— ไม่ติด —', u.salesPerf || '')}${PERF.map((p) => opt(p.code, `${p.name} · ${p.code}`, u.salesPerf)).join('')}${u.salesPerf && !PERF.some((p) => p.code === u.salesPerf) ? opt(u.salesPerf, u.salesPerf + ' (ไม่อยู่ในรายการ)', u.salesPerf) : ''}</select></label>
+    ${sellerGroups().map((g) => { const cur = (u.classItems || {})[g.code] || ''; return `<label class="fl">${esc(g.name)} (PEAK ${esc(g.code)})<select class="sel u-cls" data-g="${esc(g.code)}">${opt('', '— ไม่ติด —', cur)}${(g.items || []).map((p) => opt(p.code, `${p.name} · ${p.code}`, cur)).join('')}${cur && !(g.items || []).some((p) => p.code === cur) ? opt(cur, cur + ' (ไม่มีใน PEAK แล้ว)', cur) : ''}</select></label>`; }).join('')}
     <div class="u-sum" id="u-sum"></div></div><div class="err" id="u-err"></div>`;
   let extra = new Set(u.extra || []);
   const paint = () => {
@@ -103,13 +106,14 @@ async function openUser(email) {
   $('m-cancel').onclick = () => ($('m-ok').dataset.step ? back() : close());
   $('m-ok').onclick = async () => {
     const role = $('u-role').value, admin = role === 'admin', base = roleOf(role).perms;
-    const next = { role, team: admin ? u.team : $('u-team').value, salesPerf: $('u-perf').value, extra: admin ? [] : [...extra].filter((p) => !base.includes(p)).sort() };
+    const next = { role, team: admin ? u.team : $('u-team').value, extra: admin ? [] : [...extra].filter((p) => !base.includes(p)).sort() };
+    const cls = {}; document.querySelectorAll('.u-cls').forEach((el) => { if (el.value !== ((u.classItems || {})[el.dataset.g] || '')) cls[el.dataset.g] = el.value; });
     const curExtra = (u.extra || []).filter((p) => !roleOf(u.role).perms.includes(p)).sort();
     const changes = [];
     if (next.role !== u.role) changes.push(`Role: ${roleOf(u.role).label} → <b>${esc(roleOf(role).label)}</b>`);
     if (next.team !== u.team) changes.push(`ทีม: ${esc(TEAM[u.team])} → <b>${esc(TEAM[next.team])}</b>`);
     if (next.extra.join() !== curExtra.join()) changes.push(`สิทธิ์เพิ่ม: ${permList(curExtra)} → <b>${permList(next.extra)}</b>`);
-    if (next.salesPerf !== (u.salesPerf || '')) changes.push(`Sales Performance: ${esc(u.salesPerf || '—')} → <b>${esc(next.salesPerf || '—')}</b>`);
+    Object.entries(cls).forEach(([g, v]) => { const grp = CLASSES.groups.find((x) => x.code === g) || { name: g }; const was = (u.classItems || {})[g]; changes.push(`${esc(grp.name)}: ${esc(was ? itemName(grp, was) : '—')} → <b>${esc(v ? itemName(grp, v) : '—')}</b>`); });
     if (!changes.length) { $('u-err').textContent = 'ยังไม่ได้เปลี่ยนอะไร'; return; }
     if ($('m-ok').dataset.step !== 'confirm') {
       $('m-ok').dataset.step = 'confirm'; $('m-ok').textContent = 'ยืนยันบันทึก'; $('m-cancel').textContent = '← กลับไปแก้';
@@ -121,16 +125,35 @@ async function openUser(email) {
     if (next.role !== u.role) body.role = next.role;
     if (next.team !== u.team) body.team = next.team;
     if (next.extra.join() !== curExtra.join()) body.extra = next.extra;
-    if (next.salesPerf !== (u.salesPerf || '')) body.salesPerf = next.salesPerf;
+    if (Object.keys(cls).length) body.classItems = cls;
     try { await api('/api/users', { method: 'PATCH', body: JSON.stringify({ email, ...body }) }); close(); await load(); const m = document.getElementById('m-' + email); if (m) m.insertAdjacentHTML('afterbegin', '<span class="ok">✓ บันทึกแล้ว </span>'); }
     catch (e) { $('u-err').textContent = e.message; }
     finally { $('m-ok').disabled = false; }
   };
 }
+const MODE_TH = { segment: 'ตามกลุ่มลูกค้า', seller: 'ตามเซล (รายคน)', off: 'ไม่ติด' };
+function renderClasses() {
+  const C = CLASSES;
+  $('cls').innerHTML = (C.live ? '' : `<p class="small warn">ยังอ่านจาก PEAK ไม่ได้ (${esc(C.error || 'PEAK_MODE = off')}) แสดงกติกาเดิมไว้ก่อน แก้ได้เมื่อเปิด PEAK API</p>`)
+    + `<table style="margin-top:8px"><thead><tr><th>กลุ่ม</th><th>ติดยังไง</th><th>รายการตามกลุ่มลูกค้า</th><th></th></tr></thead><tbody>${C.groups.map((g) => `<tr>
+      <td class="who"><b>${esc(g.name)}</b><br><span class="small">${esc(g.code)}${g.description ? ' · ' + esc(g.description) : ''}</span></td>
+      <td><select class="sel" id="cm-${esc(g.code)}" onchange="clsPaint('${esc(g.code)}')" ${C.live ? '' : 'disabled'}>${Object.entries(MODE_TH).map(([m, t]) => `<option value="${m}"${g.mode === m ? ' selected' : ''}>${t}</option>`).join('')}</select></td>
+      <td><div id="cs-${esc(g.code)}" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;min-width:420px">${C.segments.map((sg) => { const cur = g.segments[sg] || ''; return `<label class="small">${esc(sg)}<select class="sel" data-s="${esc(sg)}" ${C.live ? '' : 'disabled'}><option value="">— ไม่ติด —</option>${(g.items || []).map((i) => `<option value="${esc(i.code)}"${cur === i.code ? ' selected' : ''}>${esc(i.name)} · ${esc(i.code)}</option>`).join('')}${cur && !(g.items || []).some((i) => i.code === cur) ? `<option value="${esc(cur)}" selected>${esc(cur)} (ไม่มีใน PEAK แล้ว)</option>` : ''}</select></label>`; }).join('')}</div></td>
+      <td style="text-align:right">${C.live ? `<button class="btn btn-o btn-sm" type="button" onclick="clsSave('${esc(g.code)}')">บันทึก</button>` : ''}<div class="small" id="cmsg-${esc(g.code)}"></div></td></tr>`).join('')}</tbody></table>`;
+  C.groups.forEach((g) => clsPaint(g.code));
+}
+function clsPaint(code) { const m = $('cm-' + code).value; $('cs-' + code).style.display = m === 'segment' ? 'grid' : 'none'; }
+async function clsSave(code) {
+  const mode = $('cm-' + code).value, segments = {};
+  $('cs-' + code).querySelectorAll('select').forEach((el) => { if (el.value) segments[el.dataset.s] = el.value; });
+  $('cmsg-' + code).textContent = 'กำลังบันทึก…';
+  try { await api('/api/users', { method: 'PATCH', body: JSON.stringify({ action: 'classes', group: code, mode, segments }) }); await load(); $('cmsg-' + code).innerHTML = '<span class="ok">✓ บันทึกแล้ว</span>'; }
+  catch (e) { $('cmsg-' + code).textContent = e.message; }
+}
 async function load() {
   const d = await api('/api/users');
   $('chat-st').textContent = { ok: '✓ ตั้งค่าแล้ว', missing: '✗ ยังไม่ได้ตั้ง GCHAT_WEBHOOK_URL ใน Vercel (ของ environment นี้)', invalid: '✗ GCHAT_WEBHOOK_URL ไม่ใช่ลิงก์ webhook ของ Google Chat' }[d.chat] || d.chat;
-  PERF = d.salesPerf || []; ROLES = d.roles || []; PERMS = d.perms || {};
+  CLASSES = d.classes || { groups: [], segments: [] }; ROLES = d.roles || []; PERMS = d.perms || {}; renderClasses();
   const order = ROLES.map((r) => r.id);
   USERS = d.users.sort((a, b) => (b.fixedAdmin - a.fixedAdmin) || (order.indexOf(b.role) - order.indexOf(a.role)) || String(a.name).localeCompare(String(b.name)));
   renderMatrix(); render();

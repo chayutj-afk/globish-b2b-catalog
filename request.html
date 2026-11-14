@@ -1141,7 +1141,7 @@ function renderMine() {
       ${PEAK_LIVE && q.peakQtId && q.peakQtNo ? `<details class="qlive" ontoggle="if(this.open)liveQt('${esc(q.requestId)}')"><summary class="small" style="cursor:pointer;margin-top:6px">🔎 ดู QT ล่าสุดจาก PEAK</summary><div id="qlv-${esc(q.requestId)}" class="small">กำลังโหลด…</div></details>` : ''}
       ${mineIvs.length ? `<div class="inv-mini">${mineIvs.map((v) => `<div class="inv-mini-row"><span class="mono">${esc(v.ivRequestId)}</span><span>${esc(v.company)} · ${fmt(ivAmt(v).amt)}</span><span>${st(IV_ST, v.status)} ${st(ORIG_ST, v.originalStatus)}</span></div>`).join('')}</div>` : ''}
       ${q.status === 'rejected' && ME && q.requestedBy === ME.email && !replaced.has(q.requestId) ? `<div style="margin-top:8px"><button class="btn btn-p btn-sm" onclick="rebuildQT('${esc(q.requestId)}')">↻ สร้างคำขอใหม่จากข้อมูลเดิม</button></div>` : ''}
-      ${q.peakQtNo && QT_LIVE.includes(q.status) ? `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${qtLeft(q) > 0.01 ? `<button class="btn btn-o btn-sm" onclick="startInvFor('${esc(q.requestId)}')">🧾 ขอ INV จาก QT นี้</button>` : '<span class="st green">ขอ INV ครบยอดแล้ว</span>'}${mineIvs.some((v) => v.status !== 'rejected') ? '' : `<button class="btn btn-g btn-sm" onclick="askEdit('QT','${esc(q.peakQtNo)}','${esc(q.requestId)}')">✏️ ขอแก้ไข QT</button>`}</div><span id="qm-${esc(q.requestId)}"></span>` : ''}
+      ${q.peakQtNo && QT_LIVE.includes(q.status) ? (pendEdit('QT', q.peakQtNo) ? editNote(pendEdit('QT', q.peakQtNo)) : `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${qtLeft(q) > 0.01 ? `<button class="btn btn-o btn-sm" onclick="startInvFor('${esc(q.requestId)}')">🧾 ขอ INV จาก QT นี้</button>` : '<span class="st green">ขอ INV ครบยอดแล้ว</span>'}${mineIvs.some((v) => v.status !== 'rejected') ? '' : `<button class="btn btn-g btn-sm" onclick="askEdit('QT','${esc(q.peakQtNo)}','${esc(q.requestId)}')">✏️ ขอแก้ไข QT</button>`}</div>`) + `<span id="qm-${esc(q.requestId)}"></span>` : ''}
     </div>`;
   }).join('') : `<div class="empty">${allQ.length ? 'ไม่พบคำขอที่ตรงกับตัวกรอง' : 'ยังไม่มีคำขอใบเสนอราคา'}</div>`;
 
@@ -1157,7 +1157,7 @@ function renderMine() {
         ${canOrig && v.originalStatus !== 'requested' ? `<button class="btn btn-o btn-sm" onclick="openOrig('${esc(v.ivRequestId)}')">📮 ลูกค้าขอตัวจริง</button>` : ''}
         ${canOrig && v.originalStatus !== 'not_needed' ? `<button class="btn btn-g btn-sm" onclick="setOrig('${esc(v.ivRequestId)}','no')">ไม่ต้องส่งตัวจริง</button>` : ''}
         ${canPayNotice(v) ? `<button class="btn btn-o btn-sm" onclick="openPayNotice('${esc(v.ivRequestId)}')">💰 แจ้งบัญชีว่าลูกค้าจ่ายแล้ว</button>` : ''}
-        ${v.peakIvNo && v.status === 'iv_issued' && !(v.ar && (v.ar.rtNo || v.ar.paidDate)) && !RTS.some((r) => String(r.refDoc || '').toUpperCase() === String(v.peakIvNo).toUpperCase() && r.status !== 'rejected') ? `<button class="btn btn-g btn-sm" onclick="askEdit('INV','${esc(v.peakIvNo)}','${esc(v.ivRequestId)}')">✏️ ขอแก้ไข INV</button>` : ''}
+        ${v.peakIvNo && pendEdit('INV', v.peakIvNo) ? editNote(pendEdit('INV', v.peakIvNo)) : v.peakIvNo && v.status === 'iv_issued' && !(v.ar && (v.ar.rtNo || v.ar.paidDate)) && !RTS.some((r) => String(r.refDoc || '').toUpperCase() === String(v.peakIvNo).toUpperCase() && r.status !== 'rejected') ? `<button class="btn btn-g btn-sm" onclick="askEdit('INV','${esc(v.peakIvNo)}','${esc(v.ivRequestId)}')">✏️ ขอแก้ไข INV</button>` : ''}
       </div>
       <div id="orig-${esc(v.ivRequestId)}"></div>
     </div>`;
@@ -1238,7 +1238,11 @@ async function submitRT() {
     loadAll();
   } catch (e) { msg('r-msg', 'err', e.message); } finally { btn.disabled = false; }
 }
+// An edit request still waiting for accounting on this document (one at a time).
+function pendEdit(type, no) { return EDITS.find((e) => e.docType === type && String(e.docNo).toUpperCase() === String(no).toUpperCase() && e.status === 'new'); }
+function editNote(e) { return `<div class="pc-note warn" style="margin-top:8px">✏️ ขอแก้ไขแล้ว รอฝ่ายบัญชีแก้ใน PEAK: ${esc(e.detail)}<br><span class="small">${esc(e.editId)} · ${esc(e.createdAt)} ${e.docType === 'QT' ? ' · ระหว่างนี้ยังขอ INV จาก QT นี้ไม่ได้' : ''}</span></div>`; }
 async function askEdit(docType, docNo, refId) {
+  if (pendEdit(docType, docNo)) { alertMsg(`${docNo} มีคำขอแก้ไขที่รอฝ่ายบัญชีอยู่แล้ว`); return; }
   const company = (REQS.find((q) => q.requestId === refId) || IVS.find((v) => v.ivRequestId === refId) || {}).company || '';
   if (!(await ask({ title: `ขอแก้ไข ${docType} ${docNo}`, ok: 'ส่งคำขอแก้ไข', html: `<p>${esc(company)}</p><div class="fg"><label>ต้องการแก้อะไร *</label><textarea id="ed-detail" rows="4" maxlength="1500" style="width:100%" placeholder="เช่น เปลี่ยนจำนวนผู้เรียนจาก 12 เป็น 10 / แก้ชื่อบริษัทเป็น ... / เปลี่ยนที่อยู่"></textarea></div>` }))) return;
   const detail = (document.getElementById('ed-detail') || {}).value || '';

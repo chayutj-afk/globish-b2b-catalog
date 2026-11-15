@@ -305,7 +305,7 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
   }
   console.log('── 9c. Google Chat: rooms and tags');
   { const msgs = peak().chat || []; const main = msgs.filter((m) => m.room === 'MAIN').map((m) => m.text), fin = msgs.filter((m) => m.room === 'FIN').map((m) => m.text);
-    const has = (list, re) => list.some((t) => re.test(t));
+    const has = (list, re) => list.some((t) => re.test(t.replace(/\*/g, '').replace(/\n/g, ' · ')));
     ok(has(main, /↩️ ตีกลับคำขอ QT .*<users\/108000000000000000001>/s), 'QT sent back → main room, salesperson tagged');
     ok(has(main, /✅ QT QO-\d+ อนุมัติแล้ว .*<users\/108000000000000000001>/), 'QT approved → main room, salesperson tagged');
     ok(has(main, /✅ INV IV-\d+ ออกแล้ว .*<users\/108000000000000000001>/), 'INV issued → main room, salesperson tagged');
@@ -314,7 +314,7 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
     ok(has(main, /INV IV-\d+ ออกแล้ว · ซิสเม็กซ์ · kook · /) && !has(main, /<users\/>|<users\/undefined>|\u0001/), 'someone who has not signed in yet: plain name, no broken tag');
     await call(BENZ, 'POST', '/api/requests', qtBody({ company: '<users/all> จำกัด', items: [{ kind: 'service', code: '5136', qty: 9, unitPrice: 100 }] }));
     ok((peak().chat || []).some((m) => /users\/all  จำกัด/.test(m.text)) && !(peak().chat || []).some((m) => /<users\/all>/.test(m.text)), 'a tag typed into a company name is not turned into a real mention');
-    ok((peak().chat || []).every((m) => (m.text.split('\n').length <= 2 && m.text.length < 330) || /สุขภาพข้อมูล/.test(m.text)), 'every message is one line (+ a reason line), under 330 characters');
+    ok((peak().chat || []).every((m) => (m.text.split('\n').length <= 9 && m.text.length < 330 && !/ · /.test(m.text) && /^\*[^\n]+\*\n/.test(m.text)) || /สุขภาพข้อมูล/.test(m.text)), 'every message: bold head, one short part per line, no bullets');
     ok(!has(main, /👤 ผู้ใช้ใหม่|หยุดบันทึกแท็บ|อัปเดตไม่สำเร็จ|แนบไฟล์ .* ไม่สำเร็จ/), 'new-user and system alerts never go to the main room');
     ok(has(main, /📝 ขอ QT ใหม่ · .* · benz/), 'new QT request → main room');
     ok(!has(main, /Draft/) && !has(fin, /สร้าง Draft/), 'nothing is posted when a Draft is made in PEAK (only when it is approved)');

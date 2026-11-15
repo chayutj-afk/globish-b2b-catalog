@@ -52,11 +52,11 @@ test('already-invoiced amount ignores rejected requests', () => {
 test('column-layout guard: live headers match, moved column is caught', () => {
   const hub = require('../lib/hub');
   const live = ['Email', 'Name', 'Role (sales = Sales, lead = หัวหน้าเซล, op = บัญชี)', 'First login', 'Last login', 'Role changed by', 'Role changed at',
-    'Team (b2b / b2c / both, ว่าง = both · b2c ไม่เห็น Catalog)', 'PEAK Sales Performance (G014 code, from Lists!K)', 'Extra permissions (comma list)'];
+    'Team (b2b / b2c / both, ว่าง = both · b2c ไม่เห็น Catalog)', 'PEAK Sales Performance (G014 code, from Lists!K)', 'Extra permissions (comma list)', 'Google ID (for Chat mentions; filled at sign-in)'];
   assert.equal(hub.layoutProblem('Users', live), '');
   const moved = [...live]; moved.splice(2, 0, 'Phone');
   assert.match(hub.layoutProblem('Users', moved), /คอลัมน์ C/);
-  assert.match(hub.layoutProblem('Users', live.slice(0, 9)), /คอลัมน์ J/, 'missing last column');
+  assert.match(hub.layoutProblem('Users', live.slice(0, 10)), /คอลัมน์ K/, 'missing last column');
   assert.equal(hub.layoutProblem('Requests', require('../lib/headers').Requests.map((h) => h.replace('WHT %', 'WHT % (หัก ณ ที่จ่าย: 0 = ไม่หัก)'))), '');
   for (const t of Object.keys(hub.TABLES)) assert.equal(require('../lib/headers')[t].length, hub.TABLES[t].length, t);
 });

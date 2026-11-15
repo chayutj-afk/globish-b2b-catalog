@@ -27,6 +27,8 @@ function pick(list, q) {
 
 global.fetch = async (url, opts = {}) => {
   const u = new URL(String(url));
+  // Google Chat webhooks: keep what would have been posted, per room (space name in the URL).
+  if (u.hostname === 'chat.googleapis.com') { const s = load(); (s.chat = s.chat || []).push({ room: u.pathname.split('/')[3], text: JSON.parse(opts.body).text }); save(s); return json({}); }
   if (u.hostname !== 'api.peakaccount.com') return real(url, opts);
   const s = load(); s.calls = s.calls || [];
   const path = u.pathname.replace('/api/v1', ''); const q = Object.fromEntries(u.searchParams);

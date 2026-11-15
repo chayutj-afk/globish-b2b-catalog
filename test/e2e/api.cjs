@@ -303,6 +303,23 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
     const rs = await Promise.all([call(ACCT, 'GET', '/api/invoice-requests?view=pay-methods'), call(ACCT, 'GET', '/api/invoice-requests?view=pay-methods'), call(BENZ, 'GET', '/api/contacts?taxId=0105555555554'), call(BENZ, 'GET', '/api/requests?view=classes'), call(ACCT, 'GET', '/api/requests?view=qt-live&id=LEGACY-QO-20261100020')]);
     ok(rs.every((x) => x[0] === 200), `round ${round + 1}: 5 requests at once after the token was replaced → ${rs.map((x) => x[0]).join(',')}` + (rs.find((x) => x[0] !== 200) ? ' ' + (rs.find((x) => x[0] !== 200)[1].error || '') : ''));
   }
+  console.log('── 9c. Google Chat: rooms and tags');
+  { const msgs = peak().chat || []; const main = msgs.filter((m) => m.room === 'MAIN').map((m) => m.text), fin = msgs.filter((m) => m.room === 'FIN').map((m) => m.text);
+    const has = (list, re) => list.some((t) => re.test(t));
+    ok(has(main, /↩️ ตีกลับคำขอ QT .*<users\/108000000000000000001>/s), 'QT sent back → main room, salesperson tagged');
+    ok(has(main, /✅ QT QO-\d+ อนุมัติแล้ว .*<users\/108000000000000000001>/), 'QT approved → main room, salesperson tagged');
+    ok(has(main, /✅ ออก INV IV-\d+ แล้ว .*<users\/108000000000000000001>/), 'INV issued → main room, salesperson tagged');
+    ok(has(main, /✅ ยืนยันเงินเข้า .*<users\/108000000000000000001>/), 'payment confirmed → tagged');
+    ok(has(main, /🧾 ออกใบเสร็จ .*<users\/108000000000000000001>/), 'receipt issued → tagged');
+    ok(has(main, /ออก INV IV-\d+ แล้ว · ซิสเม็กซ์ · kook$/) && !has(main, /<users\/>|<users\/undefined>|\u0001/), 'someone who has not signed in yet: plain name, no broken tag');
+    await call(BEE, 'POST', '/api/invoice-requests', { action: 'edit', docType: 'QT', docNo: req(q3).peakQtNo, refId: q3, company: 'x', detail: '<users/all> ทดสอบ tag ปลอม' });
+    ok((peak().chat || []).some((m) => /‹users\/all> ทดสอบ/.test(m.text)) && !(peak().chat || []).some((m) => /<users\/all>/.test(m.text)), 'a tag typed into a note is not turned into a real mention');
+    ok(!has(main, /👤 ผู้ใช้ใหม่|หยุดบันทึกแท็บ|อัปเดตไม่สำเร็จ|แนบไฟล์ .* ไม่สำเร็จ/), 'new-user and system alerts never go to the main room');
+    console.log(`   main room ${main.length} messages · finance room ${fin.length}`); }
+  { // a new person signs in → finance room
+    process.env.HUB_MODE = 'mock'; process.env.HUB_MOCK_FILE = '/tmp/sales-desk-e2e/db.json';
+    const r = await fetch('http://localhost:3950/api/users?view=health-cron', { headers: { Authorization: 'Bearer cron123' } }); ok(r.status === 200, 'daily health digest runs');
+    const fin = (peak().chat || []).filter((m) => m.room === 'FIN').map((m) => m.text); ok(fin.some((t) => /สุขภาพข้อมูล/.test(t)), 'health digest → finance room'); }
   console.log('── 10. webhook with only an id (partial payload) and number reuse');
   [s, j] = await call(BENZ, 'POST', '/api/requests', qtBody({ items: [{ kind: 'service', code: '5136', qty: 7, unitPrice: 15900 }] })); const q9 = j.requestId;
   await call(ACCT, 'PATCH', '/api/requests', { requestId: q9, action: 'approve' }); const r9 = req(q9);

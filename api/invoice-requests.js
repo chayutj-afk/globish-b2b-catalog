@@ -316,7 +316,7 @@ async function update(req, res, user) {
     const trackingNo = text(b.trackingNo, 60);
     await hub.writeChecked('InvoiceRequests', 'ivRequestId', row, { originalStatus: 'sent', originalSentAt: at, trackingNo, updatedAt: at });
     await hub.log('catalog', 'original_sent', id, `${user.email}${trackingNo ? ' · ' + trackingNo : ''}`);
-    await notify.chat(`✅ ส่งเอกสารตัวจริงแล้ว ${id} · ${row.company}${trackingNo ? ' · เลขพัสดุ ' + trackingNo : ''} (แจ้ง ${row.salesName || row.requestedBy})`);
+    await notify.chat(`✅ ส่งเอกสารตัวจริงแล้ว ${id} · ${row.company}${trackingNo ? ' · เลขพัสดุ ' + trackingNo : ''} · ${await notify.at(row.requestedBy, row.salesName)}`);
     return res.status(200).json({ ok: true, originalStatus: 'sent' });
   }
 
@@ -371,6 +371,7 @@ async function update(req, res, user) {
     if (b.action === 'reject') {
       if (!note) throw bad('ใส่เหตุผลที่ตีกลับ');
       await hub.writeChecked('InvoiceRequests', 'ivRequestId', row, { status: 'rejected', accountNote: `${note} — ${user.name || user.email}`, updatedAt: at });
+      await notify.chat(`↩️ ตีกลับคำขอ INV ${id} · ${row.company} · QT ${row.qtNo} · ${await notify.at(row.requestedBy, row.salesName)}\nเหตุผล: ${note}`).catch(() => {});
     } else if (b.action === 'reopen') {
       await hub.writeChecked('InvoiceRequests', 'ivRequestId', row, { status: 'new', updatedAt: at });
     } else {
@@ -406,7 +407,7 @@ async function attachToPeak(kind, transactionId, file, label) { // kind: quotati
     return 'attached';
   } catch (e) {
     await Promise.all([hub.log('catalog', 'peak_attach_failed', label, String(e.message).slice(0, 200)).catch(() => {}),
-      notify.chat(`⚠️ แนบไฟล์ ${label} เข้า PEAK ไม่สำเร็จ (${String(e.message).slice(0, 80)}) แนบเองใน PEAK`).catch(() => {})]);
+      notify.finance(`⚠️ แนบไฟล์ ${label} เข้า PEAK ไม่สำเร็จ (${String(e.message).slice(0, 80)}) แนบเองใน PEAK`).catch(() => {})]);
     return 'failed';
   }
 }
@@ -429,6 +430,7 @@ async function issueInv(row, { ivNo, link, issueDate, note, peakIvId }, opts = {
     if (peakIvId) a.peakIvId = peakIvId;
     await hub.appendRows('Invoices', [a]);
   }
+  if (row.status !== 'iv_issued') await notify.chat(`✅ ออก INV ${ivNo} แล้ว · ${row.company} · ${await notify.at(row.requestedBy, row.salesName)}`).catch(() => {});
 }
 
 // ---------------------------------------------------------------- AR (debt follow-up)
@@ -686,7 +688,7 @@ async function updatePayNotice(req, res, user) {
     if (!note) throw bad('ใส่เหตุผล เช่น ยังไม่เห็นเงินเข้าบัญชี');
     await hub.updateRow('PaymentNotices', row._row, { status: 'rejected', accountNote: note, doneBy: who, updatedAt: at });
     await Promise.all([hub.log('catalog', 'pay_reject', row.noticeId, `${user.email} · ${note}`),
-      notify.chat(`↩️ ยังไม่ยืนยันเงินเข้า ${row.ivNo} · ${row.company} (แจ้งโดย ${row.salesName || row.requestedBy})\nเหตุผล: ${note}`)]);
+      notify.chat(`↩️ ยังไม่ยืนยันเงินเข้า ${row.ivNo} · ${row.company} · ${await notify.at(row.requestedBy, row.salesName)}\nเหตุผล: ${note}`)]);
     return res.status(200).json({ ok: true });
   }
   if (b.action !== 'pay_confirm') throw bad('คำสั่งไม่ถูกต้อง');
@@ -710,7 +712,7 @@ async function updatePayNotice(req, res, user) {
     if (slipFile) await attachToPeak('invoice', a.peakIvId, slipFile, `PAYMENT_${row.ivNo}`);
   }
   await Promise.all([hub.log('catalog', 'pay_confirm', row.noticeId, `${user.email} · ${row.ivNo} · ${amount}`),
-    notify.chat(`✅ ยืนยันเงินเข้า ${row.ivNo} · ${row.company} ${money(amount)} (แจ้งโดย ${row.salesName || row.requestedBy}) · รอออกใบเสร็จ`)]);
+    notify.chat(`✅ ยืนยันเงินเข้า ${row.ivNo} · ${row.company} ${money(amount)} · ${await notify.at(row.requestedBy, row.salesName)} · รอออกใบเสร็จ`)]);
   res.status(200).json({ ok: true });
 }
 
@@ -725,7 +727,7 @@ async function paidDirectly(row, f, slip, user, d = {}) {
   await hub.appendRows('PaymentNotices', [{ noticeId: shortId('PAY'), createdAt: at, requestedBy: user.email, salesName: who, ivRequestId: row.ivRequestId || '', ivNo,
     company: row.company, paidDate: f.paidDate, amount: f.paidAmount || row.paidAmount, paymentMethod: f.paymentMethod || row.paymentMethod, slipLink: slip,
     deliveryChannel: d.deliveryChannel || '', email: d.email || '', deliveryAddress: d.deliveryAddress || '', note: d.note || '', status: 'confirmed', source: 'accounting', accountNote: 'ลูกค้าแจ้งฝ่ายบัญชีโดยตรง', doneBy: who, updatedAt: at }]);
-  await notify.chat(`💰 ลูกค้าจ่ายแล้ว ${ivNo} · ${row.company} ${money(f.paidAmount || row.paidAmount)} (บัญชีบันทึก${row.salesName ? ` · แจ้ง ${row.salesName}` : ''}) · รอออกใบเสร็จ`);
+  await notify.chat(`💰 ลูกค้าจ่ายแล้ว ${ivNo} · ${row.company} ${money(f.paidAmount || row.paidAmount)} (บัญชีบันทึก)${row.salesEmail ? ' · ' + await notify.at(row.salesEmail, row.salesName) : ''} · รอออกใบเสร็จ`);
 }
 
 async function listPayNotices(req, res, user) {
@@ -837,7 +839,7 @@ async function rtFromInv(req, res, user) {
     paidDate: a.paidDate, paymentProof: '', deliveryChannel: RT_CHANNEL[ch], docLang: 'TH', note: `ออกจาก INV ${ivNo}`, status: 'issued', peakRtNo: no, peakDocLink: link,
     sentStatus: sent ? 'sent' : 'waiting', sentAt: sent ? at : '', trackingNo: '', accountNote: `ออกใบเสร็จจาก INV — ${user.name || user.email}`, updatedAt: at }]);
   await hub.updateRow('Invoices', a._row, { rtNo: no });
-  await Promise.all([hub.log('catalog', 'rt_from_inv', ivNo, `${user.email} · ${no}`), notify.chat(`🧾 ออกใบเสร็จ ${no} จาก ${ivNo} · ${a.company}${sent ? '' : ' · รอส่งตัวจริง'}`)]);
+  await Promise.all([hub.log('catalog', 'rt_from_inv', ivNo, `${user.email} · ${no}`), notify.chat(`🧾 ออกใบเสร็จ ${no} จาก ${ivNo} · ${a.company}${sent ? '' : ' · รอส่งตัวจริง'}${a.salesEmail ? ' · ' + await notify.at(a.salesEmail, a.salesName) : ''}`)]);
   res.status(200).json({ ok: true, rtRequestId: id });
 }
 
@@ -914,7 +916,7 @@ async function finishRt(row, d, who, opts = {}) {
   const invs = await hub.readTable('Invoices');
   const a = invs.find((x) => String(x.ivNo).toUpperCase() === String(row.refDoc).toUpperCase());
   if (a && !a.rtNo) await hub.updateRow('Invoices', a._row, { rtNo: f.peakRtNo });
-  await notify.chat(`🧾 ออกใบเสร็จ ${f.peakRtNo} จาก ${row.refDoc} · ${row.billName}${sent ? '' : ' · รอส่งตัวจริง'}`);
+  await notify.chat(`🧾 ออกใบเสร็จ ${f.peakRtNo} จาก ${row.refDoc} · ${row.billName}${sent ? '' : ' · รอส่งตัวจริง'} · ${await notify.at(row.requestedBy, row.salesName)}`);
 }
 
 async function updateReceipt(req, res, user) {
@@ -960,8 +962,9 @@ async function updateReceipt(req, res, user) {
     if (row.sentStatus === 'sent') throw bad('บันทึกว่าส่งแล้ว', 409);
     await hub.updateRow('ReceiptRequests', row._row, { sentStatus: 'sent', sentAt: at, trackingNo: text(b.trackingNo, 60), updatedAt: at });
   } else throw bad('คำสั่งไม่ถูกต้อง');
-  const tell = { rt_issued: () => `🧾 ออกใบเสร็จแล้ว ${text(b.peakRtNo, 40).toUpperCase()} · ${row.billName} (คำขอ ${row.rtRequestId} ของ ${row.salesName || row.requestedBy})`,
-    rt_reject: () => `↩️ ตีกลับคำขอใบเสร็จ ${row.rtRequestId} · ${row.billName} (ของ ${row.salesName || row.requestedBy})\nเหตุผล: ${note}` }[b.action];
+  const owner = ['rt_issued', 'rt_reject'].includes(b.action) ? await notify.at(row.requestedBy, row.salesName) : '';
+  const tell = { rt_issued: () => `🧾 ออกใบเสร็จแล้ว ${text(b.peakRtNo, 40).toUpperCase()} · ${row.billName} (คำขอ ${row.rtRequestId}) · ${owner}`,
+    rt_reject: () => `↩️ ตีกลับคำขอใบเสร็จ ${row.rtRequestId} · ${row.billName} · ${owner}\nเหตุผล: ${note}` }[b.action];
   await Promise.all([hub.log('catalog', b.action, row.rtRequestId, `${user.email}${note ? ' · ' + note : ''}`), tell ? notify.chat(tell()) : null]);
   res.status(200).json({ ok: true });
 }
@@ -1087,7 +1090,7 @@ async function updateEdit(req, res, user) {
   }
   await hub.writeChecked('EditRequests', 'editId', row, { status: b.action === 'edit_done' ? 'done' : 'rejected', accountNote: note, newDocNo: newNo, doneBy: who, updatedAt: at });
   await Promise.all([hub.log('catalog', b.action, row.editId, `${user.email} · ${row.docNo}`),
-    notify.chat(b.action === 'edit_done' ? `✅ แก้ ${row.docType} ${row.docNo}${newNo ? ' → ' + newNo : ''} แล้ว · ${row.company} (คำขอของ ${row.salesName || row.requestedBy})` : `↩️ ตีกลับคำขอแก้ ${row.docType} ${row.docNo} · ${row.company} (ของ ${row.salesName || row.requestedBy})\nเหตุผล: ${note}`)]);
+    notify.chat(b.action === 'edit_done' ? `✅ แก้ ${row.docType} ${row.docNo}${newNo ? ' → ' + newNo : ''} แล้ว · ${row.company} · ${await notify.at(row.requestedBy, row.salesName)}` : `↩️ ตีกลับคำขอแก้ ${row.docType} ${row.docNo} · ${row.company} · ${await notify.at(row.requestedBy, row.salesName)}\nเหตุผล: ${note}`)]);
   res.status(200).json({ ok: true });
 }
 

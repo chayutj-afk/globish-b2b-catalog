@@ -29,7 +29,7 @@ module.exports = async function handler(req, res) {
     try { next = Buffer.from(nextB64 || '', 'base64url').toString('utf8') || '/'; } catch { next = '/'; }
     if (!next.startsWith('/') || next.startsWith('//')) next = '/';
     const { header } = issue(p.email, p.name);
-    await users.touch(p.email, p.name); // record the sign-in (new users start as Sales)
+    await users.touch(p.email, p.name, p.sub); // record the sign-in (a new person waits for an admin); sub = Google id, used to tag in Chat
     return back(res, next, [clearState, header]);
   } catch (e) {
     console.error(e);

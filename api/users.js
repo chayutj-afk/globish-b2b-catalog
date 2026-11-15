@@ -47,7 +47,7 @@ module.exports = async function handler(req, res) {
       const health = require('../lib/health');
       const h = await health.collect();
       const text = health.digest(h);
-      const sent = text ? await require('../lib/notify').send(text) : { ok: true, skipped: 'all ok' };
+      const sent = text ? await require('../lib/notify').send(text, { room: 'finance' }) : { ok: true, skipped: 'all ok' };
       return res.status(200).json({ ok: true, bad: h.bad, warn: h.warn, sent });
     }
     // PEAK webhook (no login; checked by its x-api-key header). See lib/peakhook.js.
@@ -64,14 +64,17 @@ module.exports = async function handler(req, res) {
       const list = await users.list();
       const classes = await classView(list);
       for (const u of list) u.classItems = Object.fromEntries(Object.entries(classes.rules).filter(([, r]) => r.mode === 'seller').map(([g, r]) => [g, r.users[u.email.toLowerCase()] || '']));
-      return res.status(200).json({ ok: true, users: list, classes: { live: classes.live, error: classes.error, groups: classes.groups, segments: classes.segments, types: classes.types }, chat: require('../lib/notify').configured(), roles: users.ROLES.map((r) => ({ id: r, label: users.ROLE_LABEL[r], perms: users.ROLE_PERMS[r] })), perms: users.PERMS });
+      return res.status(200).json({ ok: true, users: list, classes: { live: classes.live, error: classes.error, groups: classes.groups, segments: classes.segments, types: classes.types }, chat: require('../lib/notify').configured(), chatFinance: require('../lib/notify').configured('finance'), roles: users.ROLES.map((r) => ({ id: r, label: users.ROLE_LABEL[r], perms: users.ROLE_PERMS[r] })), perms: users.PERMS });
     }
     if (req.method === 'PATCH') {
       checkOrigin(req);
       const b = req.body || {};
       if (b.action === 'test_chat') {
-        const r = await require('../lib/notify').send(`✅ ทดสอบการแจ้งเตือนจาก Globish Sales Desk โดย ${me.name || me.email}`);
-        return res.status(200).json({ ok: true, chat: r });
+        const n = require('../lib/notify');
+        const r = await n.send(`✅ ทดสอบการแจ้งเตือนจาก Globish Sales Desk โดย ${me.name || me.email} · ${await n.at(me.email, me.name)}`);
+        // The finance room gets its own test line only when it has its own webhook.
+        const f = n.configured('finance') === 'ok' ? await n.send(`✅ ทดสอบห้อง Finance (ผู้ใช้ใหม่รอเปิดสิทธิ์ + ปัญหาระบบ) โดย ${me.name || me.email}`, { room: 'finance' }) : null;
+        return res.status(200).json({ ok: true, chat: r, finance: f });
       }
       if (b.action === 'test_peak') {
         const r = await require('../lib/peak').testConnection(String(b.taxId || '').replace(/\D/g, '').slice(0, 13));

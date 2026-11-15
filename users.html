@@ -322,6 +322,7 @@ async function clsSave(code) {
 async function load() {
   const d = await api('/api/users');
   $('chat-st').textContent = { ok: '✓ ตั้งค่าแล้ว', missing: '✗ ยังไม่ได้ตั้ง GCHAT_WEBHOOK_URL ใน Vercel (ของ environment นี้)', invalid: '✗ GCHAT_WEBHOOK_URL ไม่ใช่ลิงก์ webhook ของ Google Chat' }[d.chat] || d.chat;
+  $('chat-st').textContent = 'ห้องหลัก ' + $('chat-st').textContent + ' · ห้อง Finance ' + ({ ok: '✓ ตั้งค่าแล้ว', missing: '— ยังไม่ได้ตั้ง GCHAT_FINANCE_WEBHOOK_URL (ตอนนี้ส่งเข้าห้องหลักแทน)', invalid: '✗ GCHAT_FINANCE_WEBHOOK_URL ไม่ใช่ลิงก์ webhook ของ Google Chat (ส่งเข้าห้องหลักแทน)' }[d.chatFinance] || '');
   CLASSES = d.classes || { groups: [], segments: [] }; ROLES = d.roles || []; PERMS = d.perms || {}; renderClasses();
   const order = ROLES.map((r) => r.id);
   USERS = d.users.sort((a, b) => ((b.role === 'pending') - (a.role === 'pending')) || (b.fixedAdmin - a.fixedAdmin) || (order.indexOf(b.role) - order.indexOf(a.role)) || String(a.name).localeCompare(String(b.name)));

@@ -6,7 +6,7 @@ const hub = require('../../lib/hub');
   await hub.appendRows('Users', [
     { email: 'bee@globish.co.th', name: 'Siraprapa (Bee)', role: 'sales', team: 'b2b', salesPerf: 'B2B-S001' },
     { email: 'kook@globish.co.th', name: 'Kawinthida (Kookkai)', role: 'sales', team: 'b2b', salesPerf: 'B2B-S002' },
-    { email: 'benz@globish.co.th', name: 'Chattraya (Benz)', role: 'sales', team: 'b2c', salesPerf: 'B2C-S003' },
+    { email: 'benz@globish.co.th', name: 'Chattraya (Benz)', role: 'sales', team: 'b2c', salesPerf: 'B2C-S003', googleId: '108000000000000000001' },
     { email: 'lead@globish.co.th', name: 'Lead B2B', role: 'lead', team: 'b2b' },
     { email: 'leadc@globish.co.th', name: 'Lead B2C', role: 'lead', team: 'b2c' },
     { email: 'leadall@globish.co.th', name: 'Lead All', role: 'lead', team: 'both' },

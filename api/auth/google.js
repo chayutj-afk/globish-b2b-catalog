@@ -5,7 +5,11 @@ const { authUrl } = require('../../lib/oauth');
 
 function safeNext(v) {
   const s = String(v || '/');
-  return s.startsWith('/') && !s.startsWith('//') ? s.slice(0, 200) : '/';
+  if (!s.startsWith('/') || s.startsWith('//')) return '/';
+  // The catalog is never the landing page: a sign-in that started there (an old bookmark from when the site
+  // was only the catalog, or a session that ended on that tab) opens the home page.
+  if (/^\/(catalog|2026B2BStandardCatalog\.html)([/?#]|$)/i.test(s)) return '/';
+  return s.slice(0, 200);
 }
 
 module.exports = async function handler(req, res) {

@@ -73,3 +73,16 @@ test('middleware verifier accepts Node-signed cookies', async () => {
   assert.equal((await verifySession(token, process.env.AUTH_SECRET, 'globish.co.th')).email, 'a@globish.co.th');
   assert.equal(await verifySession(token + 'x', process.env.AUTH_SECRET, 'globish.co.th'), null);
 });
+
+test('after sign-in: the catalog is never the landing page; other pages and their #tab are kept', () => {
+  const src = require('fs').readFileSync(require('path').join(__dirname, '../api/auth/google.js'), 'utf8');
+  const safeNext = new Function(src.slice(src.indexOf('function safeNext'), src.indexOf('module.exports')) + '; return safeNext;')();
+  assert.equal(safeNext('/catalog'), '/');
+  assert.equal(safeNext('/catalog?return=request'), '/');
+  assert.equal(safeNext('/2026B2BStandardCatalog.html'), '/');
+  assert.equal(safeNext('/request#mine'), '/request#mine');
+  assert.equal(safeNext('/ar'), '/ar');
+  assert.equal(safeNext(undefined), '/');
+  assert.equal(safeNext('//evil.example'), '/');
+  assert.equal(safeNext('https://evil.example'), '/');
+});

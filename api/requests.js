@@ -208,10 +208,8 @@ async function create(req, res, user) {
     discount: l.discount, listPrice: l.listPrice, salesNote: l.salesNote || '', qtDescription: '', freebie: l.freebie || '',
   })));
   await hub.log('catalog', 'request_created', request.requestId, `${user.email} · ${r.company} · ${total}${incl ? ` (incl. VAT ${totalInclVat})` : ''}${belowFloor ? ' · below catalog floor: ' + belowFloor : ''}`);
-  const fmt = (n) => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
-  await require('../lib/notify').chat([`📝 ขอ QT ใหม่ ${request.requestId} จาก ${user.name || user.email}`,
-    `${request.segment || ''} · ${r.company} · ${incl ? 'รวม VAT ' + fmt(totalInclVat) : 'ก่อน VAT ' + fmt(total)} บาท · ${lines.length} รายการ`,
-    belowFloor ? '⚠️ ราคาต่ำกว่า Catalog' : ''].filter(Boolean).join('\n')).catch(() => {});
+  { const n = require('../lib/notify'); const fmt = (x) => Number(x || 0).toLocaleString('en-US', { maximumFractionDigits: 0 });
+    await n.chat(`📝 ขอ QT ใหม่ · ${n.co(r.company)} · ${fmt(incl ? totalInclVat : total)} บาท · ${user.name || user.email}${belowFloor ? ' · ⚠️ ต่ำกว่า Catalog' : ''} · ${n.link('pend')}`).catch(() => {}); }
 
   res.status(200).json({ ok: true, requestId: request.requestId, status: request.status, peakQtNo: request.peakQtNo, total, totalInclVat, vatMode: request.vatMode, catalogTotal, belowFloor, lines: lines.length, message: peakNote });
 }
@@ -362,8 +360,8 @@ async function update(req, res, user) {
   await hub.log('catalog', `qt_${b.action}`, row.requestId, `${user.email}${note ? ' · ' + note : ''}`);
   // Tell the salesperson (tagged) when the request is sent back, or the QT is approved and ready to send out.
   const notify = require('../lib/notify');
-  if (b.action === 'reject') await notify.chat(`↩️ ตีกลับคำขอ QT ${row.requestId} · ${row.company} · ${await notify.at(row.requestedBy, row.salesName)}\nเหตุผล: ${note}`).catch(() => {});
-  if (b.action === 'qt_approved') await notify.chat(`✅ QT ${row.peakQtNo} อนุมัติแล้ว · ${row.company} · ${await notify.at(row.requestedBy, row.salesName)} ส่งให้ลูกค้าได้`).catch(() => {});
+  if (b.action === 'reject') await notify.chat(`↩️ ตีกลับคำขอ QT · ${notify.co(row.company)} · ${await notify.at(row.requestedBy, row.salesName)} · ${notify.link('mine')}\nเหตุผล: ${notify.why(note)}`).catch(() => {});
+  if (b.action === 'qt_approved') await notify.chat(`✅ QT ${row.peakQtNo} อนุมัติแล้ว ใช้ได้เลย · ${notify.co(row.company)} · ${await notify.at(row.requestedBy, row.salesName)} · ${notify.link('mine')}`).catch(() => {});
   if (!makeNow) return res.status(200).json({ ok: true, status });
 
   const merged = { ...row, ...fields };

@@ -208,6 +208,10 @@ async function create(req, res, user) {
     discount: l.discount, listPrice: l.listPrice, salesNote: l.salesNote || '', qtDescription: '', freebie: l.freebie || '',
   })));
   await hub.log('catalog', 'request_created', request.requestId, `${user.email} · ${r.company} · ${total}${incl ? ` (incl. VAT ${totalInclVat})` : ''}${belowFloor ? ' · below catalog floor: ' + belowFloor : ''}`);
+  const fmt = (n) => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
+  await require('../lib/notify').chat([`📝 ขอ QT ใหม่ ${request.requestId} จาก ${user.name || user.email}`,
+    `${request.segment || ''} · ${r.company} · ${incl ? 'รวม VAT ' + fmt(totalInclVat) : 'ก่อน VAT ' + fmt(total)} บาท · ${lines.length} รายการ`,
+    belowFloor ? '⚠️ ราคาต่ำกว่า Catalog' : ''].filter(Boolean).join('\n')).catch(() => {});
 
   res.status(200).json({ ok: true, requestId: request.requestId, status: request.status, peakQtNo: request.peakQtNo, total, totalInclVat, vatMode: request.vatMode, catalogTotal, belowFloor, lines: lines.length, message: peakNote });
 }
@@ -359,6 +363,7 @@ async function update(req, res, user) {
   // Tell the salesperson (tagged) when the request is sent back, or the QT is approved and ready to send out.
   const notify = require('../lib/notify');
   if (b.action === 'reject') await notify.chat(`↩️ ตีกลับคำขอ QT ${row.requestId} · ${row.company} · ${await notify.at(row.requestedBy, row.salesName)}\nเหตุผล: ${note}`).catch(() => {});
+  if (b.action === 'approve' && !makeNow) await notify.chat(`👍 บัญชีอนุมัติคำขอ QT ${row.requestId} · ${row.company} · ${await notify.at(row.requestedBy, row.salesName)} รอสร้าง QT ใน PEAK`).catch(() => {});
   if (b.action === 'qt_approved') await notify.chat(`✅ QT ${row.peakQtNo} อนุมัติแล้ว · ${row.company} · ${await notify.at(row.requestedBy, row.salesName)} ส่งให้ลูกค้าได้`).catch(() => {});
   if (!makeNow) return res.status(200).json({ ok: true, status });
 
@@ -379,6 +384,12 @@ async function update(req, res, user) {
   out.updatedAt = hub.sheetDateTime();
   await hub.updateRow('Requests', row._row, out);
   await hub.log('peak', `qt_live_${out.status}`, row.requestId, out.peakQtNo || out.peakNote.slice(0, 200));
+  // Accounting approved the request: tell the salesperson what happened in PEAK.
+  if (b.action === 'approve') {
+    const who2 = await notify.at(row.requestedBy, row.salesName);
+    await notify.chat(out.status === 'qt_draft' ? `👍 บัญชีอนุมัติคำขอ QT ${row.requestId} · ${row.company} · สร้าง Draft ${out.peakQtNo} ใน PEAK แล้ว รอบัญชีอนุมัติใน PEAK · ${who2}`
+      : `👍 บัญชีอนุมัติคำขอ QT ${row.requestId} · ${row.company} · ยังสร้าง QT ใน PEAK ไม่ได้ บัญชีกำลังตรวจ · ${who2}`).catch(() => {});
+  }
   res.status(200).json({ ok: true, status: out.status, peakQtNo: out.peakQtNo || '', message: out.peakNote });
 }
 

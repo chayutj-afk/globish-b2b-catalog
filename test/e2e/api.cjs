@@ -315,6 +315,11 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
     await call(BEE, 'POST', '/api/invoice-requests', { action: 'edit', docType: 'QT', docNo: req(q3).peakQtNo, refId: q3, company: 'x', detail: '<users/all> ทดสอบ tag ปลอม' });
     ok((peak().chat || []).some((m) => /‹users\/all> ทดสอบ/.test(m.text)) && !(peak().chat || []).some((m) => /<users\/all>/.test(m.text)), 'a tag typed into a note is not turned into a real mention');
     ok(!has(main, /👤 ผู้ใช้ใหม่|หยุดบันทึกแท็บ|อัปเดตไม่สำเร็จ|แนบไฟล์ .* ไม่สำเร็จ/), 'new-user and system alerts never go to the main room');
+    ok(has(main, /📝 ขอ QT ใหม่ REQ-.* จาก benz/), 'new QT request → main room');
+    ok(has(main, /👍 บัญชีอนุมัติคำขอ QT .*สร้าง Draft QO-\d+ ใน PEAK แล้ว.*<users\/108000000000000000001>/), 'QT request approved (Draft made) → main room, tagged');
+    ok(has(main, /👍 บัญชีอนุมัติคำขอ QT .*ยังสร้าง QT ใน PEAK ไม่ได้/), 'approved but PEAK could not make it → said so');
+    ok(has(fin, /QT QO-\d+ .*ถูกแก้ไขใน PEAK/) && has(fin, /INV IV-\d+ .*ถูกแก้ใน PEAK/) && has(fin, /INV IV-\d+ .*ถูก void ใน PEAK/) && has(fin, /ใบเสร็จ RT-\d+ ถูก void/) && has(fin, /ลูกค้าจ่ายแล้ว .*บันทึกใน PEAK/), 'edits / voids / payments made in PEAK → finance room');
+    ok(!has(main, /ถูกแก้ไขใน PEAK|ถูกแก้ใน PEAK|ถูก void ใน PEAK|บันทึกใน PEAK\)/), '…and not the main room');
     console.log(`   main room ${main.length} messages · finance room ${fin.length}`); }
   { // a new person signs in → finance room
     process.env.HUB_MODE = 'mock'; process.env.HUB_MOCK_FILE = '/tmp/sales-desk-e2e/db.json';

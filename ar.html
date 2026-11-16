@@ -47,6 +47,10 @@ table.sum tr.tot td{font-weight:500;color:var(--head)}
 .acts{display:flex;gap:8px;flex-wrap:wrap;padding:12px 0}
 #ov-load{z-index:1100}
 .filters select.sel{width:auto;min-width:140px}.filters .search{flex:1;min-width:200px}
+#topf{margin-bottom:14px}#f-clear[hidden],#g-old[hidden]{display:none}#topf .lbl{font-size:13px;color:var(--muted)}#topf .search{max-width:420px}
+.states{display:flex;gap:8px 12px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.states .seg{margin-bottom:0;border-radius:14px}.states .seg button{white-space:nowrap}
+.states .seg.oldg{align-items:center}.states .seg.oldg .lbl{font-size:12px;color:var(--muted);padding:0 4px 0 10px;white-space:nowrap}
 .pn{border:1px solid var(--line2);border-radius:10px;padding:12px 14px;margin-top:10px;background:var(--panel)}
 .pn-top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.pn-amt{text-align:right}.pn-amt b{font-size:18px;color:var(--head)}
 .pn-act{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
@@ -83,6 +87,13 @@ table.sum tr.now td{background:var(--primary-soft)}
 <script src="/shell.js"></script>
 <main>
   <div id="msg"></div>
+  <div class="filters" id="topf">
+    <span class="lbl">ตัวกรอง</span>
+    <select class="sel" id="f-seg" aria-label="กลุ่มลูกค้า"><option value="">ทุกกลุ่ม</option></select>
+    <select class="sel" id="f-sales" aria-label="เซล"><option value="">ทุกเซล</option></select>
+    <input type="search" class="search" id="f-q" aria-label="ค้นหา" placeholder="ค้นหา บริษัท / เลข INV / QT / เลขภาษี">
+    <button class="btn btn-g btn-sm" type="button" id="f-clear" hidden>ล้างตัวกรอง</button>
+  </div>
   <div class="stats">
     <div class="stat go" role="button" tabindex="0" data-kpi="open" title="ดูรายชื่อบริษัท"><div class="k">ยอดค้างรับ INV ปี 2026 เป็นต้นไป (รวม VAT หัก WHT)</div><div class="v" id="s-open">–</div><div class="s" id="s-open-n"></div></div>
     <div class="stat go" role="button" tabindex="0" data-kpi="over" title="ดูรายชื่อบริษัท"><div class="k">เกินกำหนดชำระ</div><div class="v hot" id="s-over">–</div><div class="s" id="s-over-n"></div></div>
@@ -98,20 +109,19 @@ table.sum tr.now td{background:var(--primary-soft)}
       <div id="pn-list"></div>
     </div>
     <div class="card">
-      <div class="filters">
-        <div class="seg" id="f-state">
+      <div class="states" id="f-state">
+        <div class="seg">
           <button class="on" data-v="due" type="button">ต้องตาม</button>
           <button data-v="recommit" type="button" title="เลยวันที่ลูกค้านัดจ่ายแล้วยังไม่จ่าย ต้องหาวันนัดใหม่">ต้องหาวันนัดใหม่</button>
           <button data-v="Overdue" type="button">เกินกำหนด</button>
           <button data-v="Outstanding" type="button">ยังไม่ถึงกำหนด</button>
           <button data-v="Paid" type="button">จ่ายแล้ว</button>
           <button data-v="all" type="button">ทั้งหมด</button>
+        </div>
+        <div class="seg oldg" id="g-old" hidden><span class="lbl">ข้อมูลเก่า</span>
           <button data-v="old" type="button" id="b-old" hidden title="INV ที่ออกก่อนปี 2026 และยังค้างอยู่ ไม่รวมในยอดค้างรับปัจจุบัน">ค้างเก่าก่อนปี 2026</button>
           <button data-v="check" type="button" id="b-check" hidden>ข้อมูลเก่ารอตรวจ</button>
         </div>
-        <select class="sel" id="f-seg"><option value="">ทุกกลุ่ม</option></select>
-        <select class="sel" id="f-sales"><option value="">ทุกเซล</option></select>
-        <input type="search" class="search" id="f-q" placeholder="ค้นหา บริษัท / เลข INV / QT / เลขภาษี">
       </div>
       <div id="pc-bar" hidden style="margin:0 0 10px"><button class="btn btn-o btn-sm" type="button" id="pc-go">🔎 ตรวจรายการที่แสดงอยู่กับ PEAK</button> <span class="small" id="pc-info"></span></div>
       <p class="hint" id="f-hint">"ต้องตาม" = เกินกำหนด หรือครบกำหนดใน 7 วัน หรือถึงวันนัดติดตาม เรียงจากเกินนานสุด</p>
@@ -177,7 +187,11 @@ document.querySelectorAll('#tabs button').forEach((b) => b.onclick = () => {
   document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('on', t.id === 'tab-' + b.dataset.t));
 });
 document.querySelectorAll('#f-state button').forEach((b) => b.onclick = () => { document.querySelectorAll('#f-state button').forEach((x) => x.classList.toggle('on', x === b)); SHOW = 100; render(); });
-['f-seg', 'f-sales'].forEach((id) => $(id).onchange = () => { SHOW = 100; render(); });
+// The group filter and the group select of the summary tab move together.
+const hasOpt = (el, v) => [...el.options].some((o) => o.value === v);
+$('f-seg').onchange = () => { SHOW = 100; render(); const v = $('f-seg').value; if ($('s-seg').value !== v && hasOpt($('s-seg'), v)) { $('s-seg').value = v; loadSum(); } };
+$('f-sales').onchange = () => { SHOW = 100; render(); };
+$('f-clear').onclick = () => { $('f-sales').value = ''; $('f-q').value = ''; $('f-seg').value = ''; $('f-seg').onchange(); };
 $('f-q').oninput = () => { SHOW = 100; render(); };
 
 let PN = [];
@@ -186,7 +200,7 @@ async function load() {
   catch (e) { $('msg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; return; }
   renderNotices(); if (window.refreshPayBadge) window.refreshPayBadge();
   const s = D.summary;
-  $('b-check').hidden = !s.legacyCheckCount; $('b-old').hidden = !s.oldCount;
+  $('b-check').hidden = !s.legacyCheckCount; $('b-old').hidden = !s.oldCount; $('g-old').hidden = !s.legacyCheckCount && !s.oldCount;
   if (s.legacyCheckCount) $('f-hint').innerHTML = `"ต้องตาม" = เกินกำหนด หรือครบกำหนดใน 7 วัน หรือถึงวันนัดติดตาม · <b>ข้อมูลเก่ารอตรวจ ${s.legacyCheckCount} ใบ (${fmt0(s.legacyCheck)} บาท)</b> คือ INV ก่อนปี 2026 ที่ชีท Debt ยังเป็น "รอชำระ" และ INV ปี 2026 ที่มีใน PEAK แต่ไม่มีในชีท Debt ไม่นับในยอดค้างรับจนกว่าจะตรวจ (กด "↻ อัปเดตจาก PEAK" หรือบันทึกรับเงิน / ยกเลิก)`;
   const segs = [...new Set(D.invoices.map((r) => r.segment).filter(Boolean))].sort();
   const sales = [...new Set(D.invoices.map((r) => r.salesName || r.salesEmail).filter(Boolean))].sort();
@@ -215,6 +229,7 @@ function renderKpi() {
       avgDaysToPay: paid.length ? Math.round(paid.reduce((t, r) => t + Number(r.cycleDays), 0) / paid.length) : 0 };
   }
   const tag = seg || sal || q ? ' · ตามตัวกรอง' : '';
+  $('f-clear').hidden = !(seg || sal || q);
   $('s-open').textContent = fmt0(k.open); $('s-open-n').textContent = `${k.openCount} ใบ${tag}`;
   $('s-over').textContent = fmt0(k.overdue); $('s-over-n').textContent = `${k.overdueCount} ใบ${tag}`;
   const w = k.forecast.weeks[0] || {}; $('s-week').textContent = fmt0(w.expected); $('s-week-n').textContent = `${w.count || 0} ใบ · สัปดาห์ถึง ${w.weekEnd || ''}${tag}`;
@@ -549,7 +564,7 @@ async function loadSum() {
   try { S = (await api('/api/invoice-requests?view=ar&brief=1&seg=' + encodeURIComponent($('s-seg').value))).summary; renderSum(); }
   catch (e) { $('msg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
 }
-$('s-seg').onchange = loadSum;
+$('s-seg').onchange = () => { loadSum(); const v = $('s-seg').value; if ($('f-seg').value !== v && hasOpt($('f-seg'), v)) { $('f-seg').value = v; SHOW = 100; render(); } };
 function renderSum() {
   const s = S || D.summary, c = s.checks, v = s.vsCommit;
   const cur = s.forecast.weeks[0] || {};

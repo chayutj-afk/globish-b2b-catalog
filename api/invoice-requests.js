@@ -623,9 +623,10 @@ async function arRefresh(req, res, user) {
   res.status(200).json({ ok: true, ...out });
 }
 
-// "ข้อมูลเก่ารอตรวจ": imported INVs nobody has checked yet. Read each from PEAK and say whether it is paid,
-// still open, or no longer an approved document. apply: true also writes the paid / still-open result
-// (anything else is only reported, for accounting to decide).
+// Check open INVs against PEAK: read each one and say whether it is paid, still open, or no longer an approved
+// document. Works for any INV still open in the app, and for "ข้อมูลเก่ารอตรวจ" (imported, nobody has checked).
+// apply: true writes the paid result; for a waiting-for-check row it also writes the still-open result.
+// Anything else is only reported, for accounting to decide.
 async function arPeakCheck(req, res, user) {
   if (!isOp(user) && !can(user, 'approve')) throw bad('ไม่มีสิทธิ์', 403);
   const peak = require('../lib/peak'), ps = require('../lib/peaksync');
@@ -641,7 +642,7 @@ async function arPeakCheck(req, res, user) {
     const row = rows.find((x) => x.ivNo === ivNo);
     const e = row ? ar.enrich(row, today) : null;
     const base = { ivNo, company: row ? row.company : '', expected: e ? e.expected : 0 };
-    if (!row || !e.legacyCheck) { results.push({ ...base, result: 'skip', text: 'ไม่ใช่รายการรอตรวจแล้ว' }); continue; }
+    if (!row || !(e.state === 'Outstanding' || e.state === 'Overdue')) { results.push({ ...base, result: 'skip', text: 'ไม่ใช่รายการค้างชำระแล้ว' }); continue; }
     let iv = null;
     try { iv = await peak.findInvoiceByCode(ivNo); } catch (err) { results.push({ ...base, result: 'error', text: 'อ่านจาก PEAK ไม่ได้: ' + err.message }); continue; }
     if (!iv) { results.push({ ...base, result: 'notfound', text: 'ไม่พบเลขนี้ในใบแจ้งหนี้ของ PEAK' }); continue; }
@@ -662,6 +663,12 @@ async function arPeakCheck(req, res, user) {
       results.push({ ...base, result: 'paid', text: 'จ่ายแล้วใน PEAK', paidDate, amount: cash, net, link: link.peakDocLink, rtNo: rt ? rt.code : '', applied: !!b.apply });
     } else if (pays.length) {
       results.push({ ...base, result: 'partial', text: `รับเงินบางส่วนใน PEAK คงเหลือ ${remain}`, link: link.peakDocLink });
+    } else if (remain <= 0.01 && net > 0.01) {
+      // Nothing left to pay in PEAK but no payment on the INV itself: settled by another document (one receipt for
+      // several INVs, a credit note). PEAK gives no paid date here, so accounting records the payment by hand.
+      results.push({ ...base, result: 'settled', text: 'ยอดคงเหลือใน PEAK เป็น 0 แต่ไม่มีรายการรับเงินบนใบนี้ (มักรับผ่านใบเสร็จรวมหลายใบ หรือใบลดหนี้) ให้บัญชีบันทึกรับเงินพร้อมวันที่และเลขใบเสร็จ', amount: net, net, link: link.peakDocLink });
+    } else if (!e.legacyCheck) {
+      results.push({ ...base, result: 'open', text: 'ยังค้างชำระใน PEAK', amount: remain || net, net, link: link.peakDocLink, applied: false });
     } else {
       if (b.apply) await hub.updateRow('Invoices', row._row, { followStatus: '', commitDate: row.commitDate || e.dueDate, ...link, note: note('ตรวจกับ PEAK แล้ว ยังค้างชำระ') });
       results.push({ ...base, result: 'open', text: 'ยังค้างชำระใน PEAK', amount: remain || net, net, link: link.peakDocLink, applied: !!b.apply });

@@ -265,10 +265,17 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
     documentLink: 'https://doc.peakaccount.com/invoice?emi=old25', paidPayments: [{ paymentDate: '20250520', paymentTotal: 16050, payments: [{ paymentMethodCode: 'BNK001', amount: 15600 }] }] }); });
   [s, j] = await call(BEE, 'PATCH', '/api/invoice-requests', { action: 'ar_peakcheck', ivNos: ['IV-20250500001'] }); ok(s === 403, 'sales cannot run the PEAK check');
   [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_peakcheck', ivNos: ['IV-20250500001', 'IV-20260800009'] });
-  ok(s === 200 && j.results[0].result === 'paid' && j.results[0].paidDate === '20/05/2025' && j.results[0].amount === 15600 && j.results[1].result === 'skip' && !arRow('IV-20250500001').paidDate, 'PEAK check reads only: ' + JSON.stringify(j.results.map((r) => r.result)));
+  ok(s === 200 && j.results[0].result === 'paid' && j.results[0].paidDate === '20/05/2025' && j.results[0].amount === 15600 && j.results[1].result === 'settled' && !arRow('IV-20250500001').paidDate, 'PEAK check reads only: ' + JSON.stringify(j.results.map((r) => r.result)));
   [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_peakcheck', ivNos: ['IV-20250500001'], apply: true });
   let oc = arRow('IV-20250500001');
   ok(s === 200 && oc.paidDate === '20/05/2025' && Number(oc.paidAmount) === 15600 && oc.commitDate === '20/05/2025' && !oc.followStatus && oc.peakIvId === 'old25', 'PEAK check saved: paid on the PEAK date, off the waiting list');
+  // any open INV can be checked: still open → nothing written; remain 0 with no payment on the INV → reported, not written
+  { const before = JSON.stringify(arRow('IV-20260800009'));
+    [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_peakcheck', ivNos: ['IV-20260800009'], apply: true });
+    ok(s === 200 && j.results[0].result === 'settled' && JSON.stringify(arRow('IV-20260800009')) === before, 'remain 0 without a payment is reported, not written ' + JSON.stringify(j.results[0].result));
+    setPeak((p) => { const iv = p.invoices.find((x) => x.code === 'IV-20260800009' && x.status === 'Approve'); iv.remainAmount = iv.netAmount || 1000; iv.netAmount = iv.remainAmount; });
+    [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_peakcheck', ivNos: ['IV-20260800009'], apply: true });
+    ok(s === 200 && j.results[0].result === 'open' && JSON.stringify(arRow('IV-20260800009')) === before, 'open INV checked with PEAK: still open, row untouched ' + JSON.stringify(j.results[0].result)); }
   // paid INV with no receipt number: the receipt PEAK already issued from it is found by reference
   setPeak((p) => { p.receipts.push({ id: 'rOld', code: '202505A00009', status: 'Approve', isVoid: 0, reference: 'IV-20250500001', documentLink: 'https://doc.peakaccount.com/receipt?emi=rOld' }); });
   [s, j] = await call(BEE, 'PATCH', '/api/invoice-requests', { action: 'rt_find', ivNos: ['IV-20250500001'] }); ok(s === 403, 'sales cannot run the receipt lookup');

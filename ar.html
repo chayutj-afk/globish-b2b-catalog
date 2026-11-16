@@ -271,8 +271,11 @@ function countTabs() {
 function render() {
   countTabs(); renderKpi();
   const xs = rowsFor();
-  const chk = document.querySelector('#f-state button.on').dataset.v === 'check' && D.peakLive && (CAN_EDIT || CAN_RT);
+  const tabV = document.querySelector('#f-state button.on').dataset.v;
+  // Any tab that lists open INVs can be checked against PEAK (paid there but still open here).
+  const chk = tabV !== 'Paid' && D.peakLive && (CAN_EDIT || CAN_RT) && xs.some(isOpenRow);
   $('pc-bar').hidden = !chk;
+  $('pc-info').textContent = chk && tabV !== 'check' ? 'หาใบที่จ่ายแล้วใน PEAK แต่ที่นี่ยังค้าง · ตรวจเฉพาะใบค้างชำระที่แสดงอยู่' : '';
   if (chk) { $('pc-go').textContent = `🔎 ตรวจรายการที่แสดงอยู่กับ PEAK (${xs.length} ใบ)`; $('pc-go').disabled = !xs.length; $('pc-info').textContent = 'อ่านอย่างเดียวก่อน แล้วให้ยืนยันก่อนบันทึก · กรองกลุ่มหรือค้นหาเพื่อเลือกเฉพาะบางใบได้'; }
   $('wl').innerHTML = xs.slice(0, SHOW).map((r) => {
     const d = r.daysOverdue;
@@ -526,7 +529,8 @@ function kpiDrill(which) {
 document.querySelectorAll('.stat.go').forEach((el) => { el.onclick = () => D && kpiDrill(el.dataset.kpi); el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.click(); } }; });
 
 // ---- "ข้อมูลเก่ารอตรวจ": check the listed INVs against PEAK, show the result, then save on confirm
-const PC_TH = { paid: 'จ่ายแล้ว', open: 'ยังค้างชำระ', partial: 'รับบางส่วน', void: 'ไม่พบใบที่อนุมัติ', notfound: 'ไม่พบใน PEAK', error: 'อ่านไม่ได้', skip: 'ข้าม' };
+const isOpenRow = (r) => r.state === 'Outstanding' || r.state === 'Overdue';
+const PC_TH = { paid: 'จ่ายแล้ว', settled: 'ปิดยอดแล้วใน PEAK (ไม่มีวันรับเงิน)', open: 'ยังค้างชำระ', partial: 'รับบางส่วน', void: 'ไม่พบใบที่อนุมัติ', notfound: 'ไม่พบใน PEAK', error: 'อ่านไม่ได้', skip: 'ข้าม' };
 async function peakCheckRun(ivNos, apply) {
   const out = [];
   $('ov-load').hidden = false;
@@ -546,18 +550,18 @@ function peakCheckShow(rs, done) {
   const sum = (k) => rs.filter((r) => r.result === k).reduce((t, r) => t + (Number(r.amount) || 0), 0);
   const can = rs.filter((r) => r.result === 'paid' || r.result === 'open');
   $('d-title').textContent = done ? 'บันทึกตามผลจาก PEAK แล้ว' : 'ผลตรวจกับ PEAK';
-  $('d-sub').textContent = `${rs.length} ใบ · จ่ายแล้ว ${n('paid')} (${fmt0(sum('paid'))}) · ยังค้าง ${n('open')} (${fmt0(sum('open'))}) · อื่น ๆ ${rs.length - n('paid') - n('open')}`;
-  const order = { open: 0, partial: 1, void: 2, notfound: 3, error: 4, paid: 5, skip: 6 };
+  $('d-sub').textContent = `${rs.length} ใบ · จ่ายแล้ว ${n('paid')} (${fmt0(sum('paid'))}) · ยังค้าง ${n('open')} (${fmt0(sum('open'))}) · ปิดยอดแล้วแต่ไม่มีวันรับเงิน ${n('settled')} (${fmt0(sum('settled'))}) · อื่น ๆ ${rs.length - n('paid') - n('open') - n('settled')}`;
+  const order = { settled: 0, paid: 1, partial: 2, void: 3, notfound: 4, error: 5, open: 6, skip: 7 };
   $('d-body').innerHTML = `<table><thead><tr><th>บริษัท</th><th>INV</th><th>ผลจาก PEAK</th><th>วันที่รับเงิน</th><th class="num">ยอด</th></tr></thead><tbody>
     ${rs.slice().sort((a, b) => order[a.result] - order[b.result]).map((r) => `<tr><td><b>${esc(r.company)}</b></td><td class="mono">${r.link ? `<a class="doc" href="${esc(r.link)}" target="_blank" rel="noopener">${esc(r.ivNo)}</a>` : esc(r.ivNo)}</td>
       <td>${esc(PC_TH[r.result] || r.result)}${r.result !== 'paid' && r.result !== 'open' ? `<div class="small">${esc(r.text || '')}</div>` : ''}</td><td>${esc(r.paidDate || '')}</td><td class="num">${r.amount ? fmt(r.amount) : ''}</td></tr>`).join('')}</tbody></table>
-    ${done ? '' : `<p class="small" style="margin-top:10px">กดบันทึก: ใบที่<b>จ่ายแล้ว</b>จะถูกบันทึกรับเงินตามวันที่และยอดใน PEAK · ใบที่<b>ยังค้าง</b>จะย้ายเข้ารายการติดตามหนี้ปกติ (วันนัดจ่าย = วันครบกำหนด) · ผลแบบอื่นไม่ถูกแตะ ให้ตรวจใน PEAK เอง</p>
+    ${done ? '' : `<p class="small" style="margin-top:10px">กดบันทึก: ใบที่<b>จ่ายแล้ว</b>จะถูกบันทึกรับเงินตามวันที่และยอดใน PEAK · ใบที่<b>ยังค้าง</b>ในแท็บข้อมูลเก่ารอตรวจจะย้ายเข้ารายการติดตามหนี้ปกติ (วันนัดจ่าย = วันครบกำหนด) ส่วนใบค้างปกติไม่ถูกแตะ · ใบที่<b>ปิดยอดแล้วแต่ไม่มีวันรับเงิน</b> ให้บัญชีเปิดใบนั้นแล้วบันทึกรับเงินเอง · ผลแบบอื่นไม่ถูกแตะ ให้ตรวจใน PEAK เอง</p>
     <div style="text-align:right"><button class="btn btn-p" type="button" id="pc-apply"${can.length ? '' : ' disabled'}>บันทึกตามผลจาก PEAK (${can.length} ใบ)</button></div>`}`;
   $('ov-drill').hidden = false;
   const ap = $('pc-apply');
   if (ap) ap.onclick = async () => { closeDrill(); const rs2 = await peakCheckRun(can.map((r) => r.ivNo), true); await load(); peakCheckShow(rs2, true); };
 }
-$('pc-go').onclick = async () => { const nos = rowsFor().map((r) => r.ivNo); if (nos.length) peakCheckShow(await peakCheckRun(nos, false), false); };
+$('pc-go').onclick = async () => { const nos = rowsFor().filter(isOpenRow).map((r) => r.ivNo); if (nos.length) peakCheckShow(await peakCheckRun(nos, false), false); };
 
 let S = null;
 async function loadSum() {

@@ -50,6 +50,11 @@ table.sum tr.tot td{font-weight:500;color:var(--head)}
 #topf{margin-bottom:14px}#f-clear[hidden],#g-old[hidden]{display:none}#topf .lbl{font-size:13px;color:var(--muted)}#topf .search{max-width:420px}
 .states{display:flex;gap:8px 12px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
 .states .seg{margin-bottom:0;border-radius:14px}.states .seg button{white-space:nowrap}
+.states #f-due{width:auto;min-width:150px}.states #f-due[hidden],#b-all[hidden]{display:none}
+.help{margin:0 0 10px}.help summary{cursor:pointer;font-size:12.5px;color:var(--muted);width:fit-content}.help summary:hover{color:var(--primary)}.help[open] summary{margin-bottom:6px}.help#pc-bar{margin:14px 0 0}
+.acts details.mo{position:relative}.acts details.mo>summary{list-style:none}.acts details.mo>summary::-webkit-details-marker{display:none}
+.acts details.mo .menu{position:absolute;z-index:20;top:calc(100% + 4px);left:0;min-width:240px;background:var(--panel);border:1px solid var(--line2);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:6px;display:flex;flex-direction:column;gap:2px}
+.acts details.mo .menu button{border:0;background:none;text-align:left;font:inherit;font-size:13px;color:var(--ink,inherit);padding:8px 10px;border-radius:7px;cursor:pointer}.acts details.mo .menu button:hover,.acts details.mo .menu button:focus-visible{background:var(--panel-2)}
 .states .seg.oldg{align-items:center}.states .seg.oldg .lbl{font-size:12px;color:var(--muted);padding:0 4px 0 10px;white-space:nowrap}
 .pn{border:1px solid var(--line2);border-radius:10px;padding:12px 14px;margin-top:10px;background:var(--panel)}
 .pn-top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.pn-amt{text-align:right}.pn-amt b{font-size:18px;color:var(--head)}
@@ -111,23 +116,25 @@ table.sum tr.now td{background:var(--primary-soft)}
     <div class="card">
       <div class="states" id="f-state">
         <div class="seg">
-          <button class="on" data-v="due" type="button">ต้องตาม</button>
+          <button class="on" data-v="due" type="button" title="เกินกำหนด ครบกำหนดใน 7 วัน หรือถึงวันนัดติดตาม">ต้องตาม</button>
           <button data-v="recommit" type="button" title="เลยวันที่ลูกค้านัดจ่ายแล้วยังไม่จ่าย ต้องหาวันนัดใหม่">ต้องหาวันนัดใหม่</button>
           <button data-v="await" type="button" id="b-await" hidden title="ออกใบเสร็จแล้ว (ล่วงหน้า หรือรับเช็คมาแล้ว) แต่เงินยังไม่เข้าบัญชี ยังนับเป็นยอดค้างรับ">รอเงินเข้า</button>
-          <button data-v="Overdue" type="button">เกินกำหนด</button>
-          <button data-v="Outstanding" type="button">ยังไม่ถึงกำหนด</button>
+          <button data-v="open" type="button" title="INV ปี 2026 เป็นต้นไปที่ยังไม่ได้รับเงิน">ค้างทั้งหมด</button>
           <button data-v="Paid" type="button">จ่ายแล้ว</button>
-          <button data-v="all" type="button">ทั้งหมด</button>
+          <button data-v="all" type="button" id="b-all" hidden title="ทุกสถานะ รวมเอกสารที่ยกเลิกและค้างเก่าก่อนปี 2026">ทุกสถานะ</button>
         </div>
         <div class="seg oldg" id="g-old" hidden><span class="lbl">ข้อมูลเก่า</span>
-          <button data-v="old" type="button" id="b-old" hidden title="INV ที่ออกก่อนปี 2026 และยังค้างอยู่ ไม่รวมในยอดค้างรับปัจจุบัน">ค้างเก่าก่อนปี 2026</button>
-          <button data-v="check" type="button" id="b-check" hidden>ข้อมูลเก่ารอตรวจ</button>
+          <button data-v="check" type="button" id="b-check" hidden>รอตรวจกับ PEAK</button>
         </div>
+        <select class="sel" id="f-due" aria-label="กำหนดชำระ" hidden><option value="">ทุกกำหนดชำระ</option><option value="Overdue">เกินกำหนด</option><option value="Outstanding">ยังไม่ถึงกำหนด</option></select>
       </div>
-      <div id="pc-bar" hidden style="margin:0 0 10px"><button class="btn btn-o btn-sm" type="button" id="pc-go">🔎 ตรวจรายการที่แสดงอยู่กับ PEAK</button> <span class="small" id="pc-info"></span></div>
-      <p class="hint" id="f-hint">"ต้องตาม" = เกินกำหนด หรือครบกำหนดใน 7 วัน หรือถึงวันนัดติดตาม เรียงจากเกินนานสุด</p>
+      <details class="help" id="f-help"><summary>แต่ละแท็บคืออะไร</summary><div class="small" id="f-hint"></div></details>
       <div class="wrap"><table class="wl"><thead><tr><th>INV</th><th>บริษัท</th><th>เซล</th><th>ครบกำหนด</th><th class="num">เกิน (วัน)</th><th class="num">ยอดที่ต้องได้รับ</th><th>สถานะติดตาม</th><th>นัดถัดไป</th></tr></thead><tbody id="wl"></tbody></table></div>
       <div class="more" id="more"></div>
+      <details class="help" id="pc-bar" hidden><summary>เครื่องมือบัญชี: ตรวจใบค้างกับ PEAK</summary>
+        <p class="small" style="margin:8px 0">หาใบที่จ่ายแล้วใน PEAK แต่ที่นี่ยังค้าง ระบบอ่านอย่างเดียวก่อน แล้วให้ยืนยันก่อนบันทึก ตัวกรองกลุ่ม เซล และคำค้นด้านบนมีผลกับรายการที่ตรวจ</p>
+        <div class="acts" style="padding:0" id="pc-btns"></div>
+      </details>
     </div>
   </section>
 
@@ -192,6 +199,7 @@ document.querySelectorAll('#f-state button').forEach((b) => b.onclick = () => { 
 const hasOpt = (el, v) => [...el.options].some((o) => o.value === v);
 $('f-seg').onchange = () => { SHOW = 100; render(); const v = $('f-seg').value; if ($('s-seg').value !== v && hasOpt($('s-seg'), v)) { $('s-seg').value = v; loadSum(); } };
 $('f-sales').onchange = () => { SHOW = 100; render(); };
+$('f-due').onchange = () => { SHOW = 100; render(); };
 $('f-clear').onclick = () => { $('f-sales').value = ''; $('f-q').value = ''; $('f-seg').value = ''; $('f-seg').onchange(); };
 $('f-q').oninput = () => { SHOW = 100; render(); };
 
@@ -201,10 +209,10 @@ async function load() {
   catch (e) { $('msg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; return; }
   renderNotices(); if (window.refreshPayBadge) window.refreshPayBadge();
   const s = D.summary;
-  $('b-check').hidden = !s.legacyCheckCount; $('b-old').hidden = !s.oldCount; $('g-old').hidden = !s.legacyCheckCount && !s.oldCount;
+  $('b-check').hidden = !s.legacyCheckCount; $('g-old').hidden = !s.legacyCheckCount;
   $('b-await').hidden = !D.invoices.some((r) => r.awaitCash);
   if ($('b-await').hidden && $('b-await').classList.contains('on')) { $('b-await').classList.remove('on'); document.querySelector('#f-state button[data-v="due"]').classList.add('on'); }
-  if (s.legacyCheckCount) $('f-hint').innerHTML = `"ต้องตาม" = เกินกำหนด หรือครบกำหนดใน 7 วัน หรือถึงวันนัดติดตาม · <b>ข้อมูลเก่ารอตรวจ ${s.legacyCheckCount} ใบ (${fmt0(s.legacyCheck)} บาท)</b> คือ INV ก่อนปี 2026 ที่ชีท Debt ยังเป็น "รอชำระ" และ INV ปี 2026 ที่มีใน PEAK แต่ไม่มีในชีท Debt ไม่นับในยอดค้างรับจนกว่าจะตรวจ (กด "↻ อัปเดตจาก PEAK" หรือบันทึกรับเงิน / ยกเลิก)`;
+  $('f-hint').innerHTML = `<b>ต้องตาม</b> = เกินกำหนด หรือครบกำหนดใน 7 วัน หรือถึงวันนัดติดตาม เรียงจากเกินนานสุด<br><b>ต้องหาวันนัดใหม่</b> = เลยวันที่ลูกค้านัดจ่ายแล้วยังไม่จ่าย<br><b>รอเงินเข้า</b> = ออกใบเสร็จแล้ว (ล่วงหน้า หรือรับเช็ค) แต่เงินยังไม่เข้าบัญชี ยังนับเป็นยอดค้างรับ<br><b>ค้างทั้งหมด</b> = INV ปี 2026 เป็นต้นไปที่ยังไม่ได้รับเงิน เลือกดูเฉพาะเกินกำหนดหรือยังไม่ถึงกำหนดได้${s.oldCount ? `<br><b>ค้างเก่าก่อนปี 2026</b> ${s.oldCount} ใบ (${fmt0(s.old)} บาท) แยกไว้ ดูได้ที่แท็บ "สรุป"` : ''}${s.legacyCheckCount ? `<br><b>รอตรวจกับ PEAK</b> ${s.legacyCheckCount} ใบ (${fmt0(s.legacyCheck)} บาท) = ข้อมูลที่ย้ายมาและยังไม่มีใครตรวจ ไม่นับในยอดค้างรับจนกว่าจะตรวจ` : ''}`;
   const segs = [...new Set(D.invoices.map((r) => r.segment).filter(Boolean))].sort();
   const sales = [...new Set(D.invoices.map((r) => r.salesName || r.salesEmail).filter(Boolean))].sort();
   const keepS = $('f-seg').value, keepP = $('f-sales').value;
@@ -250,7 +258,8 @@ function rowsFor(only) {
     if (mode === 'check') return r.legacyCheck;
     if (r.legacyCheck) return false;
     if (mode === 'old') return r.old && (r.state === 'Outstanding' || r.state === 'Overdue');
-    if (r.old && mode !== 'Paid') return false; // the old book has its own tab
+    if (r.old && mode !== 'Paid') return false; // the old book is on the summary tab
+    if (mode === 'open') { const du = only ? '' : $('f-due').value; return (r.state === 'Outstanding' || r.state === 'Overdue') && (!du || r.state === du); }
     if (mode === 'recommit') return r.needCommit;
     if (mode === 'await') return r.awaitCash;
     if (mode === 'due') {
@@ -276,11 +285,11 @@ function render() {
   countTabs(); renderKpi();
   const xs = rowsFor();
   const tabV = document.querySelector('#f-state button.on').dataset.v;
-  // Any tab that lists open INVs can be checked against PEAK (paid there but still open here).
-  const chk = tabV !== 'Paid' && D.peakLive && (CAN_EDIT || CAN_RT) && xs.some(isOpenRow);
-  $('pc-bar').hidden = !chk;
-  $('pc-info').textContent = chk && tabV !== 'check' ? 'หาใบที่จ่ายแล้วใน PEAK แต่ที่นี่ยังค้าง · ตรวจเฉพาะใบค้างชำระที่แสดงอยู่' : '';
-  if (chk) { $('pc-go').textContent = `🔎 ตรวจรายการที่แสดงอยู่กับ PEAK (${xs.length} ใบ)`; $('pc-go').disabled = !xs.length; $('pc-info').textContent = 'อ่านอย่างเดียวก่อน แล้วให้ยืนยันก่อนบันทึก · กรองกลุ่มหรือค้นหาเพื่อเลือกเฉพาะบางใบได้'; }
+  $('f-due').hidden = tabV !== 'open';
+  // Accounting tool, in one place: check open INVs against PEAK (paid there but still open here).
+  const sets = !(D.peakLive && (CAN_EDIT || CAN_RT)) ? [] : [['open', 'ใบค้างปี 2026 เป็นต้นไป'], ['old', 'ค้างเก่าก่อนปี 2026'], ['check', 'ข้อมูลเก่ารอตรวจ']].map(([m, t]) => [m, t, rowsFor(m).filter(isOpenRow).length]).filter((x) => x[2]);
+  $('pc-bar').hidden = !sets.length;
+  $('pc-btns').innerHTML = sets.map(([m, t, n]) => `<button class="btn btn-o btn-sm" type="button" onclick="peakCheckSet('${m}')">🔎 ตรวจ${t} (${n} ใบ)</button>`).join('');
   $('wl').innerHTML = xs.slice(0, SHOW).map((r) => {
     const d = r.daysOverdue;
     const open = OPEN === r.ivNo;
@@ -304,13 +313,16 @@ function detail(r) {
   const fu = (r.followUps || []).slice().reverse().map((f) => `<div><b>${esc(f.loggedAt)}</b> · ${esc(f.channel)} · ${esc(f.result)}${f.nextActionDate ? ' · นัด ' + esc(f.nextActionDate) : ''}<br><span class="small">${esc(f.by)}${f.note ? ' · ' + esc(f.note) : ''}</span></div>`).join('') || '<div class="small">ยังไม่มีบันทึก</div>';
   const paid = r.state === 'Paid', closed = r.state === 'Closed';
   return `<tr class="det"><td colspan="8">
-    <div class="acts">${D.canOwner ? `<button class="btn btn-g btn-sm" onclick="openOwner('${id}')">👤 เปลี่ยนเซลเจ้าของ</button>` : ''}${!CAN_EDIT ? (D.canOwner ? '' : '<span class="small">ดูอย่างเดียว</span>') : `
+    <div class="acts">${!CAN_EDIT ? (D.canOwner ? `<button class="btn btn-g btn-sm" onclick="openOwner('${id}')">👤 เปลี่ยนเซลเจ้าของ</button>` : '<span class="small">ดูอย่างเดียว</span>') : `
       ${closed ? '' : `<button class="btn btn-p btn-sm" onclick="openFollow('${id}')">📞 บันทึกการติดตาม</button>`}
       ${closed ? '' : `<button class="btn ${paid ? 'btn-g' : 'btn-p'} btn-sm" onclick="openPaid('${id}')">💰 ${paid ? 'แก้ไขการรับเงิน' : r.awaitCash ? 'ยืนยันเงินเข้า' : 'บันทึกรับเงิน'}</button>`}
-      ${paid || closed ? '' : `<button class="btn btn-g btn-sm" onclick="openAwait('${id}')" title="ออกใบเสร็จล่วงหน้า หรือรับเช็คมาแล้ว แต่เงินยังไม่เข้าบัญชี">🧾 ${r.awaitCash ? 'แก้วันที่ใบเสร็จ / วันรับเช็ค' : 'มีใบเสร็จ / เช็คแล้ว รอเงินเข้า'}</button>`}
-      <button class="btn btn-g btn-sm" onclick="openDoc('${id}')">📄 สถานะเอกสาร / หมายเหตุ</button>
-      ${D.peakLive ? `<button class="btn btn-g btn-sm" onclick="refreshPeak('${id}')" title="อ่าน INV และใบเสร็จจาก PEAK แล้วอัปเดตยอด วันที่ หัก ณ ที่จ่าย สถานะ และกลุ่มจัดประเภท">↻ อัปเดตจาก PEAK</button>` : ''}
-      ${paid && !r.rtNo ? `<a class="btn btn-o btn-sm" href="/request#pend">🧾 ออกใบเสร็จ (รออนุมัติ › ใบเสร็จ)</a>` : ''}`}
+      ${paid && !r.rtNo ? `<a class="btn btn-o btn-sm" href="/request#pend">🧾 ออกใบเสร็จ (รออนุมัติ › ใบเสร็จ)</a>` : ''}
+      <details class="mo"><summary class="btn btn-g btn-sm">เพิ่มเติม ▾</summary><div class="menu" onclick="this.parentNode.open=false">
+        ${paid || closed ? '' : `<button type="button" onclick="openAwait('${id}')">🧾 ${r.awaitCash ? 'แก้วันที่ใบเสร็จ / วันรับเช็ค' : 'มีใบเสร็จ / เช็คแล้ว รอเงินเข้า'}</button>`}
+        <button type="button" onclick="openDoc('${id}')">📄 สถานะเอกสาร / หมายเหตุ</button>
+        ${D.peakLive ? `<button type="button" onclick="refreshPeak('${id}')" title="อ่าน INV และใบเสร็จจาก PEAK แล้วอัปเดตยอด วันที่ หัก ณ ที่จ่าย สถานะ และกลุ่มจัดประเภท">↻ อัปเดตจาก PEAK</button>` : ''}
+        ${D.canOwner ? `<button type="button" onclick="openOwner('${id}')">👤 เปลี่ยนเซลเจ้าของ</button>` : ''}
+      </div></details>`}
     </div>
     <div class="kv">${kv('วันที่ออก', esc(r.issueDate))}${kv('เครดิต', esc(r.creditTermDays) + ' วัน')}${kv('ก่อน VAT', fmt(toNum(r.preVat)))}${kv('หัก ณ ที่จ่าย', whtPct(r.whtRate))}${kv('QT', esc(r.qtNo))}${kv('เลขภาษี', esc(r.taxId) + (r.branch ? ' / ' + esc(r.branch) : ''))}${kv('PO', esc(r.poNo))}${kv('งวด', esc(r.installment))}${kv(paid ? 'นัดจ่ายไว้เดิม' : 'ลูกค้านัดจ่าย', esc(paid ? r.promisedDate : r.commitDate))}${kv('จ่ายเทียบวันนัด', r.paidVsCommit === '' || r.paidVsCommit === undefined ? '' : r.paidVsCommit < 0 ? `ก่อนนัด ${-r.paidVsCommit} วัน` : r.paidVsCommit > 0 ? `ช้ากว่านัด ${r.paidVsCommit} วัน` : 'ตรงวันนัด')}${kv('RT', esc(r.rtNo))}${kv('วันที่ใบเสร็จ / วันรับเช็ค', esc(r.rtDate))}${kv('วันที่เงินเข้า', esc(r.paidDate))}${kv('ยอดที่รับ', r.paidAmount ? fmt(toNum(r.paidAmount)) : '')}${kv('วิธีจ่าย', esc(r.paymentMethod))}${kv('เหตุผลจ่ายช้า', esc(r.delayReason))}${kv('หมายเหตุ', esc(r.note))}${kv('ที่มา', esc(r.source))}</div>
     <div class="box"><h4>ประวัติการติดตาม</h4><div class="log">${fu}</div></div>
@@ -527,7 +539,10 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('ov-d
 function openInList(iv) {
   closeDrill();
   $('f-seg').value = ''; $('f-sales').value = ''; $('f-q').value = iv;
-  document.querySelectorAll('#f-state button').forEach((x) => x.classList.toggle('on', x.dataset.v === 'all'));
+  const tr0 = find(iv), tab = !tr0 ? 'all' : tr0.legacyCheck ? 'check' : tr0.state === 'Paid' ? 'Paid' : (tr0.state === 'Outstanding' || tr0.state === 'Overdue') && !tr0.old ? 'open' : 'all';
+  if (tab === 'all') $('b-all').hidden = false;
+  $('f-due').value = '';
+  document.querySelectorAll('#f-state button').forEach((x) => x.classList.toggle('on', x.dataset.v === tab));
   document.querySelector('#tabs button[data-t="work"]').click();
   OPEN = iv; SHOW = 100; render();
   const tr = document.querySelector('#wl tr.r'); if (tr) tr.scrollIntoView({ block: 'center' });
@@ -584,7 +599,7 @@ function peakCheckShow(rs, done) {
   const ap = $('pc-apply');
   if (ap) ap.onclick = async () => { closeDrill(); const rs2 = await peakCheckRun(can.map((r) => r.ivNo), true); await load(); peakCheckShow(rs2, true); };
 }
-$('pc-go').onclick = async () => { const nos = rowsFor().filter(isOpenRow).map((r) => r.ivNo); if (nos.length) peakCheckShow(await peakCheckRun(nos, false), false); };
+async function peakCheckSet(mode) { const nos = rowsFor(mode).filter(isOpenRow).map((r) => r.ivNo); if (nos.length) peakCheckShow(await peakCheckRun(nos, false), false); }
 
 let S = null;
 async function loadSum() {

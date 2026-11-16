@@ -49,7 +49,7 @@ button,input,select,textarea{font-family:inherit}
 .icon-btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:50%;width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
 .icon-btn svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .icon-btn:hover{border-color:var(--primary);color:var(--primary)}
-main{width:100%;max-width:1040px;padding:4px 24px 60px}
+main{width:100%;max-width:1680px;padding:4px 24px 60px}
 .rail a.ri.m-only{display:none}
 .rail a.ri[hidden]{display:none!important}
 @media(max-width:760px){

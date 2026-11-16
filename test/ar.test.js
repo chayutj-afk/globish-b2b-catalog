@@ -62,3 +62,9 @@ test('AR group follows the selling team: a company customer sold by the B2C team
   assert.equal(row('bee@globish.co.th', 'B2B'), 'B2B');
   assert.equal(row('benz@globish.co.th', 'B2E'), 'B2E');
 });
+
+test('INVs issued before 2026 are the old book, kept apart from current receivables', () => {
+  const t = d('16/11/2026');
+  assert.equal(ar.enrich({ issueDate: '31/12/2025', creditTermDays: 30, preVat: 100, docStatus: 'Active' }, t).old, true);
+  assert.equal(ar.enrich({ issueDate: '01/01/2026', creditTermDays: 30, preVat: 100, docStatus: 'Active' }, t).old, false);
+});

@@ -274,6 +274,16 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
   [s, j] = await call(BEE, 'PATCH', '/api/invoice-requests', { action: 'rt_find', ivNos: ['IV-20250500001'] }); ok(s === 403, 'sales cannot run the receipt lookup');
   [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { action: 'rt_find', ivNos: ['IV-20250500001', 'IV-20260800009'] });
   ok(s === 200 && j.results[0].result === 'found' && arRow('IV-20250500001').rtNo === '202505A00009' && j.results[1].result === 'skip', 'receipt already in PEAK → number recorded, unpaid INV skipped: ' + JSON.stringify(j.results.map((r) => r.result)));
+  // the old book (issued before 2026) is reported apart from the current receivables
+  setPeak((p) => { p.invoices.push({ id: 'old24', code: 'IV-20240900099', status: 'Approve', issuedDate: '20240901', dueDate: '20241001', preTaxAmount: 1000, netAmount: 1070, remainAmount: 1070, taxStatus: 0, paidPayments: [] }); });
+  {
+    const hubm = require('../../lib/hub'); process.env.HUB_MODE = 'mock'; process.env.HUB_MOCK_FILE = '/tmp/sales-desk-e2e/db.json';
+    await hubm.appendRows('Invoices', [{ ivNo: 'IV-20240900099', issueDate: '01/09/2024', segment: 'B2B', company: 'ค้างเก่า 2024', taxId: '0105540000099', preVat: '1000', creditTermDays: '30', whtRate: '0', docStatus: 'Active', source: 'legacy' }]);
+  }
+  [s, j] = await call(COL, 'GET', '/api/invoice-requests?view=ar&brief=1'); const sOld = j.summary;
+  ok(s === 200 && sOld.oldCount === 1 && sOld.old === 1070, 'old book counted on its own: ' + sOld.oldCount + ' / ' + sOld.old);
+  [s, j] = await call(COL, 'GET', '/api/invoice-requests?view=ar&drill=open'); ok(!j.rows.some((r) => r.ivNo === 'IV-20240900099') && Math.abs(j.total - sOld.open) < 0.01, 'current receivables leave the old book out');
+  [s, j] = await call(COL, 'GET', '/api/invoice-requests?view=ar&drill=old'); ok(j.rows.length === 1 && j.total === 1070, 'the old book has its own list');
   console.log('── 8. AR actions, edit requests, B2C receipt');
   [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_followup', ivNo: 'IV-20260800009', channel: 'x', result: 'y' }); ok(s === 400, 'follow-up needs a valid channel');
   [s, j] = await call(COL, 'GET', '/api/invoice-requests?view=ar'); ok(s === 200 && j.invoices.length >= 5 && j.summary, 'collector opens AR: ' + j.invoices.length + ' rows');

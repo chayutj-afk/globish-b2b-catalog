@@ -132,12 +132,12 @@ a.tile .dd{color:var(--muted);font-size:12.5px;line-height:1.6}
       get('/api/invoice-requests?view=ar&brief=1').then(function (d) {
         if (!d || !d.summary) { document.getElementById('c-sum').textContent = 'โหลดไม่ได้ในตอนนี้'; return; }
         var s = d.summary, c = s.checks, w = s.forecast.weeks, cur = w[0] || {};
-        document.getElementById('c-sum').textContent = 'ทุกกลุ่มลูกค้า · สัปดาห์นับ ศุกร์–พฤหัส ตัดสิ้นเดือน';
         var go = function (key, title) { return '/ar#d=' + encodeURIComponent(key) + '&t=' + encodeURIComponent(title); };
         var kp = function (k, v, sub, bad, key) { return '<a href="' + go(key, k) + '" title="ดูรายชื่อบริษัท"' + (bad ? ' class="bad"' : '') + '><div class="k">' + k + '</div><div class="v">' + v + '</div><div class="s">' + sub + '</div></a>'; };
         var cell = function (val, key, title) { return val ? '<a class="fig" href="' + go(key, title) + '" title="ดูรายชื่อบริษัท">' + f0(val) + '</a>' : (key.indexOf('paid') === 0 ? '' : '0'); };
+        document.getElementById('c-sum').innerHTML = 'ทุกกลุ่มลูกค้า · สัปดาห์นับ ศุกร์–พฤหัส ตัดสิ้นเดือน' + (s.oldCount ? ' · <a class="fig" href="' + go('old', 'ค้างเก่าก่อนปี 2026') + '">ค้างเก่าก่อนปี 2026 แยกไว้ ' + f0(s.old) + ' บาท (' + s.oldCount + ' ใบ)</a>' : '');
         document.getElementById('c-kp').innerHTML =
-          kp('ค้างรับทั้งหมด', f0(s.open), s.openCount + ' ใบ · เกินกำหนด ' + f0(s.overdue), false, 'open') +
+          kp('ค้างรับ INV ปี 2026 เป็นต้นไป', f0(s.open), s.openCount + ' ใบ · เกินกำหนด ' + f0(s.overdue), false, 'open') +
           kp('เงินเข้าแล้วสัปดาห์นี้ (ถึง ' + (cur.weekEnd || '') + ')', f0(cur.paid), 'รออีก ' + f0(cur.expected) + ' (' + (cur.count || 0) + ' ใบ)', false, 'paid|' + cur.weekEnd) +
           kp('เลยวันนัด ต้องหาวันใหม่', f0(c.needCommit), c.needCommitCount + ' ใบ', c.needCommitCount > 0, 'needcommit') +
           kp('ค้างชำระที่ไม่มีวันนัด', f0(c.noCommit), c.noCommitCount + ' ใบ · ต้องเป็น 0', c.noCommitCount > 0, 'nocommit');

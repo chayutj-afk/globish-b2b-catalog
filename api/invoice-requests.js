@@ -442,7 +442,9 @@ async function arSees(user) {
 function summarise(all, today) {
   // Old rows the Debt sheet still showed as unpaid are kept apart until someone checks them in PEAK.
   const check = all.filter((r) => r.legacyCheck);
-  const open = all.filter((r) => (r.state === 'Outstanding' || r.state === 'Overdue') && !r.legacyCheck);
+  // Current receivables = issued from 2026 on. The old book (before 2026) is reported on its own.
+  const open = all.filter((r) => (r.state === 'Outstanding' || r.state === 'Overdue') && !r.legacyCheck && !r.old);
+  const oldOpen = all.filter((r) => (r.state === 'Outstanding' || r.state === 'Overdue') && !r.legacyCheck && r.old);
   const sum = (xs, f = 'expected') => Math.round(xs.reduce((s, r) => s + (Number(r[f]) || 0), 0) * 100) / 100;
   const buckets = ['Not due', '1-30', '31-60', '61-90', '90+'];
   const segs = [...new Set(open.map((r) => r.segment || 'Others'))].sort();
@@ -484,6 +486,7 @@ function summarise(all, today) {
   const recentPaid = all.filter((r) => r.paidMs !== null && r.paidMs >= today - 90 * DAY && r.cycleDays !== '');
   return {
     legacyCheck: sum(check), legacyCheckCount: check.length,
+    old: sum(oldOpen), oldCount: oldOpen.length,
     open: sum(open), openCount: open.length, overdue: sum(open.filter((r) => r.state === 'Overdue')), overdueCount: open.filter((r) => r.state === 'Overdue').length,
     avgDaysToPay: recentPaid.length ? Math.round(recentPaid.reduce((s, r) => s + r.cycleDays, 0) / recentPaid.length) : 0,
     aging, buckets, forecast: { earlier: sum(earlier), earlierCount: earlier.length, weeks, later: sum(later), laterCount: later.length }, cash, months,
@@ -495,7 +498,7 @@ function summarise(all, today) {
 // The invoices behind one figure of the summary / dashboard (?drill=key), with the same rules as summarise().
 function drillRows(all, today, key) {
   const DAY = 86400e3;
-  const open = all.filter((r) => (r.state === 'Outstanding' || r.state === 'Overdue') && !r.legacyCheck);
+  const open = all.filter((r) => (r.state === 'Outstanding' || r.state === 'Overdue') && !r.legacyCheck && !r.old);
   const [k, a = '', b = ''] = String(key).split('|');
   const seg = (r) => r.segment || 'Others';
   const month = (ms) => (ms === null ? '' : ar.fmt(ms).slice(3));
@@ -505,6 +508,7 @@ function drillRows(all, today, key) {
   if (k === 'open') xs = open;
   else if (k === 'overdue') xs = open.filter((r) => r.state === 'Overdue');
   else if (k === 'legacy') xs = all.filter((r) => r.legacyCheck);
+  else if (k === 'old') xs = all.filter((r) => (r.state === 'Outstanding' || r.state === 'Overdue') && !r.legacyCheck && r.old);
   else if (k === 'nocommit') xs = open.filter((r) => r.noCommit);
   else if (k === 'needcommit') xs = open.filter((r) => r.needCommit);
   else if (k === 'fc') xs = open.filter((r) => r.planMs !== null && ar.fmt(r.planMs) === a);

@@ -55,7 +55,7 @@ table.sum tr.now td{background:var(--primary-soft)}
 .sumbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
 .sumbar label{font-size:13px;color:var(--muted)}
 .sumbar .sel{width:auto;min-width:170px;flex:0 0 auto}
-#checks{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
+#checks{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:12px;margin-bottom:14px}
 @media(max-width:1000px){#checks{grid-template-columns:1fr 1fr}}
 @media(max-width:560px){#checks{grid-template-columns:1fr}}
 .chk{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;display:flex;flex-direction:column;gap:3px;font-size:13px}
@@ -84,7 +84,7 @@ table.sum tr.now td{background:var(--primary-soft)}
 <main>
   <div id="msg"></div>
   <div class="stats">
-    <div class="stat go" role="button" tabindex="0" data-kpi="open" title="ดูรายชื่อบริษัท"><div class="k">ยอดค้างรับทั้งหมด (รวม VAT หัก WHT)</div><div class="v" id="s-open">–</div><div class="s" id="s-open-n"></div></div>
+    <div class="stat go" role="button" tabindex="0" data-kpi="open" title="ดูรายชื่อบริษัท"><div class="k">ยอดค้างรับ INV ปี 2026 เป็นต้นไป (รวม VAT หัก WHT)</div><div class="v" id="s-open">–</div><div class="s" id="s-open-n"></div></div>
     <div class="stat go" role="button" tabindex="0" data-kpi="over" title="ดูรายชื่อบริษัท"><div class="k">เกินกำหนดชำระ</div><div class="v hot" id="s-over">–</div><div class="s" id="s-over-n"></div></div>
     <div class="stat go" role="button" tabindex="0" data-kpi="week" title="ดูรายชื่อบริษัท"><div class="k">คาดว่าเข้าสัปดาห์นี้ (ยังรอชำระ)</div><div class="v" id="s-week">–</div><div class="s" id="s-week-n"></div></div>
     <div class="stat"><div class="k">เฉลี่ยวันรับเงิน (จ่ายใน 90 วัน)</div><div class="v" id="s-avg">–</div><div class="s">นับจากวันออก INV</div></div>
@@ -106,6 +106,7 @@ table.sum tr.now td{background:var(--primary-soft)}
           <button data-v="Outstanding" type="button">ยังไม่ถึงกำหนด</button>
           <button data-v="Paid" type="button">จ่ายแล้ว</button>
           <button data-v="all" type="button">ทั้งหมด</button>
+          <button data-v="old" type="button" id="b-old" hidden title="INV ที่ออกก่อนปี 2026 และยังค้างอยู่ ไม่รวมในยอดค้างรับปัจจุบัน">ค้างเก่าก่อนปี 2026</button>
           <button data-v="check" type="button" id="b-check" hidden>ข้อมูลเก่ารอตรวจ</button>
         </div>
         <select class="sel" id="f-seg"><option value="">ทุกกลุ่ม</option></select>
@@ -185,7 +186,7 @@ async function load() {
   catch (e) { $('msg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; return; }
   renderNotices(); if (window.refreshPayBadge) window.refreshPayBadge();
   const s = D.summary;
-  $('b-check').hidden = !s.legacyCheckCount;
+  $('b-check').hidden = !s.legacyCheckCount; $('b-old').hidden = !s.oldCount;
   if (s.legacyCheckCount) $('f-hint').innerHTML = `"ต้องตาม" = เกินกำหนด หรือครบกำหนดใน 7 วัน หรือถึงวันนัดติดตาม · <b>ข้อมูลเก่ารอตรวจ ${s.legacyCheckCount} ใบ (${fmt0(s.legacyCheck)} บาท)</b> คือ INV ก่อนปี 2026 ที่ชีท Debt ยังเป็น "รอชำระ" และ INV ปี 2026 ที่มีใน PEAK แต่ไม่มีในชีท Debt ไม่นับในยอดค้างรับจนกว่าจะตรวจ (กด "↻ อัปเดตจาก PEAK" หรือบันทึกรับเงิน / ยกเลิก)`;
   const segs = [...new Set(D.invoices.map((r) => r.segment).filter(Boolean))].sort();
   const sales = [...new Set(D.invoices.map((r) => r.salesName || r.salesEmail).filter(Boolean))].sort();
@@ -204,7 +205,7 @@ function renderKpi() {
   const seg = $('f-seg').value, sal = $('f-sales').value, q = $('f-q').value.trim();
   let k = D.summary;
   if (seg || sal || q) {
-    const base = rowsFor('all'), open = base.filter((r) => (r.state === 'Outstanding' || r.state === 'Overdue') && !r.legacyCheck);
+    const base = rowsFor('all'), open = base.filter((r) => (r.state === 'Outstanding' || r.state === 'Overdue') && !r.legacyCheck && !r.old);
     const sum = (xs) => xs.reduce((t, r) => t + (Number(r.expected) || 0), 0);
     const over = open.filter((r) => r.state === 'Overdue');
     const wk = D.summary.forecast.weeks[0] || {}, inWk = open.filter((r) => r.forecastWeek === wk.weekEnd);
@@ -230,6 +231,8 @@ function rowsFor(only) {
     if (mode === 'all') return true;
     if (mode === 'check') return r.legacyCheck;
     if (r.legacyCheck) return false;
+    if (mode === 'old') return r.old && (r.state === 'Outstanding' || r.state === 'Overdue');
+    if (r.old && mode !== 'Paid') return false; // the old book has its own tab
     if (mode === 'recommit') return r.needCommit;
     if (mode === 'due') {
       if (r.state === 'Overdue') return true;
@@ -498,7 +501,7 @@ async function drill(key, title) {
 document.addEventListener('click', (e) => { const b = e.target.closest('.dr,[data-k].go'); if (b && b.dataset.k) drill(b.dataset.k, b.dataset.t || ''); });
 // Top cards follow the list filters, so their lists come from the rows on the page.
 function kpiDrill(which) {
-  const base = rowsFor('all'), open = base.filter((r) => (r.state === 'Outstanding' || r.state === 'Overdue') && !r.legacyCheck);
+  const base = rowsFor('all'), open = base.filter((r) => (r.state === 'Outstanding' || r.state === 'Overdue') && !r.legacyCheck && !r.old);
   const wk = (D.summary.forecast.weeks[0] || {}).weekEnd;
   const xs = which === 'over' ? open.filter((r) => r.state === 'Overdue') : which === 'week' ? open.filter((r) => r.forecastWeek === wk) : open;
   const rows = xs.map((r) => ({ ...r, amount: r.expected })).sort((a, b) => b.amount - a.amount);
@@ -554,6 +557,7 @@ function renderSum() {
   $('checks').innerHTML = `<div class="chk ${c.noCommitCount ? 'bad' : 'ok'}"><b>${c.noCommitCount ? '⚠️' : '✓'} ยอดค้างชำระที่ยังไม่มีวันนัดจ่าย</b><span>${d('nocommit', 'ค้างชำระที่ยังไม่มีวันนัดจ่าย', c.noCommit)} บาท · ${c.noCommitCount} ใบ</span><small>ต้องเป็น 0 (ช่อง C3 ของชีท Debt)</small></div>
     <div class="chk ${c.needCommitCount ? 'bad' : 'ok'}"><b>${c.needCommitCount ? '⚠️' : '✓'} เลยวันนัดแล้วยังไม่จ่าย</b><span>${d('needcommit', 'เลยวันนัดแล้วยังไม่จ่าย', c.needCommit)} บาท · ${c.needCommitCount} ใบ</span><small>${c.needCommitCount ? 'เปิดแท็บ "ต้องหาวันนัดใหม่" ในรายการติดตาม' : 'ทุกใบมีวันนัดที่ยังไม่ถึง'}</small></div>
     <div class="chk ok"><b>สัปดาห์นี้ (ถึง ${esc(cur.weekEnd || '')})</b><span>เข้าแล้ว ${d('paid|' + cur.weekEnd, 'เงินเข้าแล้วสัปดาห์นี้ (ถึง ' + cur.weekEnd + ')', cur.paid)} · รอ ${d('fc|' + cur.weekEnd, 'รอชำระสัปดาห์นี้ (ถึง ' + cur.weekEnd + ')', cur.expected)}</span><small>ยอดชำระแล้วใน Forecast และ Actual เป็นตัวเลขเดียวกัน</small></div>
+    ${s.oldCount ? `<div class="chk ok"><b>ค้างเก่าก่อนปี 2026 (แยกไว้)</b><span>${d('old', 'ค้างเก่าก่อนปี 2026', s.old)} บาท · ${s.oldCount} ใบ</span><small>ไม่รวมในยอดค้างรับ คาดการณ์เงินเข้า และตัวเช็ก</small></div>` : ''}
     <div class="chk ok"><b>จ่ายเทียบวันนัด (90 วัน)</b><span>ก่อนนัด ${drBtn('vs|early', 'จ่ายก่อนวันนัด (90 วัน)', String(v.early), v.early)} · ตรงนัด ${drBtn('vs|ontime', 'จ่ายตรงวันนัด (90 วัน)', String(v.onTime), v.onTime)} · ช้า ${drBtn('vs|late', 'จ่ายช้ากว่าวันนัด (90 วัน)', String(v.late), v.late)}</span><small>นับใบที่รับเงินใน 90 วันล่าสุด</small></div>`;
   const maxF = Math.max(1, ...s.forecast.weeks.map((w) => w.expected + w.paid));
   $('fc').innerHTML = `<table class="sum"><tr><th>สัปดาห์ถึง</th><th>รอชำระ</th><th>ใบ</th><th>ชำระแล้ว</th><th style="width:26%"></th></tr>
@@ -572,7 +576,7 @@ function renderSum() {
   $('months').innerHTML = `<table class="sum"><tr><th>เดือน</th>${segs.map((g) => `<th>${esc(g)}</th>`).join('')}<th>ออก INV รวม</th><th>ใบ</th><th>เงินเข้า</th></tr>
     ${s.months.map((m) => `<tr><td>${esc(m.month)}</td>${segs.map((g) => `<td>${d('month-inv|' + m.month + '|' + g, 'ออก INV ' + m.month + ' · ' + g, m.bySegment[g] || 0)}</td>`).join('')}<td>${d('month-inv|' + m.month, 'ออก INV ' + m.month, m.invoiced)}</td><td>${m.count}</td><td>${d('month-cash|' + m.month, 'เงินเข้า ' + m.month, m.cash)}</td></tr>`).join('')}</table>`;
   const by = {};
-  D.invoices.filter((r) => (r.state === 'Overdue' || r.state === 'Outstanding') && !r.legacyCheck && (!$('s-seg').value || (r.segment || 'Others') === $('s-seg').value)).forEach((r) => { const k = r.salesName || r.salesEmail || '(ไม่ระบุ)'; by[k] = by[k] || { open: 0, over: 0, n: 0 }; by[k].open += r.expected; by[k].n++; if (r.state === 'Overdue') by[k].over += r.expected; });
+  D.invoices.filter((r) => (r.state === 'Overdue' || r.state === 'Outstanding') && !r.legacyCheck && !r.old && (!$('s-seg').value || (r.segment || 'Others') === $('s-seg').value)).forEach((r) => { const k = r.salesName || r.salesEmail || '(ไม่ระบุ)'; by[k] = by[k] || { open: 0, over: 0, n: 0 }; by[k].open += r.expected; by[k].n++; if (r.state === 'Overdue') by[k].over += r.expected; });
   $('bysales').innerHTML = `<table class="sum"><tr><th>เซล</th><th>ค้างรับ</th><th>เกินกำหนด</th><th>ใบ</th></tr>${Object.entries(by).sort((a, b) => b[1].open - a[1].open).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${d('sales|' + k, 'ค้างรับของ ' + k, v.open)}</td><td>${d('sales|' + k + '|over', 'เกินกำหนดของ ' + k, v.over)}</td><td>${v.n}</td></tr>`).join('')}</table>`;
 }
 

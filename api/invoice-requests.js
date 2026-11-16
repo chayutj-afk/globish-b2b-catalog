@@ -575,11 +575,9 @@ async function arOwner(req, res, user) {
 
 // "↻ อัปเดตจาก PEAK" on an AR row: read the INV (and its receipt) as they now are in PEAK and apply
 // edits / voids / classification, the same as the webhook does. For when the webhook missed something.
-async function arRefresh(req, res, user) {
-  if (!isOp(user) && !can(user, 'approve')) throw bad('ไม่มีสิทธิ์', 403);
+// Read one INV (and its receipt) as they now are in PEAK and bring the AR row in line. Returns { changes, status }.
+async function refreshFromPeak(ivNo) {
   const peak = require('../lib/peak');
-  if (peak.mode() === 'off') throw bad('ยังไม่ได้เปิดการเชื่อมต่อ PEAK API', 503);
-  const ivNo = text((req.body || {}).ivNo, 40);
   const row = (await hub.readTable('Invoices')).find((x) => x.ivNo === ivNo);
   if (!row) throw bad('ไม่พบ INV นี้ใน AR', 404);
   const ps = require('../lib/peaksync');
@@ -608,8 +606,17 @@ async function arRefresh(req, res, user) {
     const rt = await peak.findReceiptByCode(row.rtNo).catch(() => null);
     if (rt) changes.push(...(((await ps.syncReceipt(rt, { classes: true })) || {}).changes || []));
   }
-  await hub.log('catalog', 'ar_refresh', ivNo, `${user.email} · ${changes.join(', ') || 'no change'}`);
-  res.status(200).json({ ok: true, changes, status: iv.status || '' });
+  return { changes, status: iv.status || '' };
+}
+
+// "↻ อัปเดตจาก PEAK" on an AR row: applies edits / voids / classification, the same as the webhook does.
+async function arRefresh(req, res, user) {
+  if (!isOp(user) && !can(user, 'approve')) throw bad('ไม่มีสิทธิ์', 403);
+  if (require('../lib/peak').mode() === 'off') throw bad('ยังไม่ได้เปิดการเชื่อมต่อ PEAK API', 503);
+  const ivNo = text((req.body || {}).ivNo, 40);
+  const out = await refreshFromPeak(ivNo);
+  await hub.log('catalog', 'ar_refresh', ivNo, `${user.email} · ${out.changes.join(', ') || 'no change'}`);
+  res.status(200).json({ ok: true, ...out });
 }
 
 async function arUpdate(req, res, user) {
@@ -1143,6 +1150,11 @@ async function updateEdit(req, res, user) {
           if (newLink) g.peakDocLink = newLink;
           if (newAmt !== null) g.preVat = newAmt;
           await hub.updateRow('Invoices', a._row, g);
+          // Same number kept: accounting may have voided the INV and issued it again (new customer branch,
+          // address…), which gives the document a new id and link in PEAK. Bring the row in line right away.
+          if (!(newNo && newNo !== row.docNo) && !newLink && require('../lib/peak').mode() !== 'off') {
+            try { const out = await refreshFromPeak(g.ivNo || a.ivNo); if (out.changes.length) await hub.log('catalog', 'edit_refresh', a.ivNo, out.changes.join(', ')); } catch (e) { await hub.log('catalog', 'edit_refresh_failed', a.ivNo, e.message).catch(() => {}); }
+          }
         }
       }
     } else if (row.docType === 'RT') {

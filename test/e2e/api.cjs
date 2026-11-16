@@ -193,6 +193,19 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
   [s, j] = await call(KOOK, 'GET', '/api/invoice-requests'); ok(j.requests.some((x) => x.ivRequestId === 'LEGACY-IV-20261100001'), 'new owner sees it under "my requests"');
   [s, j] = await call(BEE, 'GET', '/api/invoice-requests'); ok(!j.requests.some((x) => x.ivRequestId === 'LEGACY-IV-20261100001'), 'old owner no longer sees it');
   [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_refresh', ivNo: 'IV-20250500001' }); ok(s === 404, 'refresh of an INV PEAK does not have → clear 404: ' + j.error);
+  // PEAK: INV voided and issued again under the same number. PEAK shows the voided one as "Draft" with no void flag.
+  //  a) imported row (no PEAK id, link of the old document)
+  setPeak((p) => { p.invoices.push({ id: 'old800', code: 'IV-20260800009', status: 'Draft', contactCode: 'CB01561', issuedDate: '20260809', dueDate: '20260908', preTaxAmount: 14859.81, netAmount: 15900, taxStatus: 0, documentLink: 'https://doc.peakaccount.com/invoice?emi=old800' },
+    { id: 'new800', code: 'IV-20260800009', status: 'Approve', contactCode: 'CB01561-1', issuedDate: '20260809', dueDate: '20260908', preTaxAmount: 14859.81, netAmount: 15900, taxStatus: 0, documentLink: 'https://doc.peakaccount.com/invoice?emi=new800' }); });
+  [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_refresh', ivNo: 'IV-20260800009' });
+  ok(s === 200 && arRow('IV-20260800009').peakIvId === 'new800' && /new800/.test(arRow('IV-20260800009').peakDocLink) && arRow('IV-20260800009').clientCode === 'CB01561-1', 're-issued under the same number (imported row): row follows the approved document: ' + JSON.stringify(j.changes));
+  //  b) row that holds the id of the document that was then voided
+  setPeak((p) => { const o = p.invoices.find((x) => x.id === 'iL1'); o.status = 'Draft'; p.invoices.push({ ...o, id: 'iL1b', status: 'Approve', documentLink: 'https://doc.peakaccount.com/invoice?emi=iL1b' }); });
+  [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_refresh', ivNo: 'IV-20261100001' });
+  ok(s === 200 && arRow('IV-20261100001').peakIvId === 'iL1b' && /iL1b/.test(arRow('IV-20261100001').peakDocLink) && arRow('IV-20261100001').docStatus === 'Active' && j.changes.some((c) => /ออกใหม่/.test(c)), 're-issued under the same number (row had the old id): moved to the approved document: ' + JSON.stringify(j.changes));
+  ok(ivr('LEGACY-IV-20261100001').peakIvId === 'iL1b', 'the INV request follows too');
+  setPeak((p) => { p.invoices = p.invoices.filter((x) => x.id !== 'iL1'); const n = p.invoices.find((x) => x.id === 'iL1b'); n.id = 'iL1'; });
+  await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_refresh', ivNo: 'IV-20261100001' });
   // INV void
   setPeak((p) => { const x = p.invoices.find((y) => y.id === a2.peakIvId); x.status = 'Void'; x.isVoid = 1; });
   [s, j] = await hook('invoice', { PeakInvoices: { invoices: [peak().invoices.find((y) => y.id === a2.peakIvId)] }, eventType: 'Void' });

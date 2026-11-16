@@ -583,10 +583,26 @@ async function arRefresh(req, res, user) {
   const row = (await hub.readTable('Invoices')).find((x) => x.ivNo === ivNo);
   if (!row) throw bad('ไม่พบ INV นี้ใน AR', 404);
   const ps = require('../lib/peaksync');
-  const iv = row.peakIvId ? await peak.getInvoice(row.peakIvId) : await peak.findInvoiceByCode(row.ivNo);
+  let iv = row.peakIvId ? await peak.getInvoice(row.peakIvId) : await peak.findInvoiceByCode(row.ivNo);
   if (!iv) throw bad(`ไม่พบ ${row.ivNo} ใน PEAK`, 404);
+  const pre = [];
+  // Accounting voided the INV in PEAK and issued a new one under the same number: the row still points at the
+  // voided document. Move it to the approved document that now carries the number.
+  if (row.peakIvId && !ps.isApproved(iv)) {
+    const live = await peak.findInvoiceByCode(row.ivNo);
+    if (live && live.id !== iv.id && ps.isApproved(live)) {
+      const at = hub.sheetDateTime();
+      await hub.updateRow('Invoices', row._row, { peakIvId: live.id, peakDocLink: live.documentLink || row.peakDocLink, docStatus: 'Active',
+        note: [row.note, `ออกใหม่ใน PEAK เลขเดิม เอกสารเดิมถูกยกเลิก (${at})`].filter(Boolean).join(' · ').slice(0, 500) });
+      for (const x of (await hub.readTable('InvoiceRequests')).filter((v) => v.peakIvId === row.peakIvId)) {
+        await hub.updateRow('InvoiceRequests', x._row, { peakIvId: live.id, peakDocLink: live.documentLink || x.peakDocLink, ...(x.status === 'iv_void' ? { status: 'iv_issued' } : {}), updatedAt: at });
+      }
+      pre.push('ออกใหม่ใน PEAK เลขเดิม: ย้ายไปใช้เอกสารใบที่อนุมัติอยู่');
+      iv = live;
+    } else if (!ps.isVoid(iv)) pre.push('INV นี้ใน PEAK ไม่ได้อยู่ในสถานะอนุมัติ (ถูกยกเลิกหรือดึงกลับเป็นร่าง) และไม่พบใบที่ออกใหม่เลขเดิม ตรวจใน PEAK');
+  }
   const a = await ps.syncInvoice(iv, { classes: true });
-  const changes = [...((a && a.changes) || [])];
+  const changes = [...pre, ...((a && a.changes) || [])];
   if (a && a.classError) changes.push('อ่านกลุ่มจัดประเภทจาก PEAK ไม่ได้ (ลองใหม่ภายหลัง)');
   if (row.rtNo) {
     const rt = await peak.findReceiptByCode(row.rtNo).catch(() => null);

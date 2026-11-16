@@ -398,7 +398,9 @@ let ME = null, PKGS = [], REQS = [], IVS = [], RTS = [], EDITS = [], PEAK_LIVE =
 
 
 // doc.peakaccount.com/?emi=…&eti=… (view) → secure.peakaccount.com/income/<doc>Edit?emi=…&eii=… (edit / approve page)
-function peakEdit(link, doc) { try { const u = new URL(link); const emi = u.searchParams.get('emi'), eti = u.searchParams.get('eti'); return emi && eti ? `https://secure.peakaccount.com/income/${doc}Edit?emi=${encodeURIComponent(emi)}&eii=${encodeURIComponent(eti)}` : link; } catch { return link; } }
+// Receipts go through receiptDetail: PEAK's receiptEdit page stays blank without its own receipt-type parameter,
+// and receiptDetail sends the user on to the right page (Draft → edit / approve) with that parameter filled in.
+function peakEdit(link, doc) { try { const u = new URL(link); const emi = u.searchParams.get('emi'), eti = u.searchParams.get('eti'); return emi && eti ? `https://secure.peakaccount.com/income/${doc}${doc === 'receipt' ? 'Detail' : 'Edit'}?emi=${encodeURIComponent(emi)}&eii=${encodeURIComponent(eti)}` : link; } catch { return link; } }
 const canDo = (p) => !!(ME && (ME.perms || []).includes(p));
 const isoD = (s) => { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(String(s || '')); return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : ''; };
 const whtShort = (r) => (r === undefined || r === '' ? 'ไม่ได้ระบุ' : String(r) === '0' ? 'ไม่หัก' : `${r}%`);

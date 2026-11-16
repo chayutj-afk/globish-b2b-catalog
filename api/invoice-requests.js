@@ -637,6 +637,7 @@ async function arPeakCheck(req, res, user) {
   const nos = (Array.isArray(b.ivNos) ? b.ivNos : []).map((x) => text(x, 40)).filter(Boolean).slice(0, 6);
   if (!nos.length) throw bad('ไม่มีรายการให้ตรวจ');
   const rows = await hub.readTable('Invoices');
+  const [rtsAll, ivreqsAll] = b.apply ? await Promise.all([hub.readTable('ReceiptRequests').catch(() => []), hub.readTable('InvoiceRequests').catch(() => [])]) : [[], []];
   const at = hub.sheetDateTime(), today = ar.todayMs();
   const dmyOf = (ymd) => { const m = /^(\d{4})-?(\d{2})-?(\d{2})/.exec(String(ymd || '')); return m ? `${m[3]}/${m[2]}/${m[1]}` : ''; };
   const results = [];
@@ -662,6 +663,7 @@ async function arPeakCheck(req, res, user) {
       let rt = null;
       if (b.apply && !row.rtNo) rt = await peak.findReceiptForInvoice(ivNo).catch(() => null);
       const rtNo = rt ? { rtNo: String(rt.code).toUpperCase() } : {};
+      if (rt && b.apply) await rtRowFromPeak({ ...row, paidDate }, rt, user, rtsAll, ivreqsAll);
       // A receipt dated ahead, or a cheque: PEAK's date is not the day the money came in. Keep the INV open as
       // "receipt issued, waiting for the money" until accounting confirms.
       const pp = ar.fromPeakPayment(row, { payDate: paidDate, cheque: await peak.isChequePayment(pays), today });
@@ -689,6 +691,21 @@ async function arPeakCheck(req, res, user) {
   res.status(200).json({ ok: true, results });
 }
 
+// A receipt that already exists in PEAK (issued there, not through the app) gets a ReceiptRequests row too, so the
+// salesperson finds it under "คำขอของฉัน › ใบเสร็จ" like any receipt issued through the app.
+async function rtRowFromPeak(a, rt, user, rts, ivreqs) {
+  const ivNo = String(a.ivNo).toUpperCase();
+  if ((rts || []).some((x) => String(x.refDoc).toUpperCase() === ivNo && !DEAD.has(x.status))) return false;
+  const iv = (ivreqs || []).find((x) => x.ivRequestId === a.ivRequestId) || {};
+  const at = hub.sheetDateTime(), no = String(rt.code).toUpperCase();
+  await hub.appendRows('ReceiptRequests', [{ rtRequestId: shortId('RTREQ'), createdAt: at, requestedBy: iv.requestedBy || a.salesEmail || user.email, salesName: a.salesName || iv.salesName || '',
+    segment: a.segment || 'B2B', docKind: RT_KIND.company, refDoc: ivNo, whStudent: '', billName: a.company, taxId: a.taxId, branch: a.branch || '00000', address: '', deliveryAddress: '', email: '',
+    whtRate: String(Math.round(ar.num(a.whtRate) < 1 ? ar.num(a.whtRate) * 100 : ar.num(a.whtRate))), packages: a.keyHS || '', description: a.packageName || '', price: ar.num(a.preVat), discount: 0,
+    paidDate: a.paidDate || '', paymentProof: '', deliveryChannel: '', docLang: 'TH', note: `ออกจาก INV ${ivNo}`, status: 'issued', peakRtNo: no, peakDocLink: rt.documentLink || '',
+    sentStatus: 'sent', sentAt: at, trackingNo: '', accountNote: `ใบเสร็จออกใน PEAK ไว้แล้ว ระบบดึงเลขมาให้ — ${user.name || user.email}`, updatedAt: at, peakRtId: rt.id || '' }]);
+  return true;
+}
+
 // Paid INVs with no receipt number in the app: look in PEAK for the receipt issued from each INV and
 // record its number (receipts issued in PEAK before the app, or outside it). Nothing is created in PEAK.
 async function rtFind(req, res, user) {
@@ -697,7 +714,7 @@ async function rtFind(req, res, user) {
   if (peak.mode() === 'off') throw bad('ยังไม่ได้เปิดการเชื่อมต่อ PEAK API', 503);
   const nos = (Array.isArray((req.body || {}).ivNos) ? req.body.ivNos : []).map((x) => text(x, 40).toUpperCase()).filter(Boolean).slice(0, 6);
   if (!nos.length) throw bad('ไม่มีรายการให้ตรวจ');
-  const [invs, rts] = await Promise.all([hub.readTable('Invoices'), hub.readTable('ReceiptRequests')]);
+  const [invs, rts, ivreqs] = await Promise.all([hub.readTable('Invoices'), hub.readTable('ReceiptRequests'), hub.readTable('InvoiceRequests').catch(() => [])]);
   const at = hub.sheetDateTime();
   const results = [];
   for (const ivNo of nos) {
@@ -708,6 +725,7 @@ async function rtFind(req, res, user) {
     if (!rt) { results.push({ ivNo, company: a.company, result: 'none' }); continue; }
     const no = String(rt.code).toUpperCase();
     await hub.updateRow('Invoices', a._row, { rtNo: no, note: [a.note, `ใบเสร็จ ${no} ออกใน PEAK ไว้แล้ว (${at})`].filter(Boolean).join(' · ').slice(0, 500) });
+    await rtRowFromPeak(a, rt, user, rts, ivreqs);
     results.push({ ivNo, company: a.company, result: 'found', rtNo: no, link: rt.documentLink || '' });
   }
   await hub.log('catalog', 'rt_find', nos.join(','), `${user.email} · ${results.map((r) => r.result).join(',')}`);

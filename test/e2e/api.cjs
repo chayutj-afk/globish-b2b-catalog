@@ -281,6 +281,10 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
   [s, j] = await call(BEE, 'PATCH', '/api/invoice-requests', { action: 'rt_find', ivNos: ['IV-20250500001'] }); ok(s === 403, 'sales cannot run the receipt lookup');
   [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { action: 'rt_find', ivNos: ['IV-20250500001', 'IV-20260800009'] });
   ok(s === 200 && j.results[0].result === 'found' && arRow('IV-20250500001').rtNo === '202505A00009' && j.results[1].result === 'skip', 'receipt already in PEAK → number recorded, unpaid INV skipped: ' + JSON.stringify(j.results.map((r) => r.result)));
+  { const rr = db().ReceiptRequests.filter((x) => x.refDoc === 'IV-20250500001');
+    ok(rr.length === 1 && rr[0].status === 'issued' && rr[0].peakRtNo === '202505A00009' && /receipt\?emi=rOld/.test(rr[0].peakDocLink), 'the receipt found in PEAK is listed under the receipt requests ' + JSON.stringify(rr.map((x) => [x.status, x.peakRtNo])));
+    [s, j] = await call(ACCT, 'GET', '/api/invoice-requests?view=receipts'); const mine = (j.requests || []).find((x) => x.refDoc === 'IV-20250500001');
+    ok(!!mine, 'and the receipts list returns it'); }
   // the old book (issued before 2026) is reported apart from the current receivables
   setPeak((p) => { p.invoices.push({ id: 'old24', code: 'IV-20240900099', status: 'Approve', issuedDate: '20240901', dueDate: '20241001', preTaxAmount: 1000, netAmount: 1070, remainAmount: 1070, taxStatus: 0, paidPayments: [] }); });
   {

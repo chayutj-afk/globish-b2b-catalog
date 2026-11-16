@@ -768,7 +768,7 @@ async function arUpdate(req, res, user) {
       if (c === null) throw bad('ใส่วันที่ลูกค้านัดจ่าย ถ้ายังไม่ทราบให้ใส่วันที่คาดว่าจะจ่าย');
       if (c < ar.todayMs()) throw bad('วันนัดจ่ายเลยมาแล้ว ใส่วันนัดใหม่ ถ้ายังไม่ทราบให้ใส่วันที่คาดว่าจะจ่าย');
     }
-    await hub.appendRows('FollowUps', [{ loggedAt: at, ivNo, channel, by: who, result, nextActionDate: next, note }]);
+    await hub.appendRows('FollowUps', [{ loggedAt: at, ivNo, channel, by: who, result, nextActionDate: next, note, commitDate: commit || row.commitDate || '' }]);
     const f = { followStatus: result, nextActionDate: next };
     if (commit) f.commitDate = commit;
     await hub.updateRow('Invoices', row._row, f);

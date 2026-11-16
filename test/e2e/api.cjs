@@ -308,6 +308,7 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
   [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_followup', ivNo: 'IV-20260800009', channel: ch, result: fo, nextActionDate: '2026-11-20', note: 'โทรแล้ว' }); ok(s === 400 && (db().FollowUps || []).length === 0, 'follow-up on an open INV needs a commit date that has not passed');
   [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_followup', ivNo: 'IV-20260800009', channel: ch, result: fo, commitDate: '2020-01-01', note: 'x' }); ok(s === 400, 'a commit date in the past is refused');
   [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_followup', ivNo: 'IV-20260800009', channel: ch, result: fo, commitDate: '2030-12-27', nextActionDate: '2026-11-20', note: 'โทรแล้ว' }); ok(s === 200 && db().FollowUps.length === 1, 'follow-up saved');
+  ok(db().FollowUps[0].commitDate === '27/12/2030', 'the follow-up keeps the pay date given at that contact: ' + db().FollowUps[0].commitDate);
   // PEAK receipt dated ahead: the INV stays open, waiting for the money; accounting confirms with the real date
   { const was = { ...arRow('IV-20260800009') };
     setPeak((p) => { const iv = p.invoices.find((x) => x.code === 'IV-20260800009' && x.status === 'Approve'); iv.remainAmount = 0; iv.paidPayments = [{ paymentDate: '20270115', paymentTotal: iv.netAmount, payments: [{ paymentMethodCode: 'BNK001', amount: iv.netAmount }] }]; });

@@ -318,7 +318,7 @@ const opt = (list, v, blank) => (blank ? `<option value="">${blank}</option>` : 
 function detail(r) {
   const id = esc(r.ivNo);
   const kv = (k, v) => v ? `<div><span>${k}</span>${v}</div>` : '';
-  const fu = (r.followUps || []).slice().reverse().map((f) => `<div><b>${esc(f.loggedAt)}</b> · ${esc(f.channel)} · ${esc(f.result)}${f.nextActionDate ? ' · ติดตามครั้งถัดไป ' + esc(f.nextActionDate) : ''}<br><span class="small">${esc(f.by)}${f.note ? ' · ' + esc(f.note) : ''}</span></div>`).join('') || '<div class="small">ยังไม่มีบันทึก</div>';
+  const fu = (r.followUps || []).slice().reverse().map((f) => `<div><b>${esc(f.loggedAt)}</b> · ${esc(f.channel)} · ${esc(f.result)}${f.commitDate ? ' · นัดจ่าย ' + esc(f.commitDate) : ''}${f.nextActionDate ? ' · ติดตามครั้งถัดไป ' + esc(f.nextActionDate) : ''}<br><span class="small">${esc(f.by)}${f.note ? ' · ' + esc(f.note) : ''}</span></div>`).join('') || '<div class="small">ยังไม่มีบันทึก</div>';
   const paid = r.state === 'Paid', closed = r.state === 'Closed';
   return `<tr class="det"><td colspan="8">
     <div class="acts">${!CAN_EDIT ? (D.canOwner ? `<button class="btn btn-g btn-sm" onclick="openOwner('${id}')">👤 เปลี่ยนเซลเจ้าของ</button>` : '<span class="small">ดูอย่างเดียว</span>') : `

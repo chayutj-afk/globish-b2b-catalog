@@ -260,6 +260,15 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
   ok(s === 200, 'receipt Draft for an imported INV (no stored PEAK id): ' + (j.error || j.peakRtNo));
   ok(arRow('IV-20261000030').commitDate === '14/11/2026', 'payment on /ar moves the commit date too');
 
+  // old imported INVs waiting for a check: read from PEAK, then save on confirm
+  setPeak((p) => { p.invoices.push({ id: 'old25', code: 'IV-20250500001', status: 'Approve', contactCode: 'C1', issuedDate: '20250501', dueDate: '20250531', preTaxAmount: 15000, netAmount: 16050, remainAmount: 0, taxStatus: 0,
+    documentLink: 'https://doc.peakaccount.com/invoice?emi=old25', paidPayments: [{ paymentDate: '20250520', paymentTotal: 16050, payments: [{ paymentMethodCode: 'BNK001', amount: 15600 }] }] }); });
+  [s, j] = await call(BEE, 'PATCH', '/api/invoice-requests', { action: 'ar_peakcheck', ivNos: ['IV-20250500001'] }); ok(s === 403, 'sales cannot run the PEAK check');
+  [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_peakcheck', ivNos: ['IV-20250500001', 'IV-20260800009'] });
+  ok(s === 200 && j.results[0].result === 'paid' && j.results[0].paidDate === '20/05/2025' && j.results[0].amount === 15600 && j.results[1].result === 'skip' && !arRow('IV-20250500001').paidDate, 'PEAK check reads only: ' + JSON.stringify(j.results.map((r) => r.result)));
+  [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_peakcheck', ivNos: ['IV-20250500001'], apply: true });
+  let oc = arRow('IV-20250500001');
+  ok(s === 200 && oc.paidDate === '20/05/2025' && Number(oc.paidAmount) === 15600 && oc.commitDate === '20/05/2025' && !oc.followStatus && oc.peakIvId === 'old25', 'PEAK check saved: paid on the PEAK date, off the waiting list');
   console.log('── 8. AR actions, edit requests, B2C receipt');
   [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_followup', ivNo: 'IV-20260800009', channel: 'x', result: 'y' }); ok(s === 400, 'follow-up needs a valid channel');
   [s, j] = await call(COL, 'GET', '/api/invoice-requests?view=ar'); ok(s === 200 && j.invoices.length >= 5 && j.summary, 'collector opens AR: ' + j.invoices.length + ' rows');

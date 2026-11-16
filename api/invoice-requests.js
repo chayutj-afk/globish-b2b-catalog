@@ -619,8 +619,53 @@ async function arRefresh(req, res, user) {
   res.status(200).json({ ok: true, ...out });
 }
 
+// "ข้อมูลเก่ารอตรวจ": imported INVs nobody has checked yet. Read each from PEAK and say whether it is paid,
+// still open, or no longer an approved document. apply: true also writes the paid / still-open result
+// (anything else is only reported, for accounting to decide).
+async function arPeakCheck(req, res, user) {
+  if (!isOp(user) && !can(user, 'approve')) throw bad('ไม่มีสิทธิ์', 403);
+  const peak = require('../lib/peak'), ps = require('../lib/peaksync');
+  if (peak.mode() === 'off') throw bad('ยังไม่ได้เปิดการเชื่อมต่อ PEAK API', 503);
+  const b = req.body || {};
+  const nos = (Array.isArray(b.ivNos) ? b.ivNos : []).map((x) => text(x, 40)).filter(Boolean).slice(0, 6);
+  if (!nos.length) throw bad('ไม่มีรายการให้ตรวจ');
+  const rows = await hub.readTable('Invoices');
+  const at = hub.sheetDateTime(), today = ar.todayMs();
+  const dmyOf = (ymd) => { const m = /^(\d{4})-?(\d{2})-?(\d{2})/.exec(String(ymd || '')); return m ? `${m[3]}/${m[2]}/${m[1]}` : ''; };
+  const results = [];
+  for (const ivNo of nos) {
+    const row = rows.find((x) => x.ivNo === ivNo);
+    const e = row ? ar.enrich(row, today) : null;
+    const base = { ivNo, company: row ? row.company : '', expected: e ? e.expected : 0 };
+    if (!row || !e.legacyCheck) { results.push({ ...base, result: 'skip', text: 'ไม่ใช่รายการรอตรวจแล้ว' }); continue; }
+    let iv = null;
+    try { iv = await peak.findInvoiceByCode(ivNo); } catch (err) { results.push({ ...base, result: 'error', text: 'อ่านจาก PEAK ไม่ได้: ' + err.message }); continue; }
+    if (!iv) { results.push({ ...base, result: 'notfound', text: 'ไม่พบเลขนี้ในใบแจ้งหนี้ของ PEAK' }); continue; }
+    if (!ps.isApproved(iv)) { results.push({ ...base, result: 'void', text: 'ไม่พบใบที่อนุมัติอยู่ใน PEAK (ถูกยกเลิกหรือยังเป็นร่าง)', link: iv.documentLink || '' }); continue; }
+    const pays = iv.paidPayments || [];
+    const remain = ar.num(iv.remainAmount), net = ar.num(iv.netAmount);
+    const link = { peakIvId: iv.id || row.peakIvId, peakDocLink: iv.documentLink || row.peakDocLink };
+    const note = (t) => [row.note, `${t} (${at} · ${user.name || user.email})`].filter(Boolean).join(' · ').slice(0, 500);
+    if (pays.length && remain <= 0.01) {
+      const paidDate = dmyOf(pays.map((p) => p.paymentDate).filter(Boolean).sort().pop()) || '';
+      const cash = round2(pays.reduce((t, p) => t + (p.payments || []).reduce((u, q) => u + ar.num(q.amount), 0), 0)) || round2(pays.reduce((t, p) => t + ar.num(p.paymentTotal), 0));
+      if (!paidDate) { results.push({ ...base, result: 'error', text: 'PEAK ไม่มีวันที่รับเงิน ตรวจใน PEAK', link: link.peakDocLink }); continue; }
+      if (b.apply) await hub.updateRow('Invoices', row._row, { paidDate, ...ar.onPaid(row, paidDate), paidAmount: cash, followStatus: '', ...link, note: note('รับเงินตาม PEAK (ตรวจข้อมูลเก่า)') });
+      results.push({ ...base, result: 'paid', text: 'จ่ายแล้วใน PEAK', paidDate, amount: cash, net, link: link.peakDocLink, applied: !!b.apply });
+    } else if (pays.length) {
+      results.push({ ...base, result: 'partial', text: `รับเงินบางส่วนใน PEAK คงเหลือ ${remain}`, link: link.peakDocLink });
+    } else {
+      if (b.apply) await hub.updateRow('Invoices', row._row, { followStatus: '', commitDate: row.commitDate || e.dueDate, ...link, note: note('ตรวจกับ PEAK แล้ว ยังค้างชำระ') });
+      results.push({ ...base, result: 'open', text: 'ยังค้างชำระใน PEAK', amount: remain || net, net, link: link.peakDocLink, applied: !!b.apply });
+    }
+  }
+  if (b.apply) await hub.log('catalog', 'ar_peakcheck', nos.join(','), `${user.email} · ${results.map((r) => r.result).join(',')}`);
+  res.status(200).json({ ok: true, results });
+}
+
 async function arUpdate(req, res, user) {
   checkOrigin(req);
+  if ((req.body || {}).action === 'ar_peakcheck') return arPeakCheck(req, res, user);
   if ((req.body || {}).action === 'ar_owner') return arOwner(req, res, user);
   if ((req.body || {}).action === 'ar_refresh') return arRefresh(req, res, user);
   if ((req.body || {}).action === 'ar_reclass') {

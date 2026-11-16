@@ -118,7 +118,7 @@ table.sum tr.now td{background:var(--primary-soft)}
     <div class="card">
       <div class="states" id="f-state">
         <div class="seg">
-          <button class="on" data-v="due" type="button" title="เกินกำหนด ครบกำหนดใน 7 วัน หรือถึงวันนัดติดตาม">ต้องตาม</button>
+          <button class="on" data-v="due" type="button" title="เกินกำหนด ครบกำหนดใน 7 วัน หรือถึงวันติดตามครั้งถัดไป">ต้องตาม</button>
           <button data-v="recommit" type="button" title="เลยวันที่ลูกค้านัดจ่ายแล้วยังไม่จ่าย ต้องหาวันนัดใหม่">ต้องหาวันนัดใหม่</button>
           <button data-v="await" type="button" id="b-await" hidden title="ออกใบเสร็จแล้ว (ล่วงหน้า หรือรับเช็คมาแล้ว) แต่เงินยังไม่เข้าบัญชี ยังนับเป็นยอดค้างรับ">รอเงินเข้า</button>
           <button data-v="open" type="button" title="INV ปี 2026 เป็นต้นไปที่ยังไม่ได้รับเงิน">ค้างทั้งหมด</button>
@@ -131,7 +131,7 @@ table.sum tr.now td{background:var(--primary-soft)}
         <select class="sel" id="f-due" aria-label="กำหนดชำระ" hidden><option value="">ทุกกำหนดชำระ</option><option value="Overdue">เกินกำหนด</option><option value="Outstanding">ยังไม่ถึงกำหนด</option></select>
       </div>
       <details class="help" id="f-help"><summary>แต่ละแท็บคืออะไร</summary><div class="small" id="f-hint"></div></details>
-      <div class="wrap"><table class="wl"><thead><tr><th>INV</th><th>บริษัท</th><th>เซล</th><th>ครบกำหนด</th><th class="num">เกิน (วัน)</th><th class="num">ยอดที่ต้องได้รับ</th><th>สถานะติดตาม</th><th>นัดถัดไป</th></tr></thead><tbody id="wl"></tbody></table></div>
+      <div class="wrap"><table class="wl"><thead><tr><th>INV</th><th>บริษัท</th><th>เซล</th><th>ครบกำหนด</th><th class="num">เกิน (วัน)</th><th class="num">ยอดที่ต้องได้รับ</th><th>สถานะติดตาม</th><th>ติดตามครั้งถัดไป</th></tr></thead><tbody id="wl"></tbody></table></div>
       <div class="more" id="more"></div>
       <details class="help" id="pc-bar" hidden><summary>เครื่องมือบัญชี: ตรวจใบค้างกับ PEAK</summary>
         <p class="small" style="margin:8px 0">หาใบที่จ่ายแล้วใน PEAK แต่ที่นี่ยังค้าง ระบบอ่านอย่างเดียวก่อน แล้วให้ยืนยันก่อนบันทึก ตัวกรองกลุ่ม เซล และคำค้นด้านบนมีผลกับรายการที่ตรวจ</p>
@@ -221,7 +221,7 @@ async function load() {
   $('b-check').hidden = !s.legacyCheckCount; $('g-old').hidden = !s.legacyCheckCount;
   $('b-await').hidden = !D.invoices.some((r) => r.awaitCash);
   if ($('b-await').hidden && $('b-await').classList.contains('on')) { $('b-await').classList.remove('on'); document.querySelector('#f-state button[data-v="due"]').classList.add('on'); }
-  $('f-hint').innerHTML = `<b>ต้องตาม</b> = เกินกำหนด หรือครบกำหนดใน 7 วัน หรือถึงวันนัดติดตาม เรียงจากเกินนานสุด<br><b>ต้องหาวันนัดใหม่</b> = เลยวันที่ลูกค้านัดจ่ายแล้วยังไม่จ่าย<br><b>รอเงินเข้า</b> = ออกใบเสร็จแล้ว (ล่วงหน้า หรือรับเช็ค) แต่เงินยังไม่เข้าบัญชี ยังนับเป็นยอดค้างรับ<br><b>ค้างทั้งหมด</b> = INV ปี 2026 เป็นต้นไปที่ยังไม่ได้รับเงิน เลือกดูเฉพาะเกินกำหนดหรือยังไม่ถึงกำหนดได้${s.oldCount ? `<br><b>ค้างเก่าก่อนปี 2026</b> ${s.oldCount} ใบ (${fmt0(s.old)} บาท) แยกไว้ ดูได้ที่แท็บ "สรุป"` : ''}${s.legacyCheckCount ? `<br><b>รอตรวจกับ PEAK</b> ${s.legacyCheckCount} ใบ (${fmt0(s.legacyCheck)} บาท) = ข้อมูลที่ย้ายมาและยังไม่มีใครตรวจ ไม่นับในยอดค้างรับจนกว่าจะตรวจ` : ''}`;
+  $('f-hint').innerHTML = `<b>ต้องตาม</b> = เกินกำหนด หรือครบกำหนดใน 7 วัน หรือถึงวันติดตามครั้งถัดไป เรียงจากเกินนานสุด<br><b>ต้องหาวันนัดใหม่</b> = เลยวันที่ลูกค้านัดจ่ายแล้วยังไม่จ่าย<br><b>รอเงินเข้า</b> = ออกใบเสร็จแล้ว (ล่วงหน้า หรือรับเช็ค) แต่เงินยังไม่เข้าบัญชี ยังนับเป็นยอดค้างรับ<br><b>ค้างทั้งหมด</b> = INV ปี 2026 เป็นต้นไปที่ยังไม่ได้รับเงิน เลือกดูเฉพาะเกินกำหนดหรือยังไม่ถึงกำหนดได้${s.oldCount ? `<br><b>ค้างเก่าก่อนปี 2026</b> ${s.oldCount} ใบ (${fmt0(s.old)} บาท) แยกไว้ ดูได้ที่แท็บ "สรุป"` : ''}${s.legacyCheckCount ? `<br><b>รอตรวจกับ PEAK</b> ${s.legacyCheckCount} ใบ (${fmt0(s.legacyCheck)} บาท) = ข้อมูลที่ย้ายมาและยังไม่มีใครตรวจ ไม่นับในยอดค้างรับจนกว่าจะตรวจ` : ''}`;
   const segs = D.segments || [];
   const sales = [...new Set(D.invoices.map((r) => r.salesName || r.salesEmail).filter(Boolean))].sort();
   const keepS = $('f-seg').value, keepP = $('f-sales').value;
@@ -318,7 +318,7 @@ const opt = (list, v, blank) => (blank ? `<option value="">${blank}</option>` : 
 function detail(r) {
   const id = esc(r.ivNo);
   const kv = (k, v) => v ? `<div><span>${k}</span>${v}</div>` : '';
-  const fu = (r.followUps || []).slice().reverse().map((f) => `<div><b>${esc(f.loggedAt)}</b> · ${esc(f.channel)} · ${esc(f.result)}${f.nextActionDate ? ' · นัด ' + esc(f.nextActionDate) : ''}<br><span class="small">${esc(f.by)}${f.note ? ' · ' + esc(f.note) : ''}</span></div>`).join('') || '<div class="small">ยังไม่มีบันทึก</div>';
+  const fu = (r.followUps || []).slice().reverse().map((f) => `<div><b>${esc(f.loggedAt)}</b> · ${esc(f.channel)} · ${esc(f.result)}${f.nextActionDate ? ' · ติดตามครั้งถัดไป ' + esc(f.nextActionDate) : ''}<br><span class="small">${esc(f.by)}${f.note ? ' · ' + esc(f.note) : ''}</span></div>`).join('') || '<div class="small">ยังไม่มีบันทึก</div>';
   const paid = r.state === 'Paid', closed = r.state === 'Closed';
   return `<tr class="det"><td colspan="8">
     <div class="acts">${!CAN_EDIT ? (D.canOwner ? `<button class="btn btn-g btn-sm" onclick="openOwner('${id}')">👤 เปลี่ยนเซลเจ้าของ</button>` : '<span class="small">ดูอย่างเดียว</span>') : `

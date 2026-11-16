@@ -270,7 +270,7 @@ details.more{margin-top:8px}details.more>summary{cursor:pointer;font-size:12.5px
   <div id="mine-news"></div>
   <div class="filters" id="mine-who-f" hidden><label for="mine-who" class="small" style="align-self:center">เซล</label><select id="mine-who" class="sel" onchange="renderMine();renderMineMore()" style="width:auto;min-width:220px"></select></div>
   <div class="filters" id="mine-qt-f">
-    <input type="search" id="mq-q" class="grow" placeholder="ค้นหา บริษัท / เลข QT / Request ID / Opportunity" oninput="renderMine()" style="flex:1;min-width:220px">
+    <input type="search" id="mq-q" class="grow" aria-label="ค้นหาคำขอ" placeholder="ค้นหา บริษัท / เลข QT / Request ID / Opportunity" oninput="renderMine();renderMineMore()" style="flex:1;min-width:220px">
     <select id="mq-st" class="sel" onchange="renderMine()" style="width:auto;min-width:230px">
       <option value="">ทุกคำขอ</option>
       <option value="left">ยังขอ INV ได้ (มียอดคงเหลือ)</option>
@@ -1078,7 +1078,15 @@ const IV_ST = { new: ['รอฝ่ายบัญชีออก INV', 'new'], 
 const ORIG_ST = { not_needed: ['ไม่ต้องส่งตัวจริง', ''], pending_decision: ['ยังไม่ทราบเรื่องตัวจริง', 'new'], requested: ['รอส่งตัวจริง', 'blue'], sent: ['ส่งตัวจริงแล้ว', 'green'] };
 const st = (map, k) => { if (!k) return ''; const [t, c] = map[k] || [k, '']; return `<span class="st ${c}">${esc(t)}</span>`; };
 
-function setMine(w, btn) { document.querySelectorAll('#mine-seg button').forEach((b) => b.classList.toggle('on', b === btn)); ['qt', 'inv', 'rt', 'edit'].forEach((k) => { $('mine-' + k).hidden = w !== k; }); $('mine-qt-f').hidden = w !== 'qt'; if (w === 'edit' || w === 'rt') markSeen(w); }
+// One search box for the four lists of "my requests"; the status select belongs to the QT list only.
+let MINE_TAB = 'qt';
+const MINE_PH = { qt: 'ค้นหา บริษัท / เลข QT / Request ID / Opportunity', inv: 'ค้นหา บริษัท / เลข INV / เลข QT / PO / เลขภาษี', rt: 'ค้นหา ชื่อบนใบเสร็จ / เลขใบเสร็จ / เลข INV / ผู้เรียน', edit: 'ค้นหา บริษัท / เลขเอกสาร / รายละเอียดที่ขอแก้' };
+const MINE_N = { qt: '', inv: '', rt: '', edit: '' };
+const mineQ = () => ($('mq-q').value || '').trim().toLowerCase();
+const mineHit = (q, vals) => !q || vals.some((x) => String(x || '').toLowerCase().includes(q));
+const mineCount = () => { $('mq-n').textContent = MINE_N[MINE_TAB]; };
+const mineNone = (q, t) => (q ? `<div class="empty">ไม่พบรายการที่ตรงกับ "${esc(q)}"</div>` : `<div class="empty">${t}</div>`);
+function setMine(w, btn) { document.querySelectorAll('#mine-seg button').forEach((b) => b.classList.toggle('on', b === btn)); ['qt', 'inv', 'rt', 'edit'].forEach((k) => { $('mine-' + k).hidden = w !== k; }); MINE_TAB = w; $('mq-st').hidden = w !== 'qt'; $('mq-q').placeholder = MINE_PH[w]; mineCount(); if (w === 'edit' || w === 'rt') markSeen(w); }
 // Results from accounting the requester hasn't looked at yet: edit requests (done / rejected),
 // receipt requests (issued / rejected — includes receipts issued from a paid INV, which get a row too).
 const SEEN_KEY = 'gc_seen_edits_v1';
@@ -1219,7 +1227,7 @@ function renderMine() {
     if (qs === 'wait') return !QT_LIVE.includes(q.status) && q.status !== 'rejected';
     return true;
   });
-  $('mq-n').textContent = qq || qs ? `${shownQ.length} จาก ${allQ.length} รายการ` : '';
+  MINE_N.qt = qq || qs ? `${shownQ.length} จาก ${allQ.length} รายการ` : '';
   $('mine-qt').innerHTML = shownQ.length ? shownQ.map((q) => {
     const heroes = (q.lines || []).filter((l) => l.role !== 'supplement').map((l) => `${esc(l.packageId === 'CUSTOM' ? 'Customized' : l.packageId === 'SURCHARGE' ? 'ค่าเพิ่ม' : l.packageId)} × ${esc(l.qty)}`).join(', ');
     const { total, done, lbl } = qtAmt(q);
@@ -1243,7 +1251,9 @@ function renderMine() {
     </div>`;
   }).join('') : `<div class="empty">${allQ.length ? 'ไม่พบคำขอที่ตรงกับตัวกรอง' : 'ยังไม่มีคำขอใบเสนอราคา'}</div>`;
 
-  const shownI = IVS.filter(whoOk);
+  const allI = IVS.filter(whoOk);
+  const shownI = allI.filter((v) => mineHit(qq, [v.company, v.peakIvNo, v.qtNo, v.ivRequestId, v.requestId, v.taxId, v.poNo, v.salesName]));
+  MINE_N.inv = qq ? `${shownI.length} จาก ${allI.length} รายการ` : ''; mineCount();
   $('mine-inv').innerHTML = shownI.length ? shownI.map((v) => {
     const canOrig = v.originalStatus !== 'sent';
     const nx = forMe(nextIv(v), v);
@@ -1267,7 +1277,7 @@ function renderMine() {
         ${v.originalStatus !== 'pending_decision' && origBtns ? `<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><span class="small" style="align-self:center">เอกสารตัวจริง:</span>${origBtns}</div>` : ''}
       </details>
     </div>`;
-  }).join('') : '<div class="empty">ยังไม่มีคำขอออก INV</div>';
+  }).join('') : mineNone(qq, 'ยังไม่มีคำขอออก INV');
   renderMineMore();
   paintNews();
 }
@@ -1359,18 +1369,21 @@ async function askEdit(docType, docNo, refId) {
 function alertMsg(t, ok) { ask({ title: ok ? 'เรียบร้อย' : 'ทำรายการไม่สำเร็จ', html: `<p>${esc(t)}</p>`, ok: 'ตกลง', cancel: null }); }
 function renderMineMore() {
   const op = canDo('approve') || canDo('team_view');
-  const shownR = RTS.filter(whoOk), shownE = EDITS.filter(whoOk);
+  const qq = mineQ(), allR = RTS.filter(whoOk), allE = EDITS.filter(whoOk);
+  const shownR = allR.filter((r) => mineHit(qq, [r.billName, r.peakRtNo, r.rtRequestId, r.refDoc, r.whStudent, r.taxId, r.packages, r.salesName]));
+  const shownE = allE.filter((e) => mineHit(qq, [e.company, e.docNo, e.editId, e.detail, e.salesName]));
+  MINE_N.rt = qq ? `${shownR.length} จาก ${allR.length} รายการ` : ''; MINE_N.edit = qq ? `${shownE.length} จาก ${allE.length} รายการ` : ''; mineCount();
   $('mine-rt').innerHTML = shownR.length ? shownR.map((r) => { const nx = forMe(nextRt(r), r); return `<div class="list-row" id="row-${esc(r.rtRequestId)}"><div class="list-head"><div>${r.peakRtNo ? `<span class="list-id">ใบเสร็จ ${docLink(r.peakRtNo, r.peakDocLink)}</span>` : '<span class="small">ยังไม่มีเลขใบเสร็จ</span>'} · ${esc(r.billName)}${ownerTag(r)}</div><div>${st(RT_ST, r.status)}${r.sentStatus === 'waiting' && r.status === 'issued' ? ' <span class="st blue">รอส่งตัวจริง</span>' : r.sentStatus === 'sent' ? ' <span class="st green">ส่งแล้ว</span>' : ''}</div></div>
     <div class="next ${nx.you ? 'you' : 'wait'}"><b>${nx.you ? 'ถัดไป (คุณ):' : nx.who ? `ถัดไป (${esc(nx.who)}):` : 'ถัดไป:'}</b> ${nx.t}</div>
     <div class="list-sub">${fmt(toNum(r.price) - toNum(r.discount))} บาท · ${esc(r.packages)} ${esc(r.whStudent)}</div>
     ${r.status === 'rejected' && r.accountNote ? `<div class="pc-note err" style="margin-top:8px">เหตุผล: ${esc(r.accountNote)}</div>` : ''}
     <details class="more"><summary>รายละเอียด</summary><div class="list-sub">${esc(r.rtRequestId)} · ${esc(r.createdAt)} · ${esc(r.segment)}${op ? ' · ' + esc(r.salesName) : ''} · ส่งทาง ${esc(r.deliveryChannel)}${r.trackingNo ? ' · เลขพัสดุ ' + esc(r.trackingNo) : ''}${r.accountNote && r.status !== 'rejected' ? `<br><span class="small">ฝ่ายบัญชี: ${esc(r.accountNote)}</span>` : ''}</div></details>
-</div>`; }).join('') : '<div class="empty">ยังไม่มีคำขอใบเสร็จ</div>';
+</div>`; }).join('') : mineNone(qq, 'ยังไม่มีคำขอใบเสร็จ');
   $('mine-edit').innerHTML = shownE.length ? shownE.map((e) => { const nx = forMe(nextEdit(e), e); return `<div class="list-row"><div class="list-head"><div><span class="list-id">ขอแก้ ${esc(e.docType)} ${esc(e.docNo)}</span> · ${esc(e.company)}${ownerTag(e)}</div>${st(ED_ST, e.status)}</div>
     <div class="next ${nx.you ? 'you' : 'wait'}"><b>${nx.you ? 'ถัดไป (คุณ):' : nx.who ? `ถัดไป (${esc(nx.who)}):` : 'ถัดไป:'}</b> ${nx.t}</div>
     <div class="list-sub">ขอแก้: ${esc(e.detail).replace(/\n/g, '<br>')}</div>
     ${e.status === 'rejected' && e.accountNote ? `<div class="pc-note err" style="margin-top:8px">เหตุผล: ${esc(e.accountNote)}</div>` : ''}
-    <details class="more"><summary>รายละเอียด</summary><div class="list-sub">${esc(e.editId)} · ${esc(e.createdAt)}${op ? ' · ' + esc(e.salesName) : ''}${e.accountNote && e.status !== 'rejected' ? `<br><span class="small">ฝ่ายบัญชี: ${esc(e.accountNote)}</span>` : ''}</div></details></div>`; }).join('') : '<div class="empty">ยังไม่มีคำขอแก้ไข</div>';
+    <details class="more"><summary>รายละเอียด</summary><div class="list-sub">${esc(e.editId)} · ${esc(e.createdAt)}${op ? ' · ' + esc(e.salesName) : ''}${e.accountNote && e.status !== 'rejected' ? `<br><span class="small">ฝ่ายบัญชี: ${esc(e.accountNote)}</span>` : ''}</div></details></div>`; }).join('') : mineNone(qq, 'ยังไม่มีคำขอแก้ไข');
 }
 // "Next step" for the INV / receipt / edit cards, same idea as nextStep() for QT.
 function nextIv(v) {

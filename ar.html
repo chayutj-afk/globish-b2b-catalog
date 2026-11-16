@@ -113,6 +113,7 @@ table.sum tr.now td{background:var(--primary-soft)}
         <div class="seg">
           <button class="on" data-v="due" type="button">ต้องตาม</button>
           <button data-v="recommit" type="button" title="เลยวันที่ลูกค้านัดจ่ายแล้วยังไม่จ่าย ต้องหาวันนัดใหม่">ต้องหาวันนัดใหม่</button>
+          <button data-v="await" type="button" id="b-await" hidden title="ออกใบเสร็จแล้ว (ล่วงหน้า หรือรับเช็คมาแล้ว) แต่เงินยังไม่เข้าบัญชี ยังนับเป็นยอดค้างรับ">รอเงินเข้า</button>
           <button data-v="Overdue" type="button">เกินกำหนด</button>
           <button data-v="Outstanding" type="button">ยังไม่ถึงกำหนด</button>
           <button data-v="Paid" type="button">จ่ายแล้ว</button>
@@ -201,6 +202,8 @@ async function load() {
   renderNotices(); if (window.refreshPayBadge) window.refreshPayBadge();
   const s = D.summary;
   $('b-check').hidden = !s.legacyCheckCount; $('b-old').hidden = !s.oldCount; $('g-old').hidden = !s.legacyCheckCount && !s.oldCount;
+  $('b-await').hidden = !D.invoices.some((r) => r.awaitCash);
+  if ($('b-await').hidden && $('b-await').classList.contains('on')) { $('b-await').classList.remove('on'); document.querySelector('#f-state button[data-v="due"]').classList.add('on'); }
   if (s.legacyCheckCount) $('f-hint').innerHTML = `"ต้องตาม" = เกินกำหนด หรือครบกำหนดใน 7 วัน หรือถึงวันนัดติดตาม · <b>ข้อมูลเก่ารอตรวจ ${s.legacyCheckCount} ใบ (${fmt0(s.legacyCheck)} บาท)</b> คือ INV ก่อนปี 2026 ที่ชีท Debt ยังเป็น "รอชำระ" และ INV ปี 2026 ที่มีใน PEAK แต่ไม่มีในชีท Debt ไม่นับในยอดค้างรับจนกว่าจะตรวจ (กด "↻ อัปเดตจาก PEAK" หรือบันทึกรับเงิน / ยกเลิก)`;
   const segs = [...new Set(D.invoices.map((r) => r.segment).filter(Boolean))].sort();
   const sales = [...new Set(D.invoices.map((r) => r.salesName || r.salesEmail).filter(Boolean))].sort();
@@ -249,6 +252,7 @@ function rowsFor(only) {
     if (mode === 'old') return r.old && (r.state === 'Outstanding' || r.state === 'Overdue');
     if (r.old && mode !== 'Paid') return false; // the old book has its own tab
     if (mode === 'recommit') return r.needCommit;
+    if (mode === 'await') return r.awaitCash;
     if (mode === 'due') {
       if (r.state === 'Overdue') return true;
       if (r.state !== 'Outstanding') return false;
@@ -283,7 +287,7 @@ function render() {
     return `<tr class="r${open ? ' open' : ''}" data-iv="${esc(r.ivNo)}"><td class="mono">${r.peakDocLink ? `<a class="doc" href="${esc(r.peakDocLink)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(r.ivNo)}</a>` : esc(r.ivNo)}<div class="sub">${esc(r.segment)}${r.dealType ? ' · ' + esc(r.dealType) : ''}</div></td>
       <td><div class="co">${esc(r.company)}</div><div class="sub">${esc(r.packageName || '')}${r.students ? ' · ' + esc(r.students) + ' คน' : ''}</div></td>
       <td>${esc(r.salesName || r.salesEmail || '')}</td>
-      <td>${esc(r.dueDate)}<div class="sub">${st(r.state)}</div></td>
+      <td>${esc(r.dueDate)}<div class="sub">${st(r.state)}${r.awaitCash ? ' <span class="st blue">ออกใบเสร็จแล้ว รอเงินเข้า</span>' : ''}</div></td>
       <td class="num">${d ? `<span class="days ${d > 90 ? 'd90' : d > 30 ? 'd30' : ''}">${d}</span>` : ''}</td>
       <td class="num">${fmt(r.state === 'Paid' ? (toNum(r.paidAmount) || r.expected) : r.expected)}</td>
       <td>${esc(r.followStatus || '')}${r.commitDate ? `<div class="sub">นัดจ่าย ${esc(r.commitDate)}</div>` : ''}${r.needCommit && !r.legacyCheck ? '<div class="sub late">เลยวันนัด ต้องหาวันใหม่</div>' : ''}</td>
@@ -302,12 +306,13 @@ function detail(r) {
   return `<tr class="det"><td colspan="8">
     <div class="acts">${D.canOwner ? `<button class="btn btn-g btn-sm" onclick="openOwner('${id}')">👤 เปลี่ยนเซลเจ้าของ</button>` : ''}${!CAN_EDIT ? (D.canOwner ? '' : '<span class="small">ดูอย่างเดียว</span>') : `
       ${closed ? '' : `<button class="btn btn-p btn-sm" onclick="openFollow('${id}')">📞 บันทึกการติดตาม</button>`}
-      ${closed ? '' : `<button class="btn ${paid ? 'btn-g' : 'btn-p'} btn-sm" onclick="openPaid('${id}')">💰 ${paid ? 'แก้ไขการรับเงิน' : 'บันทึกรับเงิน'}</button>`}
+      ${closed ? '' : `<button class="btn ${paid ? 'btn-g' : 'btn-p'} btn-sm" onclick="openPaid('${id}')">💰 ${paid ? 'แก้ไขการรับเงิน' : r.awaitCash ? 'ยืนยันเงินเข้า' : 'บันทึกรับเงิน'}</button>`}
+      ${paid || closed ? '' : `<button class="btn btn-g btn-sm" onclick="openAwait('${id}')" title="ออกใบเสร็จล่วงหน้า หรือรับเช็คมาแล้ว แต่เงินยังไม่เข้าบัญชี">🧾 ${r.awaitCash ? 'แก้วันที่ใบเสร็จ / วันรับเช็ค' : 'มีใบเสร็จ / เช็คแล้ว รอเงินเข้า'}</button>`}
       <button class="btn btn-g btn-sm" onclick="openDoc('${id}')">📄 สถานะเอกสาร / หมายเหตุ</button>
       ${D.peakLive ? `<button class="btn btn-g btn-sm" onclick="refreshPeak('${id}')" title="อ่าน INV และใบเสร็จจาก PEAK แล้วอัปเดตยอด วันที่ หัก ณ ที่จ่าย สถานะ และกลุ่มจัดประเภท">↻ อัปเดตจาก PEAK</button>` : ''}
       ${paid && !r.rtNo ? `<a class="btn btn-o btn-sm" href="/request#pend">🧾 ออกใบเสร็จ (รออนุมัติ › ใบเสร็จ)</a>` : ''}`}
     </div>
-    <div class="kv">${kv('วันที่ออก', esc(r.issueDate))}${kv('เครดิต', esc(r.creditTermDays) + ' วัน')}${kv('ก่อน VAT', fmt(toNum(r.preVat)))}${kv('หัก ณ ที่จ่าย', whtPct(r.whtRate))}${kv('QT', esc(r.qtNo))}${kv('เลขภาษี', esc(r.taxId) + (r.branch ? ' / ' + esc(r.branch) : ''))}${kv('PO', esc(r.poNo))}${kv('งวด', esc(r.installment))}${kv(paid ? 'นัดจ่ายไว้เดิม' : 'ลูกค้านัดจ่าย', esc(paid ? r.promisedDate : r.commitDate))}${kv('จ่ายเทียบวันนัด', r.paidVsCommit === '' || r.paidVsCommit === undefined ? '' : r.paidVsCommit < 0 ? `ก่อนนัด ${-r.paidVsCommit} วัน` : r.paidVsCommit > 0 ? `ช้ากว่านัด ${r.paidVsCommit} วัน` : 'ตรงวันนัด')}${kv('RT', esc(r.rtNo))}${kv('วันที่รับเงิน', esc(r.paidDate))}${kv('ยอดที่รับ', r.paidAmount ? fmt(toNum(r.paidAmount)) : '')}${kv('วิธีจ่าย', esc(r.paymentMethod))}${kv('เหตุผลจ่ายช้า', esc(r.delayReason))}${kv('หมายเหตุ', esc(r.note))}${kv('ที่มา', esc(r.source))}</div>
+    <div class="kv">${kv('วันที่ออก', esc(r.issueDate))}${kv('เครดิต', esc(r.creditTermDays) + ' วัน')}${kv('ก่อน VAT', fmt(toNum(r.preVat)))}${kv('หัก ณ ที่จ่าย', whtPct(r.whtRate))}${kv('QT', esc(r.qtNo))}${kv('เลขภาษี', esc(r.taxId) + (r.branch ? ' / ' + esc(r.branch) : ''))}${kv('PO', esc(r.poNo))}${kv('งวด', esc(r.installment))}${kv(paid ? 'นัดจ่ายไว้เดิม' : 'ลูกค้านัดจ่าย', esc(paid ? r.promisedDate : r.commitDate))}${kv('จ่ายเทียบวันนัด', r.paidVsCommit === '' || r.paidVsCommit === undefined ? '' : r.paidVsCommit < 0 ? `ก่อนนัด ${-r.paidVsCommit} วัน` : r.paidVsCommit > 0 ? `ช้ากว่านัด ${r.paidVsCommit} วัน` : 'ตรงวันนัด')}${kv('RT', esc(r.rtNo))}${kv('วันที่ใบเสร็จ / วันรับเช็ค', esc(r.rtDate))}${kv('วันที่เงินเข้า', esc(r.paidDate))}${kv('ยอดที่รับ', r.paidAmount ? fmt(toNum(r.paidAmount)) : '')}${kv('วิธีจ่าย', esc(r.paymentMethod))}${kv('เหตุผลจ่ายช้า', esc(r.delayReason))}${kv('หมายเหตุ', esc(r.note))}${kv('ที่มา', esc(r.source))}</div>
     <div class="box"><h4>ประวัติการติดตาม</h4><div class="log">${fu}</div></div>
   </td></tr>`;
 }
@@ -386,12 +391,14 @@ function openPaid(iv) {
   const r = find(iv), L = D.lists, paid = r.state === 'Paid';
   const mOpts = L.payMethods.map((m) => `<option value="${esc(m)}"${m === (r.paymentMethod || 'Bank Transfer') ? ' selected' : ''}>${esc(METHOD_TH[m] || m)}</option>`).join('');
   // Same fields, same order and same required slip as the Sales form 'แจ้งบัญชีว่าลูกค้าจ่ายแล้ว', plus the delay reason.
-  formModal({ title: paid ? '💰 แก้ไขการรับเงิน' : '💰 บันทึกรับเงิน', ok: '✓ บันทึกรับเงิน', html: head(r) + `
-    <div class="row"><div class="fg"><label>วันที่รับเงิน *</label><input type="date" id="pd-dt" value="${iso(r.paidDate)}"></div>
+  const hasRt = !paid && !!r.rtNo, todayIso = new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10);
+  formModal({ title: paid ? '💰 แก้ไขการรับเงิน' : r.awaitCash ? '💰 ยืนยันเงินเข้า' : '💰 บันทึกรับเงิน', ok: r.awaitCash && !paid ? '✓ ยืนยันเงินเข้า' : '✓ บันทึกรับเงิน', html: head(r) + `
+    ${r.awaitCash ? `<p class="small" style="margin:0 0 10px">ใบนี้มีใบเสร็จแล้ว${r.rtNo ? ' (' + esc(r.rtNo) + ')' : ''}${r.rtDate ? ' ลงวันที่ ' + esc(r.rtDate) : ''} ใส่วันที่เงินเข้าบัญชีจริงตาม statement</p>` : ''}
+    <div class="row"><div class="fg"><label>วันที่เงินเข้าบัญชีจริง *</label><input type="date" id="pd-dt" max="${todayIso}" value="${iso(r.paidDate)}"><div class="sub">ไม่ใช่วันที่บนใบเสร็จหรือวันรับเช็ค</div></div>
     <div class="fg"><label>ยอดที่ได้รับ *</label><input type="text" inputmode="decimal" id="pd-am" value="${r.paidAmount ? esc(r.paidAmount) : r.expected}"><div class="sub">ที่ควรได้รับ ${fmt(r.expected)} (รวม VAT หัก ณ ที่จ่ายแล้ว)</div></div></div>
     <div class="row"><div class="fg"><label>วิธีชำระ *</label><select id="pd-mt">${mOpts}</select></div>
     ${paid ? '' : '<div class="fg"><label>สลิป / หลักฐาน *</label><input type="file" id="pd-file" accept=".pdf,.jpg,.jpeg,.png"></div>'}</div>
-    ${paid ? '' : `<div class="row"><div class="fg"><label>ส่งใบเสร็จทาง *</label><select id="pd-ch" onchange="$('pd-em-w').hidden=!/email/.test(this.value);$('pd-ad-w').hidden=!/post/.test(this.value)"><option value="sales">ส่งไฟล์ให้ Sales</option><option value="email">ส่งอีเมลลูกค้า</option><option value="post">ส่งตัวจริงตามที่อยู่</option><option value="email_post">ส่งอีเมลและตัวจริง</option></select></div>
+    ${paid || hasRt ? '' : `<div class="row"><div class="fg"><label>ส่งใบเสร็จทาง *</label><select id="pd-ch" onchange="$('pd-em-w').hidden=!/email/.test(this.value);$('pd-ad-w').hidden=!/post/.test(this.value)"><option value="sales">ส่งไฟล์ให้ Sales</option><option value="email">ส่งอีเมลลูกค้า</option><option value="post">ส่งตัวจริงตามที่อยู่</option><option value="email_post">ส่งอีเมลและตัวจริง</option></select></div>
     <div class="fg" id="pd-em-w" hidden><label>อีเมลลูกค้า *</label><input type="email" id="pd-em" maxlength="120" value="${esc(r.financeEmail || '')}"></div></div>
     <div class="fg" id="pd-ad-w" hidden><label>ที่อยู่ส่งตัวจริง *</label><input type="text" id="pd-ad" maxlength="600" value="${esc(r.deliveryAddress || '')}"></div>
     <div class="fg"><label>หมายเหตุ</label><input type="text" id="pd-nt" maxlength="500" placeholder="เช่น ลูกค้าโอนรวมค่าธรรมเนียม"></div>`}
@@ -399,8 +406,9 @@ function openPaid(iv) {
     <p class="small">วันนัดจ่ายจะถูกปรับให้เท่ากับวันรับเงิน และระบบเก็บวันนัดเดิมไว้ให้ดูว่าจ่ายก่อนหรือหลังนัด<br>ใบเสร็จ (RT) ฝ่ายบัญชีออกจาก INV นี้ได้หลังบันทึกรับเงิน ที่หน้า รออนุมัติ › ใบเสร็จ${PN.some((n) => n.status === 'new' && String(n.ivNo).toUpperCase() === String(iv).toUpperCase()) ? ' · <b>เซลแจ้งจ่าย INV นี้ไว้แล้ว</b> ยืนยันจากรายการด้านบนจะได้ข้อมูลและสลิปที่เซลแนบ' : ''}</p>`,
     save: async (err) => {
       const body = { action: 'ar_update', ivNo: iv, paidDate: val('pd-dt'), paidAmount: val('pd-am'), paymentMethod: val('pd-mt'), delayReason: val('pd-dl') };
-      if (!body.paidDate || !body.paidAmount || !body.paymentMethod) { err('ใส่วันที่รับเงิน ยอด และวิธีชำระ'); return false; }
-      if (!paid) {
+      if (!body.paidDate || !body.paidAmount || !body.paymentMethod) { err('ใส่วันที่เงินเข้า ยอด และวิธีชำระ'); return false; }
+      if (body.paidDate > todayIso) { err('วันที่เงินเข้าเป็นวันในอนาคตไม่ได้ ถ้าเงินยังไม่เข้าให้ใช้ปุ่ม "มีใบเสร็จ / เช็คแล้ว รอเงินเข้า"'); return false; }
+      if (!paid && !hasRt) {
         Object.assign(body, { deliveryChannel: val('pd-ch'), email: val('pd-em'), deliveryAddress: val('pd-ad'), payNote: val('pd-nt') });
         if (/email/.test(body.deliveryChannel) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) { err('ใส่อีเมลลูกค้าสำหรับส่งใบเสร็จ'); return false; }
         if (/post/.test(body.deliveryChannel) && !body.deliveryAddress) { err('ใส่ที่อยู่ส่งใบเสร็จตัวจริง'); return false; }
@@ -412,13 +420,28 @@ function openPaid(iv) {
       if (!paid && !fl) { err('แนบสลิป / หลักฐานการรับเงิน'); return false; }
       if (fl) { if (fl.size > 3 * 1024 * 1024) { err('ไฟล์ใหญ่เกิน 3 MB'); return false; } body.file = { name: fl.name, type: fl.type, data: await readB64(fl) }; }
       await patch(body); OPEN = null; await done(`บันทึกรับเงิน ${iv} แล้ว`);
-      if (!paid) offerReceipt(iv, { ch: body.deliveryChannel, email: body.email, addr: body.deliveryAddress, method: body.paymentMethod });
+      if (!paid && !hasRt) offerReceipt(iv, { ch: body.deliveryChannel, email: body.email, addr: body.deliveryAddress, method: body.paymentMethod });
     } });
   confirmDiff = false;
 }
 let confirmDiff = false;
 // Right after money is confirmed: offer the receipt Draft in PEAK in the same flow (PEAK API on and the INV
 // came from PEAK), instead of sending accounting to another tab. "Later" leaves it in the pending tab.
+// Receipt issued ahead / cheque collected, money not in yet: keep the receipt date and number, the INV stays open.
+function openAwait(iv) {
+  const r = find(iv);
+  formModal({ title: '🧾 มีใบเสร็จ / เช็คแล้ว รอเงินเข้า', ok: '✓ บันทึก', html: head(r) + `
+    <p class="small" style="margin:0 0 10px">ใช้เมื่อออกใบเสร็จให้ลูกค้าล่วงหน้า หรือรับเช็คมาแล้วแต่เงินยังไม่เข้าบัญชี ใบนี้ยังนับเป็นยอดค้างรับและอยู่ในรายการติดตาม จนกว่าจะกด <b>ยืนยันเงินเข้า</b></p>
+    <div class="row"><div class="fg"><label>วันที่ใบเสร็จ / วันรับเช็ค *</label><input type="date" id="aw-rd" value="${iso(r.rtDate)}"></div>
+    <div class="fg"><label>คาดว่าเงินเข้าวันที่ *</label><input type="date" id="aw-cm" value="${r.needCommit ? '' : iso(r.commitDate)}"><div class="sub">ใช้เป็นวันนัดจ่ายใน Forecast</div></div></div>
+    <div class="fg"><label>เลขใบเสร็จ (ถ้ามี)</label><input type="text" id="aw-rt" maxlength="40" value="${esc(r.rtNo || '')}"></div>`,
+    save: async (err) => {
+      const body = { action: 'ar_update', ivNo: iv, rtDate: val('aw-rd'), commitDate: val('aw-cm') };
+      if (!body.rtDate || !body.commitDate) { err('ใส่วันที่ใบเสร็จ / วันรับเช็ค และวันที่คาดว่าเงินเข้า'); return false; }
+      const rt = val('aw-rt').trim(); if (rt !== String(r.rtNo || '')) body.rtNo = rt;
+      await patch(body); await done(`บันทึก ${iv} แล้ว: รอเงินเข้า`);
+    } });
+}
 let PAYM = null, CAN_RT = false;
 const PM_TY = { 1: 'เงินสด', 2: 'บัญชีธนาคาร', 4: 'e-Wallet' };
 const CH_TH = { sales: 'ส่งไฟล์ให้ Sales', email: 'ส่งอีเมลลูกค้า', post: 'ส่งตัวจริงตามที่อยู่', email_post: 'ส่งอีเมลและตัวจริง' };
@@ -530,7 +553,7 @@ document.querySelectorAll('.stat.go').forEach((el) => { el.onclick = () => D && 
 
 // ---- "ข้อมูลเก่ารอตรวจ": check the listed INVs against PEAK, show the result, then save on confirm
 const isOpenRow = (r) => r.state === 'Outstanding' || r.state === 'Overdue';
-const PC_TH = { paid: 'จ่ายแล้ว', settled: 'ปิดยอดแล้วใน PEAK (ไม่มีวันรับเงิน)', open: 'ยังค้างชำระ', partial: 'รับบางส่วน', void: 'ไม่พบใบที่อนุมัติ', notfound: 'ไม่พบใน PEAK', error: 'อ่านไม่ได้', skip: 'ข้าม' };
+const PC_TH = { paid: 'จ่ายแล้ว', await: 'มีใบเสร็จ รอยืนยันเงินเข้า', settled: 'ปิดยอดแล้วใน PEAK (ไม่มีวันรับเงิน)', open: 'ยังค้างชำระ', partial: 'รับบางส่วน', void: 'ไม่พบใบที่อนุมัติ', notfound: 'ไม่พบใน PEAK', error: 'อ่านไม่ได้', skip: 'ข้าม' };
 async function peakCheckRun(ivNos, apply) {
   const out = [];
   $('ov-load').hidden = false;
@@ -548,14 +571,14 @@ async function peakCheckRun(ivNos, apply) {
 function peakCheckShow(rs, done) {
   const n = (k) => rs.filter((r) => r.result === k).length;
   const sum = (k) => rs.filter((r) => r.result === k).reduce((t, r) => t + (Number(r.amount) || 0), 0);
-  const can = rs.filter((r) => r.result === 'paid' || r.result === 'open');
+  const can = rs.filter((r) => r.result === 'paid' || r.result === 'open' || r.result === 'await');
   $('d-title').textContent = done ? 'บันทึกตามผลจาก PEAK แล้ว' : 'ผลตรวจกับ PEAK';
   $('d-sub').textContent = `${rs.length} ใบ · จ่ายแล้ว ${n('paid')} (${fmt0(sum('paid'))}) · ยังค้าง ${n('open')} (${fmt0(sum('open'))}) · ปิดยอดแล้วแต่ไม่มีวันรับเงิน ${n('settled')} (${fmt0(sum('settled'))}) · อื่น ๆ ${rs.length - n('paid') - n('open') - n('settled')}`;
-  const order = { settled: 0, paid: 1, partial: 2, void: 3, notfound: 4, error: 5, open: 6, skip: 7 };
+  const order = { await: 0, settled: 0, paid: 1, partial: 2, void: 3, notfound: 4, error: 5, open: 6, skip: 7 };
   $('d-body').innerHTML = `<table><thead><tr><th>บริษัท</th><th>INV</th><th>ผลจาก PEAK</th><th>วันที่รับเงิน</th><th class="num">ยอด</th></tr></thead><tbody>
     ${rs.slice().sort((a, b) => order[a.result] - order[b.result]).map((r) => `<tr><td><b>${esc(r.company)}</b></td><td class="mono">${r.link ? `<a class="doc" href="${esc(r.link)}" target="_blank" rel="noopener">${esc(r.ivNo)}</a>` : esc(r.ivNo)}</td>
       <td>${esc(PC_TH[r.result] || r.result)}${r.result !== 'paid' && r.result !== 'open' ? `<div class="small">${esc(r.text || '')}</div>` : ''}</td><td>${esc(r.paidDate || '')}</td><td class="num">${r.amount ? fmt(r.amount) : ''}</td></tr>`).join('')}</tbody></table>
-    ${done ? '' : `<p class="small" style="margin-top:10px">กดบันทึก: ใบที่<b>จ่ายแล้ว</b>จะถูกบันทึกรับเงินตามวันที่และยอดใน PEAK · ใบที่<b>ยังค้าง</b>ในแท็บข้อมูลเก่ารอตรวจจะย้ายเข้ารายการติดตามหนี้ปกติ (วันนัดจ่าย = วันครบกำหนด) ส่วนใบค้างปกติไม่ถูกแตะ · ใบที่<b>ปิดยอดแล้วแต่ไม่มีวันรับเงิน</b> ให้บัญชีเปิดใบนั้นแล้วบันทึกรับเงินเอง · ผลแบบอื่นไม่ถูกแตะ ให้ตรวจใน PEAK เอง</p>
+    ${done ? '' : `<p class="small" style="margin-top:10px">กดบันทึก: ใบที่<b>จ่ายแล้ว</b>จะถูกบันทึกรับเงินตามวันที่และยอดใน PEAK · ใบที่<b>ยังค้าง</b>ในแท็บข้อมูลเก่ารอตรวจจะย้ายเข้ารายการติดตามหนี้ปกติ (วันนัดจ่าย = วันครบกำหนด) ส่วนใบค้างปกติไม่ถูกแตะ · ใบที่<b>มีใบเสร็จ รอยืนยันเงินเข้า</b> (ใบเสร็จลงวันที่ล่วงหน้า หรือรับเป็นเช็ค) จะยังเป็นยอดค้าง เก็บวันที่และเลขใบเสร็จไว้ แล้วไปอยู่แท็บ "รอเงินเข้า" · ใบที่<b>ปิดยอดแล้วแต่ไม่มีวันรับเงิน</b> ให้บัญชีเปิดใบนั้นแล้วบันทึกรับเงินเอง · ผลแบบอื่นไม่ถูกแตะ ให้ตรวจใน PEAK เอง</p>
     <div style="text-align:right"><button class="btn btn-p" type="button" id="pc-apply"${can.length ? '' : ' disabled'}>บันทึกตามผลจาก PEAK (${can.length} ใบ)</button></div>`}`;
   $('ov-drill').hidden = false;
   const ap = $('pc-apply');
@@ -576,6 +599,7 @@ function renderSum() {
   $('checks').innerHTML = `<div class="chk ${c.noCommitCount ? 'bad' : 'ok'}"><b>${c.noCommitCount ? '⚠️' : '✓'} ยอดค้างชำระที่ยังไม่มีวันนัดจ่าย</b><span>${d('nocommit', 'ค้างชำระที่ยังไม่มีวันนัดจ่าย', c.noCommit)} บาท · ${c.noCommitCount} ใบ</span><small>ต้องเป็น 0 (ช่อง C3 ของชีท Debt)</small></div>
     <div class="chk ${c.needCommitCount ? 'bad' : 'ok'}"><b>${c.needCommitCount ? '⚠️' : '✓'} เลยวันนัดแล้วยังไม่จ่าย</b><span>${d('needcommit', 'เลยวันนัดแล้วยังไม่จ่าย', c.needCommit)} บาท · ${c.needCommitCount} ใบ</span><small>${c.needCommitCount ? 'เปิดแท็บ "ต้องหาวันนัดใหม่" ในรายการติดตาม' : 'ทุกใบมีวันนัดที่ยังไม่ถึง'}</small></div>
     <div class="chk ok"><b>สัปดาห์นี้ (ถึง ${esc(cur.weekEnd || '')})</b><span>เข้าแล้ว ${d('paid|' + cur.weekEnd, 'เงินเข้าแล้วสัปดาห์นี้ (ถึง ' + cur.weekEnd + ')', cur.paid)} · รอ ${d('fc|' + cur.weekEnd, 'รอชำระสัปดาห์นี้ (ถึง ' + cur.weekEnd + ')', cur.expected)}</span><small>ยอดชำระแล้วใน Forecast และ Actual เป็นตัวเลขเดียวกัน</small></div>
+    ${c.awaitCashCount ? `<div class="chk ok"><b>ออกใบเสร็จแล้ว รอเงินเข้า</b><span>${d('await', 'ออกใบเสร็จแล้ว รอเงินเข้า', c.awaitCash)} บาท · ${c.awaitCashCount} ใบ</span><small>ยังนับเป็นยอดค้างรับจนกว่าบัญชียืนยันเงินเข้า</small></div>` : ''}
     ${s.oldCount ? `<div class="chk ok"><b>ค้างเก่าก่อนปี 2026 (แยกไว้)</b><span>${d('old', 'ค้างเก่าก่อนปี 2026', s.old)} บาท · ${s.oldCount} ใบ</span><small>ไม่รวมในยอดค้างรับ คาดการณ์เงินเข้า และตัวเช็ก</small></div>` : ''}
     <div class="chk ok"><b>จ่ายเทียบวันนัด (90 วัน)</b><span>ก่อนนัด ${drBtn('vs|early', 'จ่ายก่อนวันนัด (90 วัน)', String(v.early), v.early)} · ตรงนัด ${drBtn('vs|ontime', 'จ่ายตรงวันนัด (90 วัน)', String(v.onTime), v.onTime)} · ช้า ${drBtn('vs|late', 'จ่ายช้ากว่าวันนัด (90 วัน)', String(v.late), v.late)}</span><small>นับใบที่รับเงินใน 90 วันล่าสุด</small></div>`;
   const maxF = Math.max(1, ...s.forecast.weeks.map((w) => w.expected + w.paid));

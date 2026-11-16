@@ -298,6 +298,23 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
   [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_followup', ivNo: 'IV-20260800009', channel: ch, result: fo, nextActionDate: '2026-11-20', note: 'โทรแล้ว' }); ok(s === 400 && (db().FollowUps || []).length === 0, 'follow-up on an open INV needs a commit date that has not passed');
   [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_followup', ivNo: 'IV-20260800009', channel: ch, result: fo, commitDate: '2020-01-01', note: 'x' }); ok(s === 400, 'a commit date in the past is refused');
   [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_followup', ivNo: 'IV-20260800009', channel: ch, result: fo, commitDate: '2030-12-27', nextActionDate: '2026-11-20', note: 'โทรแล้ว' }); ok(s === 200 && db().FollowUps.length === 1, 'follow-up saved');
+  // PEAK receipt dated ahead: the INV stays open, waiting for the money; accounting confirms with the real date
+  { const was = { ...arRow('IV-20260800009') };
+    setPeak((p) => { const iv = p.invoices.find((x) => x.code === 'IV-20260800009' && x.status === 'Approve'); iv.remainAmount = 0; iv.paidPayments = [{ paymentDate: '20270115', paymentTotal: iv.netAmount, payments: [{ paymentMethodCode: 'BNK001', amount: iv.netAmount }] }]; });
+    [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_peakcheck', ivNos: ['IV-20260800009'], apply: true });
+    let w = arRow('IV-20260800009');
+    ok(s === 200 && j.results[0].result === 'await' && !w.paidDate && w.rtDate === '15/01/2027' && w.commitDate === '15/01/2027', 'receipt dated ahead in PEAK: kept open, waiting for the money ' + JSON.stringify([j.results[0].result, w.paidDate, w.rtDate, w.commitDate]));
+    [s, j] = await call(COL, 'GET', '/api/invoice-requests?view=ar');
+    const wr = j.invoices.find((x) => x.ivNo === 'IV-20260800009');
+    ok(wr && wr.awaitCash && wr.state !== 'Paid' && j.summary.checks.awaitCashCount >= 1, 'waiting row is an open receivable with its flag');
+    [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_update', ivNo: 'IV-20260800009', paidDate: '2027-01-15', paidAmount: 1000, paymentMethod: 'Bank Transfer', file: { name: 's.png', type: 'image/png', data: 'aGk=' } });
+    ok(s === 400, 'money-in date cannot be ahead of today ' + s);
+    [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_update', ivNo: 'IV-20260800009', rtDate: '2026-11-10', commitDate: '2027-01-20' });
+    w = arRow('IV-20260800009');
+    ok(s === 200 && w.rtDate === '10/11/2026' && w.commitDate === '20/01/2027' && !w.paidDate, 'receipt / cheque date recorded without a paid date');
+    // back to how it was, for the checks below
+    setPeak((p) => { const iv = p.invoices.find((x) => x.code === 'IV-20260800009' && x.status === 'Approve'); iv.remainAmount = iv.netAmount; iv.paidPayments = []; });
+    await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_update', ivNo: 'IV-20260800009', rtDate: '', commitDate: was.commitDate, note: was.note || '' }); }
   [s, j] = await call(COL, 'GET', '/api/invoice-requests?view=ar&brief=1'); ok(s === 200 && j.summary.checks && j.summary.forecast.weeks.length === 10 && j.summary.cash[0].current && !j.invoices, 'brief AR summary: checks, 10 forecast weeks, cash incl. this week');
   [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_update', ivNo: 'IV-20260800009', commitDate: '' }); ok(s === 400, 'the commit date cannot be cleared');
   [s, j] = await call(LEAD, 'PATCH', '/api/invoice-requests', { action: 'ar_owner', ivNo: 'IV-20260800009', salesEmail: BEE }); ok(s === 403, 'lead cannot move an INV outside the team ' + s);

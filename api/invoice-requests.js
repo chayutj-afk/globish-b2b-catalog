@@ -490,7 +490,8 @@ function summarise(all, today) {
     open: sum(open), openCount: open.length, overdue: sum(open.filter((r) => r.state === 'Overdue')), overdueCount: open.filter((r) => r.state === 'Overdue').length,
     avgDaysToPay: recentPaid.length ? Math.round(recentPaid.reduce((s, r) => s + r.cycleDays, 0) / recentPaid.length) : 0,
     aging, buckets, forecast: { earlier: sum(earlier), earlierCount: earlier.length, weeks, later: sum(later), laterCount: later.length }, cash, months,
-    checks: { noCommit: sum(noCommit), noCommitCount: noCommit.length, needCommit: sum(needCommit), needCommitCount: needCommit.length },
+    checks: { noCommit: sum(noCommit), noCommitCount: noCommit.length, needCommit: sum(needCommit), needCommitCount: needCommit.length,
+      awaitCash: sum(open.filter((r) => r.awaitCash)), awaitCashCount: open.filter((r) => r.awaitCash).length },
     vsCommit: { early: vs.filter((r) => r.paidVsCommit < 0).length, onTime: vs.filter((r) => r.paidVsCommit === 0).length, late: vs.filter((r) => r.paidVsCommit > 0).length },
   };
 }
@@ -511,6 +512,7 @@ function drillRows(all, today, key) {
   else if (k === 'old') xs = all.filter((r) => (r.state === 'Outstanding' || r.state === 'Overdue') && !r.legacyCheck && r.old);
   else if (k === 'nocommit') xs = open.filter((r) => r.noCommit);
   else if (k === 'needcommit') xs = open.filter((r) => r.needCommit);
+  else if (k === 'await') xs = open.filter((r) => r.awaitCash);
   else if (k === 'fc') xs = open.filter((r) => r.planMs !== null && ar.fmt(r.planMs) === a);
   else if (k === 'fc-earlier') xs = open.filter((r) => r.planMs !== null && r.planMs < cur);
   else if (k === 'fc-later') xs = open.filter((r) => r.planMs !== null && r.planMs > last);
@@ -659,7 +661,16 @@ async function arPeakCheck(req, res, user) {
       // land in the "receipt to issue" queue.
       let rt = null;
       if (b.apply && !row.rtNo) rt = await peak.findReceiptForInvoice(ivNo).catch(() => null);
-      if (b.apply) await hub.updateRow('Invoices', row._row, { paidDate, ...ar.onPaid(row, paidDate), paidAmount: cash, followStatus: '', ...link, ...(rt ? { rtNo: String(rt.code).toUpperCase() } : {}), note: note('รับเงินตาม PEAK (ตรวจข้อมูลเก่า)') });
+      const rtNo = rt ? { rtNo: String(rt.code).toUpperCase() } : {};
+      // A receipt dated ahead, or a cheque: PEAK's date is not the day the money came in. Keep the INV open as
+      // "receipt issued, waiting for the money" until accounting confirms.
+      const pp = ar.fromPeakPayment(row, { payDate: paidDate, cheque: await peak.isChequePayment(pays), today });
+      if (pp.mode === 'await') {
+        if (b.apply) await hub.updateRow('Invoices', row._row, { ...pp.fields, followStatus: e.legacyCheck ? '' : row.followStatus, ...link, ...rtNo, note: note(pp.why === 'cheque' ? 'PEAK ลงรับเป็นเช็ค รอยืนยันเงินเข้า' : 'PEAK ออกใบเสร็จล่วงหน้า รอยืนยันเงินเข้า') });
+        results.push({ ...base, result: 'await', text: pp.why === 'cheque' ? 'PEAK ลงรับเงินเป็นเช็ค ยังไม่นับว่าจ่ายจนกว่าบัญชียืนยันวันเงินเข้า' : 'ใบเสร็จใน PEAK ลงวันที่ล่วงหน้า ยังไม่นับว่าจ่ายจนกว่าบัญชียืนยันเงินเข้า', paidDate, amount: cash, net, link: link.peakDocLink, rtNo: rt ? rt.code : '', applied: !!b.apply });
+        continue;
+      }
+      if (b.apply) await hub.updateRow('Invoices', row._row, { ...pp.fields, paidAmount: cash, followStatus: '', ...link, ...rtNo, note: note('รับเงินตาม PEAK (ตรวจกับ PEAK)') });
       results.push({ ...base, result: 'paid', text: 'จ่ายแล้วใน PEAK', paidDate, amount: cash, net, link: link.peakDocLink, rtNo: rt ? rt.code : '', applied: !!b.apply });
     } else if (pays.length) {
       results.push({ ...base, result: 'partial', text: `รับเงินบางส่วนใน PEAK คงเหลือ ${remain}`, link: link.peakDocLink });
@@ -749,7 +760,10 @@ async function arUpdate(req, res, user) {
   if (b.action === 'ar_update') {
     const f = {};
     if ('commitDate' in b) { f.commitDate = dateIn(b.commitDate, 'วันนัดจ่าย'); if (!f.commitDate) throw bad('ต้องมีวันนัดจ่ายเสมอ ถ้ายังไม่ทราบให้ใส่วันครบกำหนด'); }
-    if ('paidDate' in b) f.paidDate = dateIn(b.paidDate, 'วันที่รับเงิน');
+    if ('paidDate' in b) f.paidDate = dateIn(b.paidDate, 'วันที่เงินเข้า');
+    // Date Paid is the day the money reached the bank, so it cannot be ahead of today.
+    if (f.paidDate && ar.parseDate(f.paidDate) > ar.todayMs()) throw bad('วันที่เงินเข้าเป็นวันในอนาคตไม่ได้ ถ้าออกใบเสร็จล่วงหน้าหรือรับเช็คมาแล้ว ให้ใส่ "วันที่ใบเสร็จ / วันรับเช็ค" และวันนัดจ่าย แล้วค่อยยืนยันเมื่อเงินเข้าจริง');
+    if ('rtDate' in b) f.rtDate = dateIn(b.rtDate, 'วันที่ใบเสร็จ / วันรับเช็ค');
     if (f.paidDate) Object.assign(f, ar.onPaid(row, f.paidDate));
     else if ('paidDate' in b && row.paidDate) Object.assign(f, { commitDate: row.commitAtPaid || row.commitDate, commitAtPaid: '' });
     if ('paidAmount' in b) { const n = b.paidAmount === '' ? '' : Number(String(b.paidAmount).replace(/,/g, '')); if (n !== '' && !(n > 0)) throw bad('ยอดรับเงินไม่ถูกต้อง'); f.paidAmount = n; }
@@ -764,7 +778,9 @@ async function arUpdate(req, res, user) {
     const newlyPaid = !!f.paidDate && !row.paidDate;
     // Receipt delivery for a new payment: checked before anything is saved.
     let delivery = null;
-    if (newlyPaid) {
+    // The receipt is already out (issued ahead / cheque): confirming the money needs no delivery choice.
+    if (newlyPaid && row.rtNo) { if (!b.file) throw bad('แนบสลิป / หลักฐานเงินเข้า'); delivery = { deliveryChannel: '', email: '', deliveryAddress: '', note: text(b.payNote, 500) || 'ยืนยันเงินเข้า (ออกใบเสร็จไว้ก่อนแล้ว)' }; }
+    else if (newlyPaid) {
       if (!b.file) throw bad('แนบสลิป / หลักฐานการรับเงิน');
       const ch = text(b.deliveryChannel, 20) || 'sales';
       if (!PAY_CHANNELS.includes(ch)) throw bad('เลือกช่องทางส่งใบเสร็จ');
@@ -861,6 +877,7 @@ async function updatePayNotice(req, res, user) {
   // Accounting may correct the date / amount after checking the bank statement.
   const paidDate = b.paidDate ? dmy(text(b.paidDate, 10)) : row.paidDate;
   if (!ar.parseDate(paidDate)) throw bad('วันที่รับเงินไม่ถูกต้อง');
+  if (ar.parseDate(paidDate) > ar.todayMs()) throw bad('วันที่เงินเข้าเป็นวันในอนาคตไม่ได้');
   const amount = b.amount !== undefined && b.amount !== '' ? Number(String(b.amount).replace(/,/g, '')) : ar.num(row.amount);
   if (!(amount > 0)) throw bad('ยอดรับเงินไม่ถูกต้อง');
   await hub.updateRow('Invoices', a._row, { paidDate, ...ar.onPaid(a, paidDate), paidAmount: round2(amount), paymentMethod: row.paymentMethod,

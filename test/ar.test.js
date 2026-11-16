@@ -68,3 +68,21 @@ test('INVs issued before 2026 are the old book, kept apart from current receivab
   assert.equal(ar.enrich({ issueDate: '31/12/2025', creditTermDays: 30, preVat: 100, docStatus: 'Active' }, t).old, true);
   assert.equal(ar.enrich({ issueDate: '01/01/2026', creditTermDays: 30, preVat: 100, docStatus: 'Active' }, t).old, false);
 });
+
+test('payment read from PEAK: a receipt dated ahead or a cheque waits for the money', () => {
+  const today = ar.parseDate('16/11/2026');
+  const row = { issueDate: '14/10/2026', creditTermDays: 30, preVat: 1000, commitDate: '13/11/2026' };
+  const ahead = ar.fromPeakPayment(row, { payDate: '25/11/2026', cheque: false, today });
+  assert.equal(ahead.mode, 'await');
+  assert.deepEqual(ahead.fields, { rtDate: '25/11/2026', commitDate: '25/11/2026' });
+  const chq = ar.fromPeakPayment(row, { payDate: '10/11/2026', cheque: true, today });
+  assert.equal(chq.mode, 'await');
+  assert.deepEqual(chq.fields, { rtDate: '10/11/2026' }); // the commit date stays: the collector still owes a date
+  const paid = ar.fromPeakPayment(row, { payDate: '16/11/2026', cheque: false, today });
+  assert.equal(paid.mode, 'paid');
+  assert.equal(paid.fields.paidDate, '16/11/2026'); assert.equal(paid.fields.rtDate, '16/11/2026'); assert.equal(paid.fields.commitAtPaid, '13/11/2026');
+  // waiting rows are open receivables with their own flag; paid rows are not
+  const e = ar.enrich({ ...row, ...ahead.fields, rtNo: 'RT-1', docStatus: 'Active' }, today);
+  assert.equal(e.state, 'Overdue'); assert.equal(e.awaitCash, true); assert.equal(e.needCommit, false); assert.equal(e.forecastWeek, '26/11/2026');
+  assert.equal(ar.enrich({ ...row, ...paid.fields, docStatus: 'Active' }, today).awaitCash, false);
+});

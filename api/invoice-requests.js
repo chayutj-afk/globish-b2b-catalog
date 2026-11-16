@@ -448,21 +448,29 @@ function summarise(all, today) {
   const segs = [...new Set(open.map((r) => r.segment || 'Others'))].sort();
   const aging = segs.map((sg) => ({ segment: sg, ...Object.fromEntries(buckets.map((b) => [b, sum(open.filter((r) => (r.segment || 'Others') === sg && r.aging === b))])), total: sum(open.filter((r) => (r.segment || 'Others') === sg)) }));
   const DAY = 86400e3;
-  const thisThu = today + ((((4 - new Date(today).getUTCDay()) % 7) + 7) % 7) * DAY;
+  const paidAmt = (xs) => Math.round(xs.reduce((t, r) => t + (ar.num(r.paidAmount) || r.expected), 0) * 100) / 100;
+  // Weeks run Friday to Thursday and stop at the month end (ar.weekEnd), the same as the Debt sheet.
+  const cur = ar.weekEnd(today);
   const weeks = [];
-  for (let i = 0; i < 8; i++) {
-    const end = thisThu + i * 7 * DAY;
-    const xs = open.filter((r) => r.forecastWeek === ar.fmt(end));
-    weeks.push({ weekEnd: ar.fmt(end), expected: sum(xs), count: xs.length });
+  let end = cur;
+  for (let i = 0; i < 10; i++) {
+    const xs = open.filter((r) => r.planMs === end);
+    const pd = all.filter((r) => r.paidWeekMs === end);
+    weeks.push({ weekEnd: ar.fmt(end), expected: sum(xs), count: xs.length, paid: paidAmt(pd), paidCount: pd.length });
+    if (i < 9) end = ar.weekEnd(end + DAY);
   }
-  const earlier = open.filter((r) => { const d = ar.parseDate(r.forecastWeek); return d !== null && d < thisThu; });
-  const later = open.filter((r) => { const d = ar.parseDate(r.forecastWeek); return d !== null && d > thisThu + 7 * 7 * DAY; });
+  const earlier = open.filter((r) => r.planMs !== null && r.planMs < cur);
+  const later = open.filter((r) => r.planMs !== null && r.planMs > end);
   const cash = [];
-  for (let i = 1; i <= 8; i++) {
-    const end = thisThu - i * 7 * DAY; const start = end - 6 * DAY;
-    const xs = all.filter((r) => r.paidMs !== null && r.paidMs >= start && r.paidMs <= end);
-    cash.push({ weekEnd: ar.fmt(end), paid: Math.round(xs.reduce((s, r) => s + (ar.num(r.paidAmount) || r.expected), 0) * 100) / 100, count: xs.length });
+  end = cur;
+  for (let i = 0; i < 10; i++) {
+    const xs = all.filter((r) => r.paidWeekMs === end);
+    cash.push({ weekEnd: ar.fmt(end), paid: paidAmt(xs), count: xs.length, current: i === 0 });
+    end = ar.weekStart(end) - DAY;
   }
+  // Checks the Debt sheet had: every open INV has a commit date, and none of those dates has passed.
+  const noCommit = open.filter((r) => r.noCommit), needCommit = open.filter((r) => r.needCommit);
+  const vs = all.filter((r) => r.paidMs !== null && r.paidMs >= today - 90 * DAY && r.paidVsCommit !== '');
   const months = [];
   const t = new Date(today);
   for (let i = 0; i < 12; i++) {
@@ -479,6 +487,8 @@ function summarise(all, today) {
     open: sum(open), openCount: open.length, overdue: sum(open.filter((r) => r.state === 'Overdue')), overdueCount: open.filter((r) => r.state === 'Overdue').length,
     avgDaysToPay: recentPaid.length ? Math.round(recentPaid.reduce((s, r) => s + r.cycleDays, 0) / recentPaid.length) : 0,
     aging, buckets, forecast: { earlier: sum(earlier), earlierCount: earlier.length, weeks, later: sum(later), laterCount: later.length }, cash, months,
+    checks: { noCommit: sum(noCommit), noCommitCount: noCommit.length, needCommit: sum(needCommit), needCommitCount: needCommit.length },
+    vsCommit: { early: vs.filter((r) => r.paidVsCommit < 0).length, onTime: vs.filter((r) => r.paidVsCommit === 0).length, late: vs.filter((r) => r.paidVsCommit > 0).length },
   };
 }
 
@@ -489,14 +499,19 @@ async function arList(req, res, user) {
   // Customer contact from the INV request, to prefill where the receipt goes.
   const contact = new Map(ivreqs.map((v) => [v.ivRequestId, { financeEmail: v.financeEmail || '', deliveryAddress: v.originalAddress || v.deliveryAddress || '' }]));
   const sees = await arSees(user);
-  const all = rows.filter((r) => r.ivNo && sees(r)).map((r) => ({ ...ar.enrich(r, today), preVatN: ar.num(r.preVat) }));
+  const mine = rows.filter((r) => r.ivNo && sees(r)).map((r) => ({ ...ar.enrich(r, today), preVatN: ar.num(r.preVat) }));
+  // ?seg= narrows the summary to one customer group; ?brief=1 returns the summary only (home dashboard).
+  const seg = text(req.query.seg, 20);
+  const segments = [...new Set(mine.map((r) => r.segment || 'Others'))].sort();
+  const all = seg ? mine.filter((r) => (r.segment || 'Others') === seg) : mine;
+  if (req.query.brief) return res.status(200).json({ ok: true, summary: summarise(all, today), segments, seg });
   const byIv = new Map();
   for (const f of fus) { if (!byIv.has(f.ivNo)) byIv.set(f.ivNo, []); byIv.get(f.ivNo).push(f); }
   const keep = all.filter((r) => r.state === 'Outstanding' || r.state === 'Overdue' || (r.paidMs !== null && r.paidMs >= today - 120 * 86400e3) || (r.issueMs !== null && r.issueMs >= today - 120 * 86400e3));
-  const out = keep.map(({ _row, issueMs, dueMs, paidMs, preVatN, ...r }) => ({ ...r, ...(contact.get(r.ivRequestId) || {}), followUps: (byIv.get(r.ivNo) || []).slice(-20).map(({ _row: x, ...f }) => f) }));
+  const out = keep.map(({ _row, issueMs, dueMs, paidMs, planMs, paidWeekMs, preVatN, ...r }) => ({ ...r, ...(contact.get(r.ivRequestId) || {}), followUps: (byIv.get(r.ivNo) || []).slice(-20).map(({ _row: x, ...f }) => f) }));
   const canOwner = isOp(user) || can(user, 'team_view');
   const owners = canOwner ? (await users.list()).filter((u) => ['sales', 'lead'].includes(u.role)).map((u) => ({ email: u.email, name: u.name || u.email })) : [];
-  res.status(200).json({ ok: true, peakLive: require('../lib/peak').mode() !== 'off', summary: summarise(all, today), invoices: out, total: all.length, canOwner, owners,
+  res.status(200).json({ ok: true, peakLive: require('../lib/peak').mode() !== 'off', summary: summarise(all, today), segments, seg, invoices: out, total: all.length, canOwner, owners,
     lists: { docStatus: ar.DOC_STATUS, payMethods: ar.PAY_METHODS, channels: ar.CHANNELS, follow: ar.FOLLOW, delay: ar.DELAY } });
 }
 
@@ -572,9 +587,16 @@ async function arUpdate(req, res, user) {
     if (!result) throw bad('เลือกผลการติดตาม');
     const next = dateIn(b.nextActionDate, 'วันที่ติดตามครั้งถัดไป');
     const note = text(b.note, 500);
+    const commit = dateIn(b.commitDate, 'วันนัดจ่าย');
+    // An open INV always carries a commit date that has not passed: it is what the cash forecast runs on.
+    const e = ar.enrich(row);
+    if (e.state === 'Outstanding' || e.state === 'Overdue') {
+      const c = ar.parseDate(commit || row.commitDate);
+      if (c === null) throw bad('ใส่วันที่ลูกค้านัดจ่าย ถ้ายังไม่ทราบให้ใส่วันที่คาดว่าจะจ่าย');
+      if (c < ar.todayMs()) throw bad('วันนัดจ่ายเลยมาแล้ว ใส่วันนัดใหม่ ถ้ายังไม่ทราบให้ใส่วันที่คาดว่าจะจ่าย');
+    }
     await hub.appendRows('FollowUps', [{ loggedAt: at, ivNo, channel, by: who, result, nextActionDate: next, note }]);
     const f = { followStatus: result, nextActionDate: next };
-    const commit = dateIn(b.commitDate, 'วันนัดจ่าย');
     if (commit) f.commitDate = commit;
     await hub.updateRow('Invoices', row._row, f);
     await hub.log('catalog', 'ar_followup', ivNo, `${user.email} · ${channel} · ${result}`);
@@ -582,8 +604,10 @@ async function arUpdate(req, res, user) {
   }
   if (b.action === 'ar_update') {
     const f = {};
-    if ('commitDate' in b) f.commitDate = dateIn(b.commitDate, 'วันนัดจ่าย');
+    if ('commitDate' in b) { f.commitDate = dateIn(b.commitDate, 'วันนัดจ่าย'); if (!f.commitDate) throw bad('ต้องมีวันนัดจ่ายเสมอ ถ้ายังไม่ทราบให้ใส่วันครบกำหนด'); }
     if ('paidDate' in b) f.paidDate = dateIn(b.paidDate, 'วันที่รับเงิน');
+    if (f.paidDate) Object.assign(f, ar.onPaid(row, f.paidDate));
+    else if ('paidDate' in b && row.paidDate) Object.assign(f, { commitDate: row.commitAtPaid || row.commitDate, commitAtPaid: '' });
     if ('paidAmount' in b) { const n = b.paidAmount === '' ? '' : Number(String(b.paidAmount).replace(/,/g, '')); if (n !== '' && !(n > 0)) throw bad('ยอดรับเงินไม่ถูกต้อง'); f.paidAmount = n; }
     if ('paymentMethod' in b) { const m = text(b.paymentMethod, 40); if (m && !ar.PAY_METHODS.includes(m)) throw bad('วิธีชำระเงินไม่ถูกต้อง'); f.paymentMethod = m; }
     if ('rtNo' in b) { f.rtNo = text(b.rtNo, 40).toUpperCase(); if (f.rtNo && f.rtNo !== String(row.rtNo || '').toUpperCase()) await assertDoc('RT', { no: f.rtNo, ref: 'paid:' + row.ivNo, taxId: row.taxId }); }
@@ -695,7 +719,7 @@ async function updatePayNotice(req, res, user) {
   if (!ar.parseDate(paidDate)) throw bad('วันที่รับเงินไม่ถูกต้อง');
   const amount = b.amount !== undefined && b.amount !== '' ? Number(String(b.amount).replace(/,/g, '')) : ar.num(row.amount);
   if (!(amount > 0)) throw bad('ยอดรับเงินไม่ถูกต้อง');
-  await hub.updateRow('Invoices', a._row, { paidDate, paidAmount: round2(amount), paymentMethod: row.paymentMethod,
+  await hub.updateRow('Invoices', a._row, { paidDate, ...ar.onPaid(a, paidDate), paidAmount: round2(amount), paymentMethod: row.paymentMethod,
     note: [a.note, `รับเงินตามที่ ${row.salesName || row.requestedBy} แจ้ง (${row.noticeId}) ยืนยันโดย ${who}`].filter(Boolean).join(' · ').slice(0, 500) });
   await hub.updateRow('PaymentNotices', row._row, { status: 'confirmed', paidDate, amount: round2(amount), accountNote: note, doneBy: who, updatedAt: at });
   if (a.peakIvId && require('../lib/peak').mode() !== 'off') {

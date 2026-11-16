@@ -40,6 +40,26 @@ a.tile .dd{color:var(--muted);font-size:12.5px;line-height:1.6}
 .health li{display:grid;grid-template-columns:22px 1fr;gap:6px;padding:7px 0;border-top:1px solid var(--line);font-size:13px;line-height:1.55}
 .health li small{display:block;color:var(--muted);font-size:12px}
 .health li .fx{color:var(--primary)}
+.cashd{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;margin-bottom:18px}
+.cashd[hidden]{display:none}
+.cashd .hh{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.cashd .hh b{color:var(--head);font-weight:500}
+.cashd .hh .sum{font-size:12.5px;color:var(--muted)}
+.cashd .kp{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+@media(max-width:760px){.cashd .kp{grid-template-columns:1fr 1fr}}
+.cashd .kp a{border:1px solid var(--line);border-radius:10px;padding:10px 12px;text-decoration:none;color:inherit;display:block}
+.cashd .kp a:hover{border-color:var(--primary)}
+.cashd .kp a.bad{border-color:var(--bad-ink)}
+.cashd .kp .k{font-size:12px;color:var(--muted)}
+.cashd .kp .v{font-size:20px;color:var(--head);font-weight:500;line-height:1.35}
+.cashd .kp a.bad .v{color:var(--bad-ink)}
+.cashd .kp .s{font-size:12px;color:var(--muted)}
+.cashd .wrap{overflow-x:auto;margin-top:12px}
+.cashd table{width:100%;border-collapse:collapse;font-size:13px}
+.cashd th,.cashd td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+.cashd th:first-child,.cashd td:first-child{text-align:left}
+.cashd th{font-size:12px;color:var(--muted);font-weight:500}
+.cashd tr.now td{background:var(--primary-soft)}
 .health .area{font-size:11px;color:var(--muted);border:1px solid var(--line2);border-radius:9999px;padding:0 7px;margin-right:6px}
 </style>
 </head>
@@ -56,6 +76,12 @@ a.tile .dd{color:var(--muted);font-size:12.5px;line-height:1.6}
     <a class="stat" href="/request#pend" data-gate="approve" hidden><div class="k">รออนุมัติ (QT + INV)</div><div class="v hot" id="s-pend">–</div></a>
     <a class="stat" href="/request#pend" data-gate="approve" hidden><div class="k">ต้องส่งเอกสารตัวจริง</div><div class="v" id="s-orig">–</div></a>
   </div>
+
+  <section class="cashd" id="cashd" hidden>
+    <div class="hh"><b>💰 เงินสดและลูกหนี้</b><span class="sum" id="c-sum">กำลังโหลด…</span><span style="flex:1"></span><a class="btn btn-g btn-sm" href="/ar">เปิดหน้าติดตามหนี้</a></div>
+    <div class="kp" id="c-kp"></div>
+    <div class="wrap"><table id="c-tb"></table></div>
+  </section>
 
   <section class="health" id="health" hidden aria-live="polite">
     <div class="hh"><b>🩺 สุขภาพข้อมูล</b><span class="sum" id="h-sum">กำลังตรวจ…</span>
@@ -97,6 +123,24 @@ a.tile .dd{color:var(--muted);font-size:12.5px;line-height:1.6}
     if (u.name) document.getElementById('hello').innerHTML = 'สวัสดีครับ คุณ<b>' + u.name.split(' ')[0].replace(/[<>&]/g, '') + '</b> วันนี้จะทำอะไรดี';
     var get = function (url) { return fetch(url, { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }); };
     var perms = u.perms || [];
+    // Cash dashboard: admin, accounting and collectors (same numbers as the summary tab of /ar).
+    if (perms.includes('ar_view') && (perms.includes('ar') || perms.includes('approve') || perms.includes('users'))) {
+      var f0 = function (n) { return Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 }); };
+      document.getElementById('cashd').hidden = false;
+      get('/api/invoice-requests?view=ar&brief=1').then(function (d) {
+        if (!d || !d.summary) { document.getElementById('c-sum').textContent = 'โหลดไม่ได้ในตอนนี้'; return; }
+        var s = d.summary, c = s.checks, w = s.forecast.weeks, cur = w[0] || {};
+        document.getElementById('c-sum').textContent = 'ทุกกลุ่มลูกค้า · สัปดาห์นับ ศุกร์–พฤหัส ตัดสิ้นเดือน';
+        var kp = function (k, v, sub, bad) { return '<a href="/ar"' + (bad ? ' class="bad"' : '') + '><div class="k">' + k + '</div><div class="v">' + v + '</div><div class="s">' + sub + '</div></a>'; };
+        document.getElementById('c-kp').innerHTML =
+          kp('ค้างรับทั้งหมด', f0(s.open), s.openCount + ' ใบ · เกินกำหนด ' + f0(s.overdue)) +
+          kp('สัปดาห์นี้ (ถึง ' + (cur.weekEnd || '') + ')', f0(cur.paid), 'เข้าแล้ว · รออีก ' + f0(cur.expected) + ' (' + (cur.count || 0) + ' ใบ)') +
+          kp('เลยวันนัด ต้องหาวันใหม่', f0(c.needCommit), c.needCommitCount + ' ใบ', c.needCommitCount > 0) +
+          kp('ค้างชำระที่ไม่มีวันนัด', f0(c.noCommit), c.noCommitCount + ' ใบ · ต้องเป็น 0', c.noCommitCount > 0);
+        document.getElementById('c-tb').innerHTML = '<tr><th>Forecast Cash-In สัปดาห์ถึง</th><th>รอชำระ</th><th>ใบ</th><th>ชำระแล้ว</th></tr>' +
+          w.slice(0, 6).map(function (x, i) { return '<tr' + (i === 0 ? ' class="now"' : '') + '><td>' + x.weekEnd + (i === 0 ? ' · สัปดาห์นี้' : '') + '</td><td>' + f0(x.expected) + '</td><td>' + x.count + '</td><td>' + (x.paid ? f0(x.paid) : '') + '</td></tr>'; }).join('');
+      });
+    }
     if (perms.includes('approve') || perms.includes('users')) {
       var showAll = false, H = null;
       var esc = function (v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };

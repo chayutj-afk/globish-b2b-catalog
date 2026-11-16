@@ -239,17 +239,23 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
   setPeak((p) => { const x = p.invoices.find((y) => y.id === lpi.id); x.remainAmount = 0; x.paidPayments = [{ paymentDate: '20261114', paymentTotal: 117700 }]; });
   [s, j] = await hook('invoice', { PeakInvoices: { invoices: [peak().invoices.find((y) => y.id === lpi.id)] }, eventType: 'PaidPayment' });
   ok(j.results[0] === 'paid' && arRow(lpi.code).paidDate === '14/11/2026', 'webhook: payment in PEAK → AR paid: ' + j.results[0]);
+  ok(arRow(lpi.code).commitDate === '14/11/2026' && arRow(lpi.code).commitAtPaid, 'payment moves the commit date to the paid date, promise kept: ' + arRow(lpi.code).commitAtPaid);
   // legacy INV paid directly on /ar, then receipt
   [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_update', ivNo: 'IV-20261000030', paidDate: '2026-11-14', paidAmount: 21400, paymentMethod: 'Bank Transfer' }); ok(s === 400 && /สลิป/.test(j.error), 'recording a payment needs a slip');
   [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_update', ivNo: 'IV-20261000030', paidDate: '2026-11-14', paidAmount: 21400, paymentMethod: 'Bank Transfer', file, deliveryChannel: 'email', email: 'fin@x.co' }); ok(s === 200, 'collector records payment on an imported INV ' + (j.error || ''));
   [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { action: 'rt_make', ivNo: 'IV-20261000030', paymentMethodCode: 'BNK001', deliveryChannel: 'email', email: 'fin@x.co' });
   ok(s === 200, 'receipt Draft for an imported INV (no stored PEAK id): ' + (j.error || j.peakRtNo));
+  ok(arRow('IV-20261000030').commitDate === '14/11/2026', 'payment on /ar moves the commit date too');
 
   console.log('── 8. AR actions, edit requests, B2C receipt');
   [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_followup', ivNo: 'IV-20260800009', channel: 'x', result: 'y' }); ok(s === 400, 'follow-up needs a valid channel');
   [s, j] = await call(COL, 'GET', '/api/invoice-requests?view=ar'); ok(s === 200 && j.invoices.length >= 5 && j.summary, 'collector opens AR: ' + j.invoices.length + ' rows');
   const ch = j.lists.channels[0], fo = j.lists.follow[0];
-  [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_followup', ivNo: 'IV-20260800009', channel: ch, result: fo, nextActionDate: '2026-11-20', note: 'โทรแล้ว' }); ok(s === 200 && db().FollowUps.length === 1, 'follow-up saved');
+  [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_followup', ivNo: 'IV-20260800009', channel: ch, result: fo, nextActionDate: '2026-11-20', note: 'โทรแล้ว' }); ok(s === 400 && db().FollowUps.length === 0, 'follow-up on an open INV needs a commit date that has not passed');
+  [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_followup', ivNo: 'IV-20260800009', channel: ch, result: fo, commitDate: '2020-01-01', note: 'x' }); ok(s === 400, 'a commit date in the past is refused');
+  [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_followup', ivNo: 'IV-20260800009', channel: ch, result: fo, commitDate: '2030-12-27', nextActionDate: '2026-11-20', note: 'โทรแล้ว' }); ok(s === 200 && db().FollowUps.length === 1, 'follow-up saved');
+  [s, j] = await call(COL, 'GET', '/api/invoice-requests?view=ar&brief=1'); ok(s === 200 && j.summary.checks && j.summary.forecast.weeks.length === 10 && j.summary.cash[0].current && !j.invoices, 'brief AR summary: checks, 10 forecast weeks, cash incl. this week');
+  [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_update', ivNo: 'IV-20260800009', commitDate: '' }); ok(s === 400, 'the commit date cannot be cleared');
   [s, j] = await call(LEAD, 'PATCH', '/api/invoice-requests', { action: 'ar_owner', ivNo: 'IV-20260800009', salesEmail: BEE }); ok(s === 403, 'lead cannot move an INV outside the team ' + s);
   [s, j] = await call(LEAD, 'PATCH', '/api/invoice-requests', { action: 'ar_owner', ivNo: 'IV-20250500001', salesEmail: BEE }); ok(s === 200 && arRow('IV-20250500001').salesEmail === BEE, 'lead gives an ownerless INV to a team member');
   [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_owner', ivNo: 'IV-20250500001', salesEmail: 'x@gmail.com' }); ok(s === 400, 'owner must be @globish.co.th');

@@ -50,6 +50,17 @@ table.sum tr.tot td{font-weight:500;color:var(--head)}
 .pn{border:1px solid var(--line2);border-radius:10px;padding:12px 14px;margin-top:10px;background:var(--panel)}
 .pn-top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.pn-amt{text-align:right}.pn-amt b{font-size:18px;color:var(--head)}
 .pn-act{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
+.wl .sub.late{color:var(--bad-ink)}
+table.sum tr.now td{background:var(--primary-soft)}
+.sumbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.sumbar label{font-size:13px;color:var(--muted)}
+.sumbar .sel{width:auto;min-width:170px;flex:0 0 auto}
+#checks{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
+@media(max-width:1000px){#checks{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){#checks{grid-template-columns:1fr}}
+.chk{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;display:flex;flex-direction:column;gap:3px;font-size:13px}
+.chk b{font-weight:500;color:var(--head)}.chk span{font-size:15px;color:var(--head)}.chk small{font-size:12px;color:var(--muted)}
+.chk.bad{border-color:var(--bad-ink)}.chk.bad span{color:var(--bad-ink)}
 </style>
 </head>
 <body data-page="ar">
@@ -64,7 +75,7 @@ table.sum tr.tot td{font-weight:500;color:var(--head)}
   <div class="stats">
     <div class="stat"><div class="k">ยอดค้างรับทั้งหมด (รวม VAT หัก WHT)</div><div class="v" id="s-open">–</div><div class="s" id="s-open-n"></div></div>
     <div class="stat"><div class="k">เกินกำหนดชำระ</div><div class="v hot" id="s-over">–</div><div class="s" id="s-over-n"></div></div>
-    <div class="stat"><div class="k">คาดว่าเข้าสัปดาห์นี้ (ตัดวันพฤหัส)</div><div class="v" id="s-week">–</div><div class="s" id="s-week-n"></div></div>
+    <div class="stat"><div class="k">คาดว่าเข้าสัปดาห์นี้ (ยังรอชำระ)</div><div class="v" id="s-week">–</div><div class="s" id="s-week-n"></div></div>
     <div class="stat"><div class="k">เฉลี่ยวันรับเงิน (จ่ายใน 90 วัน)</div><div class="v" id="s-avg">–</div><div class="s">นับจากวันออก INV</div></div>
   </div>
   <div class="seg" id="tabs"><button class="on" data-t="work" type="button">รายการติดตาม</button><button data-t="sum" type="button">สรุป</button></div>
@@ -79,6 +90,7 @@ table.sum tr.tot td{font-weight:500;color:var(--head)}
       <div class="filters">
         <div class="seg" id="f-state">
           <button class="on" data-v="due" type="button">ต้องตาม</button>
+          <button data-v="recommit" type="button" title="เลยวันที่ลูกค้านัดจ่ายแล้วยังไม่จ่าย ต้องหาวันนัดใหม่">ต้องหาวันนัดใหม่</button>
           <button data-v="Overdue" type="button">เกินกำหนด</button>
           <button data-v="Outstanding" type="button">ยังไม่ถึงกำหนด</button>
           <button data-v="Paid" type="button">จ่ายแล้ว</button>
@@ -96,9 +108,11 @@ table.sum tr.tot td{font-weight:500;color:var(--head)}
   </section>
 
   <section class="tab" id="tab-sum">
+    <div class="sumbar"><label for="s-seg">กลุ่มลูกค้า</label><select class="sel" id="s-seg"><option value="">ทุกกลุ่ม</option></select><span class="small">สัปดาห์นับ ศุกร์–พฤหัส และตัดที่สิ้นเดือน (เหมือน Week Mapping ของชีท Debt)</span></div>
+    <div id="checks"></div>
     <div class="two">
-      <div class="card"><h2>คาดการณ์เงินเข้า 8 สัปดาห์ (ตัดวันพฤหัส)</h2><p class="hint">ใช้วันนัดจ่าย ถ้าไม่มีใช้วันครบกำหนด</p><div id="fc"></div></div>
-      <div class="card"><h2>เงินเข้าจริง 8 สัปดาห์ที่ผ่านมา</h2><p class="hint">ตามวันที่รับเงินที่บันทึก</p><div id="cash"></div></div>
+      <div class="card"><h2>Forecast Cash-In คาดการณ์เงินเข้ารายสัปดาห์</h2><p class="hint">ตามวันที่ลูกค้านัดจ่าย (Date Commit) · ใบที่จ่ายแล้วนับในสัปดาห์ที่รับเงิน</p><div id="fc"></div></div>
+      <div class="card"><h2>Actual Cash-In เงินเข้าจริงรายสัปดาห์</h2><p class="hint">ตามวันที่รับเงิน (Date Paid)</p><div id="cash"></div></div>
     </div>
     <div class="card"><h2>ยอดค้างรับตามอายุหนี้</h2><div class="wrap" id="aging"></div></div>
     <div class="card"><h2>ออก INV และเงินเข้ารายเดือน (12 เดือน)</h2><p class="hint">ยอด INV ก่อน VAT ไม่นับเอกสารยกเลิก / เปลี่ยนเอกสาร</p><div class="wrap" id="months"></div></div>
@@ -164,7 +178,9 @@ async function load() {
   const keepS = $('f-seg').value, keepP = $('f-sales').value;
   $('f-seg').innerHTML = '<option value="">ทุกกลุ่ม</option>' + segs.map((x) => `<option>${esc(x)}</option>`).join(''); $('f-seg').value = keepS;
   $('f-sales').innerHTML = '<option value="">ทุกเซล</option>' + sales.map((x) => `<option>${esc(x)}</option>`).join('') + (D.invoices.some((r) => !(r.salesName || r.salesEmail)) ? '<option value="__none">(ไม่มีเจ้าของ)</option>' : ''); $('f-sales').value = keepP;
-  render(); renderSum();
+  const keepG = $('s-seg').value;
+  $('s-seg').innerHTML = '<option value="">ทุกกลุ่ม</option>' + (D.segments || []).map((x) => `<option>${esc(x)}</option>`).join(''); $('s-seg').value = keepG;
+  render(); if (keepG) loadSum(); else { S = null; renderSum(); }
 }
 
 // Top cards follow the group / sales / search filters (not the state tabs). No filter → the server totals.
@@ -198,6 +214,7 @@ function rowsFor(only) {
     if (mode === 'all') return true;
     if (mode === 'check') return r.legacyCheck;
     if (r.legacyCheck) return false;
+    if (mode === 'recommit') return r.needCommit;
     if (mode === 'due') {
       if (r.state === 'Overdue') return true;
       if (r.state !== 'Outstanding') return false;
@@ -229,7 +246,7 @@ function render() {
       <td>${esc(r.dueDate)}<div class="sub">${st(r.state)}</div></td>
       <td class="num">${d ? `<span class="days ${d > 90 ? 'd90' : d > 30 ? 'd30' : ''}">${d}</span>` : ''}</td>
       <td class="num">${fmt(r.state === 'Paid' ? (toNum(r.paidAmount) || r.expected) : r.expected)}</td>
-      <td>${esc(r.followStatus || '')}${r.commitDate ? `<div class="sub">นัดจ่าย ${esc(r.commitDate)}</div>` : ''}</td>
+      <td>${esc(r.followStatus || '')}${r.commitDate ? `<div class="sub">นัดจ่าย ${esc(r.commitDate)}</div>` : ''}${r.needCommit && !r.legacyCheck ? '<div class="sub late">เลยวันนัด ต้องหาวันใหม่</div>' : ''}</td>
       <td>${esc(r.nextActionDate || '')}</td></tr>${open ? detail(r) : ''}`;
   }).join('') || `<tr><td colspan="8" class="empty">ไม่มีรายการ</td></tr>`;
   $('more').innerHTML = xs.length > SHOW ? `<button class="btn btn-g btn-sm" onclick="SHOW+=100;render()">แสดงเพิ่ม (${xs.length - SHOW} รายการ)</button>` : `<span class="small">${xs.length} รายการ</span>`;
@@ -250,7 +267,7 @@ function detail(r) {
       ${D.peakLive ? `<button class="btn btn-g btn-sm" onclick="refreshPeak('${id}')" title="อ่าน INV และใบเสร็จจาก PEAK แล้วอัปเดตยอด วันที่ หัก ณ ที่จ่าย สถานะ และกลุ่มจัดประเภท">↻ อัปเดตจาก PEAK</button>` : ''}
       ${paid && !r.rtNo ? `<a class="btn btn-o btn-sm" href="/request#pend">🧾 ออกใบเสร็จ (รออนุมัติ › ใบเสร็จ)</a>` : ''}`}
     </div>
-    <div class="kv">${kv('วันที่ออก', esc(r.issueDate))}${kv('เครดิต', esc(r.creditTermDays) + ' วัน')}${kv('ก่อน VAT', fmt(toNum(r.preVat)))}${kv('หัก ณ ที่จ่าย', whtPct(r.whtRate))}${kv('QT', esc(r.qtNo))}${kv('เลขภาษี', esc(r.taxId) + (r.branch ? ' / ' + esc(r.branch) : ''))}${kv('PO', esc(r.poNo))}${kv('งวด', esc(r.installment))}${kv('ลูกค้านัดจ่าย', esc(r.commitDate))}${kv('RT', esc(r.rtNo))}${kv('วันที่รับเงิน', esc(r.paidDate))}${kv('ยอดที่รับ', r.paidAmount ? fmt(toNum(r.paidAmount)) : '')}${kv('วิธีจ่าย', esc(r.paymentMethod))}${kv('เหตุผลจ่ายช้า', esc(r.delayReason))}${kv('หมายเหตุ', esc(r.note))}${kv('ที่มา', esc(r.source))}</div>
+    <div class="kv">${kv('วันที่ออก', esc(r.issueDate))}${kv('เครดิต', esc(r.creditTermDays) + ' วัน')}${kv('ก่อน VAT', fmt(toNum(r.preVat)))}${kv('หัก ณ ที่จ่าย', whtPct(r.whtRate))}${kv('QT', esc(r.qtNo))}${kv('เลขภาษี', esc(r.taxId) + (r.branch ? ' / ' + esc(r.branch) : ''))}${kv('PO', esc(r.poNo))}${kv('งวด', esc(r.installment))}${kv(paid ? 'นัดจ่ายไว้เดิม' : 'ลูกค้านัดจ่าย', esc(paid ? r.promisedDate : r.commitDate))}${kv('จ่ายเทียบวันนัด', r.paidVsCommit === '' || r.paidVsCommit === undefined ? '' : r.paidVsCommit < 0 ? `ก่อนนัด ${-r.paidVsCommit} วัน` : r.paidVsCommit > 0 ? `ช้ากว่านัด ${r.paidVsCommit} วัน` : 'ตรงวันนัด')}${kv('RT', esc(r.rtNo))}${kv('วันที่รับเงิน', esc(r.paidDate))}${kv('ยอดที่รับ', r.paidAmount ? fmt(toNum(r.paidAmount)) : '')}${kv('วิธีจ่าย', esc(r.paymentMethod))}${kv('เหตุผลจ่ายช้า', esc(r.delayReason))}${kv('หมายเหตุ', esc(r.note))}${kv('ที่มา', esc(r.source))}</div>
     <div class="box"><h4>ประวัติการติดตาม</h4><div class="log">${fu}</div></div>
   </td></tr>`;
 }
@@ -275,16 +292,17 @@ const head = (r) => `<p style="margin:0 0 12px"><b>${esc(r.company)}</b> · ${es
 const done = async (t) => { await load(); $('msg').innerHTML = `<div class="msg ok">${esc(t)}</div>`; };
 
 function openFollow(iv) {
-  const r = find(iv), L = D.lists;
+  const r = find(iv), L = D.lists, open = r.state === 'Outstanding' || r.state === 'Overdue';
   formModal({ title: '📞 บันทึกการติดตาม', html: head(r) + `
     <div class="row"><div class="fg"><label>ช่องทาง *</label><select id="fu-ch">${opt(L.channels, '', '— เลือก —')}</select></div>
     <div class="fg"><label>ผล *</label><select id="fu-rs">${opt(L.follow, '', '— เลือก —')}</select></div></div>
-    <div class="row"><div class="fg"><label>ลูกค้านัดจ่าย</label><input type="date" id="fu-cm" value="${iso(r.commitDate)}"></div>
+    <div class="row"><div class="fg"><label>ลูกค้านัดจ่าย${open ? ' *' : ''}</label><input type="date" id="fu-cm" value="${r.needCommit ? '' : iso(r.commitDate)}">${open ? `<div class="sub">${r.needCommit ? `วันนัดเดิม ${esc(r.commitDate || r.dueDate)} เลยมาแล้ว ใส่วันใหม่ · ` : ''}ยังไม่ทราบให้ใส่วันที่คาดว่าจะจ่าย</div>` : ''}</div>
     <div class="fg"><label>ติดตามครั้งถัดไป</label><input type="date" id="fu-nx"></div></div>
     <div class="fg"><label>หมายเหตุ</label><input type="text" id="fu-nt" maxlength="500" placeholder="เช่น คุยกับฝ่ายบัญชีลูกค้า รอรอบจ่ายวันที่ 25"></div>`,
     save: async (err) => {
       const body = { action: 'ar_followup', ivNo: iv, channel: val('fu-ch'), result: val('fu-rs'), commitDate: val('fu-cm'), nextActionDate: val('fu-nx'), note: val('fu-nt') };
       if (!body.channel || !body.result) { err('เลือกช่องทางและผลการติดตาม'); return false; }
+      if (open && !body.commitDate) { err('ใส่วันที่ลูกค้านัดจ่าย ถ้ายังไม่ทราบให้ใส่วันที่คาดว่าจะจ่าย'); return false; }
       await patch(body); await done(`บันทึกการติดตาม ${iv} แล้ว`);
     } });
 }
@@ -338,7 +356,7 @@ function openPaid(iv) {
     <div class="fg" id="pd-ad-w" hidden><label>ที่อยู่ส่งตัวจริง *</label><input type="text" id="pd-ad" maxlength="600" value="${esc(r.deliveryAddress || '')}"></div>
     <div class="fg"><label>หมายเหตุ</label><input type="text" id="pd-nt" maxlength="500" placeholder="เช่น ลูกค้าโอนรวมค่าธรรมเนียม"></div>`}
     <div class="fg"><label>เหตุผลที่จ่ายช้า (ถ้ามี)</label><select id="pd-dl">${opt(L.delay, r.delayReason, '—')}</select></div>
-    <p class="small">ใบเสร็จ (RT) ฝ่ายบัญชีออกจาก INV นี้ได้หลังบันทึกรับเงิน ที่หน้า รออนุมัติ › ใบเสร็จ${PN.some((n) => n.status === 'new' && String(n.ivNo).toUpperCase() === String(iv).toUpperCase()) ? ' · <b>เซลแจ้งจ่าย INV นี้ไว้แล้ว</b> ยืนยันจากรายการด้านบนจะได้ข้อมูลและสลิปที่เซลแนบ' : ''}</p>`,
+    <p class="small">วันนัดจ่ายจะถูกปรับให้เท่ากับวันรับเงิน และระบบเก็บวันนัดเดิมไว้ให้ดูว่าจ่ายก่อนหรือหลังนัด<br>ใบเสร็จ (RT) ฝ่ายบัญชีออกจาก INV นี้ได้หลังบันทึกรับเงิน ที่หน้า รออนุมัติ › ใบเสร็จ${PN.some((n) => n.status === 'new' && String(n.ivNo).toUpperCase() === String(iv).toUpperCase()) ? ' · <b>เซลแจ้งจ่าย INV นี้ไว้แล้ว</b> ยืนยันจากรายการด้านบนจะได้ข้อมูลและสลิปที่เซลแนบ' : ''}</p>`,
     save: async (err) => {
       const body = { action: 'ar_update', ivNo: iv, paidDate: val('pd-dt'), paidAmount: val('pd-am'), paymentMethod: val('pd-mt'), delayReason: val('pd-dl') };
       if (!body.paidDate || !body.paidAmount || !body.paymentMethod) { err('ใส่วันที่รับเงิน ยอด และวิธีชำระ'); return false; }
@@ -418,15 +436,27 @@ function openDoc(iv) {
 }
 let confirmDoc = false;
 
+let S = null;
+async function loadSum() {
+  try { S = (await api('/api/invoice-requests?view=ar&brief=1&seg=' + encodeURIComponent($('s-seg').value))).summary; renderSum(); }
+  catch (e) { $('msg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
+}
+$('s-seg').onchange = loadSum;
 function renderSum() {
-  const s = D.summary;
-  const maxF = Math.max(1, ...s.forecast.weeks.map((w) => w.expected));
-  $('fc').innerHTML = `<table class="sum"><tr><th>สัปดาห์ถึง</th><th>ยอด</th><th>ใบ</th><th style="width:35%"></th></tr>
-    <tr><td>ก่อนหน้านี้ (เลยกำหนดนัด)</td><td>${fmt0(s.forecast.earlier)}</td><td>${s.forecast.earlierCount}</td><td></td></tr>
-    ${s.forecast.weeks.map((w) => `<tr><td>${esc(w.weekEnd)}</td><td>${fmt0(w.expected)}</td><td>${w.count}</td><td><div class="bar" style="width:${(w.expected / maxF) * 100}%"></div></td></tr>`).join('')}
-    <tr><td>หลังจากนั้น</td><td>${fmt0(s.forecast.later)}</td><td>${s.forecast.laterCount}</td><td></td></tr></table>`;
+  const s = S || D.summary, c = s.checks, v = s.vsCommit;
+  const cur = s.forecast.weeks[0] || {};
+  $('checks').innerHTML = `<div class="chk ${c.noCommitCount ? 'bad' : 'ok'}"><b>${c.noCommitCount ? '⚠️' : '✓'} ยอดค้างชำระที่ยังไม่มีวันนัดจ่าย</b><span>${fmt0(c.noCommit)} บาท · ${c.noCommitCount} ใบ</span><small>ต้องเป็น 0 (ช่อง C3 ของชีท Debt)</small></div>
+    <div class="chk ${c.needCommitCount ? 'bad' : 'ok'}"><b>${c.needCommitCount ? '⚠️' : '✓'} เลยวันนัดแล้วยังไม่จ่าย</b><span>${fmt0(c.needCommit)} บาท · ${c.needCommitCount} ใบ</span><small>${c.needCommitCount ? 'เปิดแท็บ "ต้องหาวันนัดใหม่" ในรายการติดตาม' : 'ทุกใบมีวันนัดที่ยังไม่ถึง'}</small></div>
+    <div class="chk ok"><b>สัปดาห์นี้ (ถึง ${esc(cur.weekEnd || '')})</b><span>เข้าแล้ว ${fmt0(cur.paid)} · รอ ${fmt0(cur.expected)}</span><small>ยอดชำระแล้วใน Forecast และ Actual เป็นตัวเลขเดียวกัน</small></div>
+    <div class="chk ok"><b>จ่ายเทียบวันนัด (90 วัน)</b><span>ก่อนนัด ${v.early} · ตรงนัด ${v.onTime} · ช้า ${v.late}</span><small>นับใบที่รับเงินใน 90 วันล่าสุด</small></div>`;
+  const maxF = Math.max(1, ...s.forecast.weeks.map((w) => w.expected + w.paid));
+  $('fc').innerHTML = `<table class="sum"><tr><th>สัปดาห์ถึง</th><th>รอชำระ</th><th>ใบ</th><th>ชำระแล้ว</th><th style="width:26%"></th></tr>
+    <tr><td>เลยวันนัดแล้ว (ต้องหาวันใหม่)</td><td>${fmt0(s.forecast.earlier)}</td><td>${s.forecast.earlierCount}</td><td></td><td></td></tr>
+    ${s.forecast.weeks.map((w, i) => `<tr${i === 0 ? ' class="now"' : ''}><td>${esc(w.weekEnd)}${i === 0 ? ' <span class="small">สัปดาห์นี้</span>' : ''}</td><td>${fmt0(w.expected)}</td><td>${w.count}</td><td>${w.paid ? fmt0(w.paid) : ''}</td><td><div class="bar" style="width:${((w.expected + w.paid) / maxF) * 100}%"></div></td></tr>`).join('')}
+    <tr><td>หลังจากนั้น</td><td>${fmt0(s.forecast.later)}</td><td>${s.forecast.laterCount}</td><td></td><td></td></tr>
+    <tr class="tot"><td>รวมรอชำระ</td><td>${fmt0(s.open)}</td><td>${s.openCount}</td><td></td><td></td></tr></table>`;
   const maxC = Math.max(1, ...s.cash.map((w) => w.paid));
-  $('cash').innerHTML = `<table class="sum"><tr><th>สัปดาห์ถึง</th><th>รับเงิน</th><th>ใบ</th><th style="width:35%"></th></tr>${s.cash.map((w) => `<tr><td>${esc(w.weekEnd)}</td><td>${fmt0(w.paid)}</td><td>${w.count}</td><td><div class="bar cash" style="width:${(w.paid / maxC) * 100}%"></div></td></tr>`).join('')}</table>`;
+  $('cash').innerHTML = `<table class="sum"><tr><th>สัปดาห์ถึง</th><th>รับเงิน</th><th>ใบ</th><th style="width:35%"></th></tr>${s.cash.map((w) => `<tr${w.current ? ' class="now"' : ''}><td>${esc(w.weekEnd)}${w.current ? ' <span class="small">สัปดาห์นี้</span>' : ''}</td><td>${fmt0(w.paid)}</td><td>${w.count}</td><td><div class="bar cash" style="width:${(w.paid / maxC) * 100}%"></div></td></tr>`).join('')}</table>`;
   const B = s.buckets;
   const tot = Object.fromEntries(B.map((b) => [b, s.aging.reduce((t, a) => t + a[b], 0)]));
   $('aging').innerHTML = `<table class="sum"><tr><th>กลุ่ม</th>${B.map((b) => `<th>${b === 'Not due' ? 'ยังไม่ถึงกำหนด' : b + ' วัน'}</th>`).join('')}<th>รวม</th></tr>
@@ -436,7 +466,7 @@ function renderSum() {
   $('months').innerHTML = `<table class="sum"><tr><th>เดือน</th>${segs.map((g) => `<th>${esc(g)}</th>`).join('')}<th>ออก INV รวม</th><th>ใบ</th><th>เงินเข้า</th></tr>
     ${s.months.map((m) => `<tr><td>${esc(m.month)}</td>${segs.map((g) => `<td>${fmt0(m.bySegment[g] || 0)}</td>`).join('')}<td>${fmt0(m.invoiced)}</td><td>${m.count}</td><td>${fmt0(m.cash)}</td></tr>`).join('')}</table>`;
   const by = {};
-  D.invoices.filter((r) => (r.state === 'Overdue' || r.state === 'Outstanding') && !r.legacyCheck).forEach((r) => { const k = r.salesName || r.salesEmail || '(ไม่ระบุ)'; by[k] = by[k] || { open: 0, over: 0, n: 0 }; by[k].open += r.expected; by[k].n++; if (r.state === 'Overdue') by[k].over += r.expected; });
+  D.invoices.filter((r) => (r.state === 'Overdue' || r.state === 'Outstanding') && !r.legacyCheck && (!$('s-seg').value || (r.segment || 'Others') === $('s-seg').value)).forEach((r) => { const k = r.salesName || r.salesEmail || '(ไม่ระบุ)'; by[k] = by[k] || { open: 0, over: 0, n: 0 }; by[k].open += r.expected; by[k].n++; if (r.state === 'Overdue') by[k].over += r.expected; });
   $('bysales').innerHTML = `<table class="sum"><tr><th>เซล</th><th>ค้างรับ</th><th>เกินกำหนด</th><th>ใบ</th></tr>${Object.entries(by).sort((a, b) => b[1].open - a[1].open).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${fmt0(v.open)}</td><td>${fmt0(v.over)}</td><td>${v.n}</td></tr>`).join('')}</table>`;
 }
 

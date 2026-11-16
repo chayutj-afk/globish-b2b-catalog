@@ -204,6 +204,12 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
   [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_refresh', ivNo: 'IV-20261100001' });
   ok(s === 200 && arRow('IV-20261100001').peakIvId === 'iL1b' && /iL1b/.test(arRow('IV-20261100001').peakDocLink) && arRow('IV-20261100001').docStatus === 'Active' && j.changes.some((c) => /ออกใหม่/.test(c)), 're-issued under the same number (row had the old id): moved to the approved document: ' + JSON.stringify(j.changes));
   ok(ivr('LEGACY-IV-20261100001').peakIvId === 'iL1b', 'the INV request follows too');
+  // re-issued for another contact (same tax ID, branch 00001, corrected name): name and branch follow PEAK
+  { const tax = arRow('IV-20261100001').taxId;
+    setPeak((p) => { p.contacts.push({ id: 'cBr', code: 'CBR01', name: 'บริษัท ลูกค้าใหม่ จำกัด สาขา 00001', taxNumber: tax, branchCode: '00001', type: 1 }); p.invoices.find((x) => x.id === 'iL1b').contactCode = 'CBR01'; });
+    [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_refresh', ivNo: 'IV-20261100001' });
+    const w = arRow('IV-20261100001');
+    ok(s === 200 && w.clientCode === 'CBR01' && w.company === 'บริษัท ลูกค้าใหม่ จำกัด สาขา 00001' && String(w.branch).replace(/^'/, '') === '00001', 'customer name and branch follow the contact of the re-issued INV: ' + JSON.stringify([w.clientCode, w.company, w.branch, j.changes])); }
   setPeak((p) => { p.invoices = p.invoices.filter((x) => x.id !== 'iL1'); const n = p.invoices.find((x) => x.id === 'iL1b'); n.id = 'iL1'; });
   await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_refresh', ivNo: 'IV-20261100001' });
   // INV void

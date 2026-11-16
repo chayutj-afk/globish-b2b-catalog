@@ -35,7 +35,8 @@ async function nameFromPerf(email, items) {
   if (it) await users.setName(email, it.name);
 }
 
-module.exports = async function handler(req, res) {
+module.exports = (req, res) => require('../lib/hub').scope(req, () => inner(req, res));
+async function inner(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   try {
     const view = new URL(req.url, 'http://x').searchParams.get('view');

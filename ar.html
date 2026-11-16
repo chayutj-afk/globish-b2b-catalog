@@ -149,7 +149,9 @@ function ask({ title, html = '', ok = 'ยืนยัน', cancel = 'ยกเ�
 }
 async function withLoading(text, fn) { $('ld-text').textContent = text; $('ov-load').hidden = false; try { return await fn(); } finally { $('ov-load').hidden = true; } }
 async function api(url, opts = {}) {
-  const r = await fetch(url, { cache: 'no-store', ...opts, headers: { 'Content-Type': 'application/json' } });
+  const wr = opts.method && opts.method !== 'GET'; if (wr) try { sessionStorage.setItem('gc_w', Date.now()); } catch {}
+  const r = await fetch(url, { cache: 'no-store', ...opts, headers: { 'Content-Type': 'application/json', ...(Date.now() - Number(sessionStorage.getItem('gc_w') || 0) < 12e3 ? { 'x-fresh': '1' } : {}) } });
+  if (wr) try { sessionStorage.setItem('gc_w', Date.now()); } catch {}
   if (r.status === 401) { location.href = '/signin.html?next=/ar'; throw new Error('ต้องเข้าสู่ระบบใหม่'); }
   const d = await r.json().catch(() => null);
   if (!r.ok || !d || !d.ok) throw new Error((d && d.error) || `HTTP ${r.status}`);

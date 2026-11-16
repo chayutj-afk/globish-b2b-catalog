@@ -95,7 +95,9 @@ const sellerGroups = () => CLASSES.groups.filter((g) => g.mode === 'seller');
 const itemName = (g, code) => ((g.items || []).find((i) => i.code === code) || {}).name || code;
 const TEAM = { b2b: 'B2B', b2c: 'B2C (ไม่เห็น Catalog)', both: 'Both' };
 async function api(url, opts = {}) {
-  const r = await fetch(url, { cache: 'no-store', ...opts, headers: { 'Content-Type': 'application/json' } });
+  const wr = opts.method && opts.method !== 'GET'; if (wr) try { sessionStorage.setItem('gc_w', Date.now()); } catch {}
+  const r = await fetch(url, { cache: 'no-store', ...opts, headers: { 'Content-Type': 'application/json', ...(Date.now() - Number(sessionStorage.getItem('gc_w') || 0) < 12e3 ? { 'x-fresh': '1' } : {}) } });
+  if (wr) try { sessionStorage.setItem('gc_w', Date.now()); } catch {}
   if (r.status === 401) { location.href = '/signin.html?next=/users'; throw new Error('ต้องเข้าสู่ระบบ'); }
   const d = await r.json().catch(() => ({}));
   if (!r.ok || !d.ok) throw new Error(d.error || ('HTTP ' + r.status));

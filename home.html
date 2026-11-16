@@ -121,7 +121,7 @@ a.tile .dd{color:var(--muted);font-size:12.5px;line-height:1.6}
   window.SHELL_ME.then(function (u) {
     if (!u) return;
     if (u.name) document.getElementById('hello').innerHTML = 'สวัสดีครับ คุณ<b>' + u.name.split(' ')[0].replace(/[<>&]/g, '') + '</b> วันนี้จะทำอะไรดี';
-    var get = function (url) { return fetch(url, { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }); };
+    var get = function (url) { return fetch(url, { cache: 'no-store', headers: (Date.now() - Number(sessionStorage.getItem('gc_w') || 0) < 12e3 ? { 'x-fresh': '1' } : {}) }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }); };
     var perms = u.perms || [];
     // Cash dashboard: admin, accounting and collectors (same numbers as the summary tab of /ar).
     if (perms.includes('ar_view') && (perms.includes('ar') || perms.includes('approve') || perms.includes('users'))) {

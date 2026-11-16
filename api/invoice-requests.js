@@ -1174,7 +1174,8 @@ async function list(req, res, user) {
   res.status(200).json({ ok: true, uploads: drive.enabled(), requests: out });
 }
 
-module.exports = async function handler(req, res) {
+module.exports = (req, res) => require('../lib/hub').scope(req, () => inner(req, res));
+async function inner(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   try {
     const user = await requireUser(req);

@@ -351,7 +351,9 @@ function validTax(s) { if (!/^\d{13}$/.test(s)) return false; let t = 0; for (le
 function disc(raw, gross) { const d = String(raw ?? '').trim().replace(/,/g, ''); if (!d) return 0; if (/^\d+(\.\d+)?%$/.test(d)) return gross * Number(d.slice(0, -1)) / 100; return /^\d+(\.\d+)?$/.test(d) ? Number(d) : NaN; }
 function msg(id, kind, text) { $(id).innerHTML = text ? `<div class="msg ${kind}">${esc(text)}</div>` : ''; }
 async function api(url, opts = {}) {
-  const r = await fetch(url, { cache: 'no-store', ...opts, headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) } });
+  const wr = opts.method && opts.method !== 'GET'; if (wr) try { sessionStorage.setItem('gc_w', Date.now()); } catch {}
+  const r = await fetch(url, { cache: 'no-store', ...opts, headers: { 'Content-Type': 'application/json', ...(Date.now() - Number(sessionStorage.getItem('gc_w') || 0) < 12e3 ? { 'x-fresh': '1' } : {}), ...(opts.headers || {}) } });
+  if (wr) try { sessionStorage.setItem('gc_w', Date.now()); } catch {}
   if (r.status === 401) { location.href = '/signin.html?next=' + encodeURIComponent(location.pathname + location.hash); throw new Error('ต้องเข้าสู่ระบบใหม่'); }
   const d = await r.json().catch(() => null);
   if (!r.ok || !d || !d.ok) throw new Error((d && d.error) || `HTTP ${r.status}`);

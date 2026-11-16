@@ -15,7 +15,8 @@ async function whPackages() {
   return whCache.map;
 }
 
-module.exports = async function handler(req, res) {
+module.exports = (req, res) => require('../lib/hub').scope(req, () => inner(req, res));
+async function inner(req, res) {
   try {
     if (req.method !== 'GET') return res.status(405).json({ ok: false, error: 'GET only' });
     await requireUser(req);

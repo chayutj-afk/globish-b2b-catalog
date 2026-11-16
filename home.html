@@ -60,6 +60,8 @@ a.tile .dd{color:var(--muted);font-size:12.5px;line-height:1.6}
 .cashd th:first-child,.cashd td:first-child{text-align:left}
 .cashd th{font-size:12px;color:var(--muted);font-weight:500}
 .cashd tr.now td{background:var(--primary-soft)}
+.cashd a.fig{color:inherit;text-decoration:underline dotted;text-underline-offset:3px;text-decoration-color:var(--muted)}
+.cashd a.fig:hover{color:var(--primary)}
 .health .area{font-size:11px;color:var(--muted);border:1px solid var(--line2);border-radius:9999px;padding:0 7px;margin-right:6px}
 </style>
 </head>
@@ -131,14 +133,16 @@ a.tile .dd{color:var(--muted);font-size:12.5px;line-height:1.6}
         if (!d || !d.summary) { document.getElementById('c-sum').textContent = 'โหลดไม่ได้ในตอนนี้'; return; }
         var s = d.summary, c = s.checks, w = s.forecast.weeks, cur = w[0] || {};
         document.getElementById('c-sum').textContent = 'ทุกกลุ่มลูกค้า · สัปดาห์นับ ศุกร์–พฤหัส ตัดสิ้นเดือน';
-        var kp = function (k, v, sub, bad) { return '<a href="/ar"' + (bad ? ' class="bad"' : '') + '><div class="k">' + k + '</div><div class="v">' + v + '</div><div class="s">' + sub + '</div></a>'; };
+        var go = function (key, title) { return '/ar#d=' + encodeURIComponent(key) + '&t=' + encodeURIComponent(title); };
+        var kp = function (k, v, sub, bad, key) { return '<a href="' + go(key, k) + '" title="ดูรายชื่อบริษัท"' + (bad ? ' class="bad"' : '') + '><div class="k">' + k + '</div><div class="v">' + v + '</div><div class="s">' + sub + '</div></a>'; };
+        var cell = function (val, key, title) { return val ? '<a class="fig" href="' + go(key, title) + '" title="ดูรายชื่อบริษัท">' + f0(val) + '</a>' : (key.indexOf('paid') === 0 ? '' : '0'); };
         document.getElementById('c-kp').innerHTML =
-          kp('ค้างรับทั้งหมด', f0(s.open), s.openCount + ' ใบ · เกินกำหนด ' + f0(s.overdue)) +
-          kp('สัปดาห์นี้ (ถึง ' + (cur.weekEnd || '') + ')', f0(cur.paid), 'เข้าแล้ว · รออีก ' + f0(cur.expected) + ' (' + (cur.count || 0) + ' ใบ)') +
-          kp('เลยวันนัด ต้องหาวันใหม่', f0(c.needCommit), c.needCommitCount + ' ใบ', c.needCommitCount > 0) +
-          kp('ค้างชำระที่ไม่มีวันนัด', f0(c.noCommit), c.noCommitCount + ' ใบ · ต้องเป็น 0', c.noCommitCount > 0);
+          kp('ค้างรับทั้งหมด', f0(s.open), s.openCount + ' ใบ · เกินกำหนด ' + f0(s.overdue), false, 'open') +
+          kp('เงินเข้าแล้วสัปดาห์นี้ (ถึง ' + (cur.weekEnd || '') + ')', f0(cur.paid), 'รออีก ' + f0(cur.expected) + ' (' + (cur.count || 0) + ' ใบ)', false, 'paid|' + cur.weekEnd) +
+          kp('เลยวันนัด ต้องหาวันใหม่', f0(c.needCommit), c.needCommitCount + ' ใบ', c.needCommitCount > 0, 'needcommit') +
+          kp('ค้างชำระที่ไม่มีวันนัด', f0(c.noCommit), c.noCommitCount + ' ใบ · ต้องเป็น 0', c.noCommitCount > 0, 'nocommit');
         document.getElementById('c-tb').innerHTML = '<tr><th>Forecast Cash-In สัปดาห์ถึง</th><th>รอชำระ</th><th>ใบ</th><th>ชำระแล้ว</th></tr>' +
-          w.slice(0, 6).map(function (x, i) { return '<tr' + (i === 0 ? ' class="now"' : '') + '><td>' + x.weekEnd + (i === 0 ? ' · สัปดาห์นี้' : '') + '</td><td>' + f0(x.expected) + '</td><td>' + x.count + '</td><td>' + (x.paid ? f0(x.paid) : '') + '</td></tr>'; }).join('');
+          w.slice(0, 6).map(function (x, i) { return '<tr' + (i === 0 ? ' class="now"' : '') + '><td>' + x.weekEnd + (i === 0 ? ' · สัปดาห์นี้' : '') + '</td><td>' + cell(x.expected, 'fc|' + x.weekEnd, 'รอชำระ สัปดาห์ถึง ' + x.weekEnd) + '</td><td>' + x.count + '</td><td>' + cell(x.paid, 'paid|' + x.weekEnd, 'ชำระแล้ว สัปดาห์ถึง ' + x.weekEnd) + '</td></tr>'; }).join('');
       });
     }
     if (perms.includes('approve') || perms.includes('users')) {

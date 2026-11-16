@@ -492,11 +492,44 @@ function summarise(all, today) {
   };
 }
 
+// The invoices behind one figure of the summary / dashboard (?drill=key), with the same rules as summarise().
+function drillRows(all, today, key) {
+  const DAY = 86400e3;
+  const open = all.filter((r) => (r.state === 'Outstanding' || r.state === 'Overdue') && !r.legacyCheck);
+  const [k, a = '', b = ''] = String(key).split('|');
+  const seg = (r) => r.segment || 'Others';
+  const month = (ms) => (ms === null ? '' : ar.fmt(ms).slice(3));
+  const cur = ar.weekEnd(today);
+  let last = cur; for (let i = 0; i < 9; i++) last = ar.weekEnd(last + DAY);
+  let xs = [], paid = false;
+  if (k === 'open') xs = open;
+  else if (k === 'overdue') xs = open.filter((r) => r.state === 'Overdue');
+  else if (k === 'legacy') xs = all.filter((r) => r.legacyCheck);
+  else if (k === 'nocommit') xs = open.filter((r) => r.noCommit);
+  else if (k === 'needcommit') xs = open.filter((r) => r.needCommit);
+  else if (k === 'fc') xs = open.filter((r) => r.planMs !== null && ar.fmt(r.planMs) === a);
+  else if (k === 'fc-earlier') xs = open.filter((r) => r.planMs !== null && r.planMs < cur);
+  else if (k === 'fc-later') xs = open.filter((r) => r.planMs !== null && r.planMs > last);
+  else if (k === 'paid') { paid = true; xs = all.filter((r) => r.paidWeekMs !== null && ar.fmt(r.paidWeekMs) === a); }
+  else if (k === 'aging') xs = open.filter((r) => (!a || seg(r) === a) && (!b || r.aging === b));
+  else if (k === 'month-inv') xs = all.filter((r) => r.issueMs !== null && month(r.issueMs) === a && r.state !== 'Closed' && (!b || seg(r) === b));
+  else if (k === 'month-cash') { paid = true; xs = all.filter((r) => r.paidMs !== null && month(r.paidMs) === a); }
+  else if (k === 'sales') xs = open.filter((r) => (r.salesName || r.salesEmail || '(ไม่ระบุ)') === a && (!b || r.state === 'Overdue'));
+  else if (k === 'vs') { paid = true; xs = all.filter((r) => r.paidMs !== null && r.paidMs >= today - 90 * DAY && r.paidVsCommit !== '' && (a === 'early' ? r.paidVsCommit < 0 : a === 'late' ? r.paidVsCommit > 0 : r.paidVsCommit === 0)); }
+  const preVat = k === 'month-inv';
+  const rows = xs.map((r) => ({ ivNo: r.ivNo, company: r.company, segment: r.segment, salesName: r.salesName || r.salesEmail || '', issueDate: r.issueDate, dueDate: r.dueDate,
+    commitDate: r.state === 'Paid' ? r.promisedDate : r.commitDate, paidDate: r.paidDate, state: r.state, daysOverdue: r.daysOverdue, paidVsCommit: r.paidVsCommit, peakDocLink: r.peakDocLink || '',
+    amount: preVat ? r.preVatN : paid ? (ar.num(r.paidAmount) || r.expected) : r.expected }))
+    .sort((x, y) => y.amount - x.amount);
+  return { rows, total: Math.round(rows.reduce((t, r) => t + (Number(r.amount) || 0), 0) * 100) / 100, basis: preVat ? 'prevat' : paid ? 'paid' : 'expected' };
+}
+
 async function arList(req, res, user) {
   if (!can(user, 'ar_view')) throw bad('ไม่มีสิทธิ์ดูหน้าติดตามหนี้', 403);
   // The home dashboard (?brief=1) may share a read for a few seconds; the work page always reads fresh.
-  const rd = req.query.brief ? { cache: 20e3 } : {};
-  const [rows, fus, ivreqs] = await Promise.all([hub.readTable('Invoices', rd), req.query.brief ? [] : hub.readTable('FollowUps'), req.query.brief ? [] : hub.readTable('InvoiceRequests').catch(() => [])]);
+  const lite = req.query.brief || req.query.drill;
+  const rd = lite ? { cache: 20e3 } : {};
+  const [rows, fus, ivreqs] = await Promise.all([hub.readTable('Invoices', rd), lite ? [] : hub.readTable('FollowUps'), lite ? [] : hub.readTable('InvoiceRequests').catch(() => [])]);
   const today = ar.todayMs();
   // Customer contact from the INV request, to prefill where the receipt goes.
   const contact = new Map(ivreqs.map((v) => [v.ivRequestId, { financeEmail: v.financeEmail || '', deliveryAddress: v.originalAddress || v.deliveryAddress || '' }]));
@@ -506,6 +539,7 @@ async function arList(req, res, user) {
   const seg = text(req.query.seg, 20);
   const segments = [...new Set(mine.map((r) => r.segment || 'Others'))].sort();
   const all = seg ? mine.filter((r) => (r.segment || 'Others') === seg) : mine;
+  if (req.query.drill) return res.status(200).json({ ok: true, seg, ...drillRows(all, today, text(req.query.drill, 120)) });
   if (req.query.brief) return res.status(200).json({ ok: true, summary: summarise(all, today), segments, seg });
   const byIv = new Map();
   for (const f of fus) { if (!byIv.has(f.ivNo)) byIv.set(f.ivNo, []); byIv.get(f.ivNo).push(f); }

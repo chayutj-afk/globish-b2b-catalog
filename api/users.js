@@ -56,7 +56,7 @@ module.exports = async function handler(req, res) {
 
     if (view === 'health') {
       if (!users.can(me, 'users') && !users.can(me, 'approve')) return res.status(403).json({ ok: false, error: 'เฉพาะผู้ดูแลหรือฝ่ายบัญชี' });
-      return res.status(200).json({ ok: true, ...(await require('../lib/health').collect()) });
+      return res.status(200).json({ ok: true, ...(await require('../lib/health').collectCached(!!new URL(req.url, 'http://x').searchParams.get('fresh'))) });
     }
     if (!users.can(me, 'users')) return res.status(403).json({ ok: false, error: 'เฉพาะผู้ดูแลสิทธิ์' });
     if (req.method === 'GET') {

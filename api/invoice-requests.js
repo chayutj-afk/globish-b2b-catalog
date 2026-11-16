@@ -494,7 +494,9 @@ function summarise(all, today) {
 
 async function arList(req, res, user) {
   if (!can(user, 'ar_view')) throw bad('ไม่มีสิทธิ์ดูหน้าติดตามหนี้', 403);
-  const [rows, fus, ivreqs] = await Promise.all([hub.readTable('Invoices'), hub.readTable('FollowUps'), hub.readTable('InvoiceRequests').catch(() => [])]);
+  // The home dashboard (?brief=1) may share a read for a few seconds; the work page always reads fresh.
+  const rd = req.query.brief ? { cache: 20e3 } : {};
+  const [rows, fus, ivreqs] = await Promise.all([hub.readTable('Invoices', rd), req.query.brief ? [] : hub.readTable('FollowUps'), req.query.brief ? [] : hub.readTable('InvoiceRequests').catch(() => [])]);
   const today = ar.todayMs();
   // Customer contact from the INV request, to prefill where the receipt goes.
   const contact = new Map(ivreqs.map((v) => [v.ivRequestId, { financeEmail: v.financeEmail || '', deliveryAddress: v.originalAddress || v.deliveryAddress || '' }]));

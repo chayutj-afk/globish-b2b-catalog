@@ -153,9 +153,9 @@ a.tile .dd{color:var(--muted);font-size:12.5px;line-height:1.6}
         }).join('');
         document.getElementById('h-all').textContent = showAll ? 'เฉพาะที่ต้องดู' : 'ดูทั้งหมด';
       };
-      var load = function () {
+      var load = function (ev) {
         document.getElementById('h-sum').textContent = 'กำลังตรวจ…';
-        get('/api/users?view=health').then(function (d) { if (!d) { document.getElementById('h-sum').textContent = 'ตรวจไม่ได้ในตอนนี้'; return; } H = d; paint(); });
+        get('/api/users?view=health' + (ev ? '&fresh=1' : '')).then(function (d) { if (!d) { document.getElementById('h-sum').textContent = 'ตรวจไม่ได้ในตอนนี้'; return; } H = d; paint(); });
       };
       document.getElementById('health').hidden = false;
       document.getElementById('h-all').onclick = function () { showAll = !showAll; paint(); };

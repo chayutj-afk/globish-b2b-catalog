@@ -1440,8 +1440,16 @@ function dlvSummary(v, k) {
 // PEAK accounts money can come into (cash / bank / e-wallet), loaded once; the last pick per payment method is remembered.
 let PAYM = null;
 async function fillPayMethods() {
-  try { if (!PAYM) PAYM = (await api('/api/invoice-requests?view=pay-methods')).methods || []; }
-  catch (e) { document.querySelectorAll('select.paym').forEach((el) => { el.innerHTML = `<option value="">${esc(e.message)}</option>`; }); return; }
+  try { if (!PAYM) { PAYM = (await api('/api/invoice-requests?view=pay-methods')).methods || []; try { localStorage.setItem('paym:list', JSON.stringify(PAYM)); } catch {} } }
+  catch (e) {
+    // PEAK slow or down: the accounts change rarely, so use the list this computer saw last.
+    try { PAYM = JSON.parse(localStorage.getItem('paym:list') || 'null'); } catch { PAYM = null; }
+    if (!PAYM || !PAYM.length) {
+      PAYM = null;
+      document.querySelectorAll('select.paym').forEach((el) => { el.innerHTML = '<option value="">โหลดบัญชีจาก PEAK ไม่ได้ กดที่นี่เพื่อลองใหม่</option>'; el.title = e.message; el.onmousedown = () => { el.onmousedown = null; el.innerHTML = '<option value="">กำลังโหลด…</option>'; fillPayMethods(); }; });
+      return;
+    }
+  }
   const TY = { 1: 'เงินสด', 2: 'บัญชีธนาคาร', 4: 'e-Wallet' };
   document.querySelectorAll('select.paym').forEach((el) => {
     let last = ''; try { last = localStorage.getItem('paym:' + el.dataset.m) || ''; } catch {}

@@ -401,7 +401,11 @@ function offerReceipt(ivNo, { ch, email, addr, method }) {
   const r = find(ivNo);
   if (!CAN_RT || !D.peakLive || !r || r.rtNo || !r.paidDate) return;
   setTimeout(async () => {
-    try { if (!PAYM) PAYM = (await api('/api/invoice-requests?view=pay-methods')).methods || []; } catch (e) { return; }
+    try { if (!PAYM) { PAYM = (await api('/api/invoice-requests?view=pay-methods')).methods || []; try { localStorage.setItem('paym:list', JSON.stringify(PAYM)); } catch {} } }
+    catch (e) {
+      try { PAYM = JSON.parse(localStorage.getItem('paym:list') || 'null'); } catch { PAYM = null; }
+      if (!PAYM || !PAYM.length) { PAYM = null; $('msg').innerHTML = `<div class="msg err">โหลดบัญชีรับเงินจาก PEAK ไม่ได้ (${esc(e.message)}) ออกใบเสร็จได้ที่หน้า รออนุมัติ › ใบเสร็จ</div>`; return; }
+    }
     let last = ''; try { last = localStorage.getItem('paym:' + (method || '')) || ''; } catch {}
     const chan = ch || 'sales';
     formModal({ title: '🧾 ออกใบเสร็จต่อเลยไหม?', ok: '🧾 สร้างใบเสร็จ Draft ใน PEAK', html: `<p style="margin:0 0 12px"><b>${esc(r.company)}</b> · ${esc(ivNo)}<br>รับเงิน <b>${fmt(toNum(r.paidAmount))}</b> เมื่อ ${esc(r.paidDate)}</p>

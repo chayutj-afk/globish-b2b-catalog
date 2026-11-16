@@ -47,6 +47,9 @@ table.sum tr.tot td{font-weight:500;color:var(--head)}
 .acts{display:flex;gap:8px;flex-wrap:wrap;padding:12px 0}
 #ov-load{z-index:1100}
 .filters select.sel{width:auto;min-width:140px}.filters .search{flex:1;min-width:200px}
+main{max-width:1680px}
+#topf [hidden]{display:none}
+@media(min-width:1500px){.wl{font-size:14px}.sum-wide{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}.sum-wide>.card{margin:0}.sum-wide{margin-bottom:16px}}
 #topf{margin-bottom:14px}#f-clear[hidden],#g-old[hidden]{display:none}#topf .lbl{font-size:13px;color:var(--muted)}#topf .search{max-width:420px}
 .states{display:flex;gap:8px 12px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
 .states .seg{margin-bottom:0;border-radius:14px}.states .seg button{white-space:nowrap}
@@ -139,15 +142,17 @@ table.sum tr.now td{background:var(--primary-soft)}
   </section>
 
   <section class="tab" id="tab-sum">
-    <div class="sumbar"><label for="s-seg">กลุ่มลูกค้า</label><select class="sel" id="s-seg"><option value="">ทุกกลุ่ม</option></select><span class="small">สัปดาห์นับ ศุกร์–พฤหัส และตัดที่สิ้นเดือน (เหมือน Week Mapping ของชีท Debt)</span></div>
+    <div class="sumbar"><span class="small">สรุปนี้ใช้ตัวกรอง<b>กลุ่มลูกค้า</b>ด้านบน · สัปดาห์นับ ศุกร์–พฤหัส และตัดที่สิ้นเดือน (เหมือน Week Mapping ของชีท Debt)</span></div>
     <div id="checks"></div>
     <div class="two">
       <div class="card"><h2>Forecast Cash-In คาดการณ์เงินเข้ารายสัปดาห์</h2><p class="hint">ตามวันที่ลูกค้านัดจ่าย (Date Commit) · ใบที่จ่ายแล้วนับในสัปดาห์ที่รับเงิน</p><div id="fc"></div></div>
       <div class="card"><h2>Actual Cash-In เงินเข้าจริงรายสัปดาห์</h2><p class="hint">ตามวันที่รับเงิน (Date Paid)</p><div id="cash"></div></div>
     </div>
-    <div class="card"><h2>ยอดค้างรับตามอายุหนี้</h2><div class="wrap" id="aging"></div></div>
     <div class="card"><h2>ออก INV และเงินเข้ารายเดือน (12 เดือน)</h2><p class="hint">ยอด INV ก่อน VAT ไม่นับเอกสารยกเลิก / เปลี่ยนเอกสาร</p><div class="wrap" id="months"></div></div>
+<div class="sum-wide">
+    <div class="card"><h2>ยอดค้างรับตามอายุหนี้</h2><div class="wrap" id="aging"></div></div>
     <div class="card"><h2>ค้างรับแยกตามเซล</h2><div class="wrap" id="bysales"></div></div>
+    </div>
     <div class="card" id="imp" hidden><h2>นำเข้าข้อมูลจากชีทเดิม (ผู้ดูแลเท่านั้น)</h2>
       <p class="hint">ใช้ครั้งเดียวตอนย้ายระบบ: นำเข้าไฟล์ .json ของ INV และประวัติติดตามจากชีท Debt หรือ QT จาก PEAK รายการที่มีอยู่แล้วจะถูกข้าม จึงนำเข้าซ้ำได้</p>
       <input type="file" id="imp-file" accept=".json,application/json"> <button class="btn btn-p btn-sm" id="imp-go" type="button">นำเข้า</button>
@@ -189,15 +194,20 @@ async function api(url, opts = {}) {
   return d;
 }
 
-let D = null, OPEN = null, SHOW = 100;
+let D = null, OPEN = null, SHOW = 100, STASH = null;
 document.querySelectorAll('#tabs button').forEach((b) => b.onclick = () => {
   document.querySelectorAll('#tabs button').forEach((x) => x.classList.toggle('on', x === b));
   document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('on', t.id === 'tab-' + b.dataset.t));
+  const sum = b.dataset.t === 'sum';
+  if (sum && !STASH) { STASH = { s: $('f-sales').value, q: $('f-q').value }; $('f-sales').value = ''; $('f-q').value = ''; }
+  else if (!sum && STASH) { $('f-sales').value = STASH.s; $('f-q').value = STASH.q; STASH = null; }
+  $('f-sales').hidden = $('f-q').hidden = sum;
+  if (D) render();
 });
 document.querySelectorAll('#f-state button').forEach((b) => b.onclick = () => { document.querySelectorAll('#f-state button').forEach((x) => x.classList.toggle('on', x === b)); SHOW = 100; render(); });
 // The group filter and the group select of the summary tab move together.
 const hasOpt = (el, v) => [...el.options].some((o) => o.value === v);
-$('f-seg').onchange = () => { SHOW = 100; render(); const v = $('f-seg').value; if ($('s-seg').value !== v && hasOpt($('s-seg'), v)) { $('s-seg').value = v; loadSum(); } };
+$('f-seg').onchange = () => { SHOW = 100; render(); loadSum(); };
 $('f-sales').onchange = () => { SHOW = 100; render(); };
 $('f-due').onchange = () => { SHOW = 100; render(); };
 $('f-clear').onclick = () => { $('f-sales').value = ''; $('f-q').value = ''; $('f-seg').value = ''; $('f-seg').onchange(); };
@@ -213,13 +223,12 @@ async function load() {
   $('b-await').hidden = !D.invoices.some((r) => r.awaitCash);
   if ($('b-await').hidden && $('b-await').classList.contains('on')) { $('b-await').classList.remove('on'); document.querySelector('#f-state button[data-v="due"]').classList.add('on'); }
   $('f-hint').innerHTML = `<b>ต้องตาม</b> = เกินกำหนด หรือครบกำหนดใน 7 วัน หรือถึงวันนัดติดตาม เรียงจากเกินนานสุด<br><b>ต้องหาวันนัดใหม่</b> = เลยวันที่ลูกค้านัดจ่ายแล้วยังไม่จ่าย<br><b>รอเงินเข้า</b> = ออกใบเสร็จแล้ว (ล่วงหน้า หรือรับเช็ค) แต่เงินยังไม่เข้าบัญชี ยังนับเป็นยอดค้างรับ<br><b>ค้างทั้งหมด</b> = INV ปี 2026 เป็นต้นไปที่ยังไม่ได้รับเงิน เลือกดูเฉพาะเกินกำหนดหรือยังไม่ถึงกำหนดได้${s.oldCount ? `<br><b>ค้างเก่าก่อนปี 2026</b> ${s.oldCount} ใบ (${fmt0(s.old)} บาท) แยกไว้ ดูได้ที่แท็บ "สรุป"` : ''}${s.legacyCheckCount ? `<br><b>รอตรวจกับ PEAK</b> ${s.legacyCheckCount} ใบ (${fmt0(s.legacyCheck)} บาท) = ข้อมูลที่ย้ายมาและยังไม่มีใครตรวจ ไม่นับในยอดค้างรับจนกว่าจะตรวจ` : ''}`;
-  const segs = [...new Set(D.invoices.map((r) => r.segment).filter(Boolean))].sort();
+  const segs = D.segments || [];
   const sales = [...new Set(D.invoices.map((r) => r.salesName || r.salesEmail).filter(Boolean))].sort();
   const keepS = $('f-seg').value, keepP = $('f-sales').value;
   $('f-seg').innerHTML = '<option value="">ทุกกลุ่ม</option>' + segs.map((x) => `<option>${esc(x)}</option>`).join(''); $('f-seg').value = keepS;
   $('f-sales').innerHTML = '<option value="">ทุกเซล</option>' + sales.map((x) => `<option>${esc(x)}</option>`).join('') + (D.invoices.some((r) => !(r.salesName || r.salesEmail)) ? '<option value="__none">(ไม่มีเจ้าของ)</option>' : ''); $('f-sales').value = keepP;
-  const keepG = $('s-seg').value;
-  $('s-seg').innerHTML = '<option value="">ทุกกลุ่ม</option>' + (D.segments || []).map((x) => `<option>${esc(x)}</option>`).join(''); $('s-seg').value = keepG;
+  const keepG = $('f-seg').value;
   render(); if (keepG) loadSum(); else { S = null; renderSum(); }
   if (!DEEP) { DEEP = true; const h = new URLSearchParams(location.hash.slice(1)); if (h.get('d')) { history.replaceState(null, '', location.pathname); drill(h.get('d'), h.get('t') || ''); } }
 }
@@ -251,7 +260,7 @@ function rowsFor(only) {
   const mode = only || document.querySelector('#f-state button.on').dataset.v;
   const seg = $('f-seg').value, sal = $('f-sales').value, q = $('f-q').value.trim().toLowerCase();
   let xs = D.invoices.filter((r) => {
-    if (seg && r.segment !== seg) return false;
+    if (seg && (r.segment || 'Others') !== seg) return false;
     if (sal && (sal === '__none' ? !!(r.salesName || r.salesEmail) : (r.salesName || r.salesEmail) !== sal)) return false;
     if (q && ![r.company, r.ivNo, r.qtNo, r.taxId, r.rtNo].some((v) => String(v || '').toLowerCase().includes(q))) return false;
     if (mode === 'all') return true;
@@ -538,7 +547,9 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('ov-d
 // Jump from the list of a figure to that INV in the work list.
 function openInList(iv) {
   closeDrill();
-  $('f-seg').value = ''; $('f-sales').value = ''; $('f-q').value = iv;
+  STASH = null; $('f-sales').hidden = $('f-q').hidden = false;
+  if ($('f-seg').value) { $('f-seg').value = ''; loadSum(); }
+  $('f-sales').value = ''; $('f-q').value = iv;
   const tr0 = find(iv), tab = !tr0 ? 'all' : tr0.legacyCheck ? 'check' : tr0.state === 'Paid' ? 'Paid' : (tr0.state === 'Outstanding' || tr0.state === 'Overdue') && !tr0.old ? 'open' : 'all';
   if (tab === 'all') $('b-all').hidden = false;
   $('f-due').value = '';
@@ -548,7 +559,7 @@ function openInList(iv) {
   const tr = document.querySelector('#wl tr.r'); if (tr) tr.scrollIntoView({ block: 'center' });
 }
 async function drill(key, title) {
-  const seg = $('s-seg').value;
+  const seg = $('f-seg').value;
   try {
     const d = await withLoading('กำลังโหลดรายชื่อ…', () => api(`/api/invoice-requests?view=ar&drill=${encodeURIComponent(key)}&seg=${encodeURIComponent(seg)}`));
     showDrill(title, seg ? 'กลุ่ม ' + seg : 'ทุกกลุ่มลูกค้า', d.rows, d.total, d.basis);
@@ -603,10 +614,9 @@ async function peakCheckSet(mode) { const nos = rowsFor(mode).filter(isOpenRow).
 
 let S = null;
 async function loadSum() {
-  try { S = (await api('/api/invoice-requests?view=ar&brief=1&seg=' + encodeURIComponent($('s-seg').value))).summary; renderSum(); }
+  try { S = (await api('/api/invoice-requests?view=ar&brief=1&seg=' + encodeURIComponent($('f-seg').value))).summary; renderSum(); }
   catch (e) { $('msg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
 }
-$('s-seg').onchange = () => { loadSum(); const v = $('s-seg').value; if ($('f-seg').value !== v && hasOpt($('f-seg'), v)) { $('f-seg').value = v; SHOW = 100; render(); } };
 function renderSum() {
   const s = S || D.summary, c = s.checks, v = s.vsCommit;
   const cur = s.forecast.weeks[0] || {};
@@ -634,7 +644,7 @@ function renderSum() {
   $('months').innerHTML = `<table class="sum"><tr><th>เดือน</th>${segs.map((g) => `<th>${esc(g)}</th>`).join('')}<th>ออก INV รวม</th><th>ใบ</th><th>เงินเข้า</th></tr>
     ${s.months.map((m) => `<tr><td>${esc(m.month)}</td>${segs.map((g) => `<td>${d('month-inv|' + m.month + '|' + g, 'ออก INV ' + m.month + ' · ' + g, m.bySegment[g] || 0)}</td>`).join('')}<td>${d('month-inv|' + m.month, 'ออก INV ' + m.month, m.invoiced)}</td><td>${m.count}</td><td>${d('month-cash|' + m.month, 'เงินเข้า ' + m.month, m.cash)}</td></tr>`).join('')}</table>`;
   const by = {};
-  D.invoices.filter((r) => (r.state === 'Overdue' || r.state === 'Outstanding') && !r.legacyCheck && !r.old && (!$('s-seg').value || (r.segment || 'Others') === $('s-seg').value)).forEach((r) => { const k = r.salesName || r.salesEmail || '(ไม่ระบุ)'; by[k] = by[k] || { open: 0, over: 0, n: 0 }; by[k].open += r.expected; by[k].n++; if (r.state === 'Overdue') by[k].over += r.expected; });
+  D.invoices.filter((r) => (r.state === 'Overdue' || r.state === 'Outstanding') && !r.legacyCheck && !r.old && (!$('f-seg').value || (r.segment || 'Others') === $('f-seg').value)).forEach((r) => { const k = r.salesName || r.salesEmail || '(ไม่ระบุ)'; by[k] = by[k] || { open: 0, over: 0, n: 0 }; by[k].open += r.expected; by[k].n++; if (r.state === 'Overdue') by[k].over += r.expected; });
   $('bysales').innerHTML = `<table class="sum"><tr><th>เซล</th><th>ค้างรับ</th><th>เกินกำหนด</th><th>ใบ</th></tr>${Object.entries(by).sort((a, b) => b[1].open - a[1].open).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${d('sales|' + k, 'ค้างรับของ ' + k, v.open)}</td><td>${d('sales|' + k + '|over', 'เกินกำหนดของ ' + k, v.over)}</td><td>${v.n}</td></tr>`).join('')}</table>`;
 }
 

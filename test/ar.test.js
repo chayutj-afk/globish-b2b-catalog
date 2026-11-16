@@ -53,3 +53,12 @@ test('payment moves the commit date to the paid date and keeps the promised date
 test('a new INV starts with commit date = due date', () => {
   assert.equal(ar.dueOf('16/11/2026', 30), '16/12/2026');
 });
+
+test('AR group follows the selling team: a company customer sold by the B2C team is B2C', () => {
+  const iv = { requestedBy: 'benz@globish.co.th', company: 'X', taxId: '1', qtNo: 'QO-1', requestId: 'R1', amountPreVat: 1000, creditTermDays: 30, whtRate: 3 };
+  const users = [{ email: 'benz@globish.co.th', name: 'Benz', team: 'b2c' }, { email: 'bee@globish.co.th', name: 'Bee', team: 'b2b' }];
+  const row = (by, segment) => ar.rowFromRequest({ ...iv, requestedBy: by }, { request: { segment }, lines: [], users, issueDate: '16/11/2026', ivNo: 'IV-1' }).segment;
+  assert.equal(row('benz@globish.co.th', 'B2B'), 'B2C');
+  assert.equal(row('bee@globish.co.th', 'B2B'), 'B2B');
+  assert.equal(row('benz@globish.co.th', 'B2E'), 'B2E');
+});

@@ -22,6 +22,7 @@ function seq(s, pre) { s.seq = s.seq || {}; s.seq[pre] = (s.seq[pre] || 500) + 1
 function pick(list, q) {
   if (q.id) return list.filter((x) => x.id === q.id);
   if (q.code) return list.filter((x) => x.code === q.code);
+  if (q.reference) return list.filter((x) => x.reference === q.reference || x.referenceCode === q.reference);
   return list;
 }
 

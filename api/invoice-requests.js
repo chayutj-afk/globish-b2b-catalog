@@ -650,8 +650,12 @@ async function arPeakCheck(req, res, user) {
       const paidDate = dmyOf(pays.map((p) => p.paymentDate).filter(Boolean).sort().pop()) || '';
       const cash = round2(pays.reduce((t, p) => t + (p.payments || []).reduce((u, q) => u + ar.num(q.amount), 0), 0)) || round2(pays.reduce((t, p) => t + ar.num(p.paymentTotal), 0));
       if (!paidDate) { results.push({ ...base, result: 'error', text: 'PEAK ไม่มีวันที่รับเงิน ตรวจใน PEAK', link: link.peakDocLink }); continue; }
-      if (b.apply) await hub.updateRow('Invoices', row._row, { paidDate, ...ar.onPaid(row, paidDate), paidAmount: cash, followStatus: '', ...link, note: note('รับเงินตาม PEAK (ตรวจข้อมูลเก่า)') });
-      results.push({ ...base, result: 'paid', text: 'จ่ายแล้วใน PEAK', paidDate, amount: cash, net, link: link.peakDocLink, applied: !!b.apply });
+      // Paid long ago in PEAK usually means the receipt exists there too: take its number, so the INV does not
+      // land in the "receipt to issue" queue.
+      let rt = null;
+      if (b.apply && !row.rtNo) rt = await peak.findReceiptForInvoice(ivNo).catch(() => null);
+      if (b.apply) await hub.updateRow('Invoices', row._row, { paidDate, ...ar.onPaid(row, paidDate), paidAmount: cash, followStatus: '', ...link, ...(rt ? { rtNo: String(rt.code).toUpperCase() } : {}), note: note('รับเงินตาม PEAK (ตรวจข้อมูลเก่า)') });
+      results.push({ ...base, result: 'paid', text: 'จ่ายแล้วใน PEAK', paidDate, amount: cash, net, link: link.peakDocLink, rtNo: rt ? rt.code : '', applied: !!b.apply });
     } else if (pays.length) {
       results.push({ ...base, result: 'partial', text: `รับเงินบางส่วนใน PEAK คงเหลือ ${remain}`, link: link.peakDocLink });
     } else {
@@ -660,6 +664,31 @@ async function arPeakCheck(req, res, user) {
     }
   }
   if (b.apply) await hub.log('catalog', 'ar_peakcheck', nos.join(','), `${user.email} · ${results.map((r) => r.result).join(',')}`);
+  res.status(200).json({ ok: true, results });
+}
+
+// Paid INVs with no receipt number in the app: look in PEAK for the receipt issued from each INV and
+// record its number (receipts issued in PEAK before the app, or outside it). Nothing is created in PEAK.
+async function rtFind(req, res, user) {
+  if (!can(user, 'approve') && !isOp(user)) throw bad('ไม่มีสิทธิ์', 403);
+  const peak = require('../lib/peak');
+  if (peak.mode() === 'off') throw bad('ยังไม่ได้เปิดการเชื่อมต่อ PEAK API', 503);
+  const nos = (Array.isArray((req.body || {}).ivNos) ? req.body.ivNos : []).map((x) => text(x, 40).toUpperCase()).filter(Boolean).slice(0, 6);
+  if (!nos.length) throw bad('ไม่มีรายการให้ตรวจ');
+  const [invs, rts] = await Promise.all([hub.readTable('Invoices'), hub.readTable('ReceiptRequests')]);
+  const at = hub.sheetDateTime();
+  const results = [];
+  for (const ivNo of nos) {
+    const a = invs.find((x) => String(x.ivNo).toUpperCase() === ivNo);
+    if (!a || !a.paidDate || a.rtNo || rts.some((x) => String(x.refDoc).toUpperCase() === ivNo && !DEAD.has(x.status))) { results.push({ ivNo, result: 'skip' }); continue; }
+    let rt = null;
+    try { rt = await peak.findReceiptForInvoice(ivNo); } catch (e) { results.push({ ivNo, result: 'error', text: e.message }); continue; }
+    if (!rt) { results.push({ ivNo, company: a.company, result: 'none' }); continue; }
+    const no = String(rt.code).toUpperCase();
+    await hub.updateRow('Invoices', a._row, { rtNo: no, note: [a.note, `ใบเสร็จ ${no} ออกใน PEAK ไว้แล้ว (${at})`].filter(Boolean).join(' · ').slice(0, 500) });
+    results.push({ ivNo, company: a.company, result: 'found', rtNo: no, link: rt.documentLink || '' });
+  }
+  await hub.log('catalog', 'rt_find', nos.join(','), `${user.email} · ${results.map((r) => r.result).join(',')}`);
   res.status(200).json({ ok: true, results });
 }
 
@@ -1288,6 +1317,7 @@ async function inner(req, res) {
     const user = await requireUser(req);
     const act = String((req.body || {}).action || '');
     if (req.method === 'POST') return await ({ legacy_import: importLegacy, receipt: createReceipt, edit: createEdit, pay_notice: createPayNotice }[act] || create)(req, res, user);
+    if (req.method === 'PATCH' && act === 'rt_find') { checkOrigin(req); return await rtFind(req, res, user); }
     if (req.method === 'PATCH') return await (act.startsWith('ar_') ? arUpdate : act.startsWith('rt_') ? updateReceipt : act.startsWith('edit_') ? updateEdit : act.startsWith('pay_') ? updatePayNotice : update)(req, res, user);
     if (req.method === 'GET') return await list(req, res, user);
     res.status(405).json({ ok: false, error: 'Method not allowed' });

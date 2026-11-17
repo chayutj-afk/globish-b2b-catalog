@@ -514,5 +514,13 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
   ok(!aq || !!qs.find((x) => x.requestId === aq.requestId).peakDocLink, 'sales: approved QT has its link' + (aq ? '' : ' (skipped)'));
   const rtRows = db().ReceiptRequests; [s, j] = await call(BENZ, 'GET', '/api/invoice-requests?view=receipts');
   ok((j.requests || []).every((x) => x.status === 'issued' || !x.peakDocLink), 'sales: receipts that are not issued carry no link (' + rtRows.filter((x) => x.status !== 'issued' && x.peakDocLink).length + ' Draft receipts with a link in the sheet)');
+  console.log('── 17. QT approval event that arrives before PEAK shows the QT as approved');
+  [s, j] = await call(BENZ, 'POST', '/api/requests', qtBody({ confirmDuplicate: true, items: [{ kind: 'service', code: '5136', qty: 3, unitPrice: 15900 }] })); const q17 = j.requestId; if (!q17) console.log('   QT request refused:', s, j.error);
+  await call(ACCT, 'PATCH', '/api/requests', { requestId: q17, action: 'approve' }); const r17 = req(q17);
+  ok(r17.status === 'qt_draft' && r17.peakQtId, 'QT Draft made: ' + r17.status);
+  const staleQ = { ...peak().quotations.find((x) => x.id === r17.peakQtId) }; // payload still Draft
+  setPeak((p) => { p.quotations.find((x) => x.id === r17.peakQtId).status = 'Approve'; });
+  [s, j] = await hook('quotation', { PeakQuotations: { quotations: [staleQ] }, eventType: 'Edit' });
+  ok(j.results[0] === 'approved' && req(q17).status === 'qt_approved', 'looked again and approved the QT: ' + j.results[0]);
   done();
 })().catch((e) => { console.error('CRASH', e); ok(false, 'CRASH: the run stopped early: ' + e.message); done(); process.exitCode = 1; });

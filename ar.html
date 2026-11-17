@@ -74,6 +74,7 @@ table.sum tr.now td{background:var(--primary-soft)}
 .chk.bad{border-color:var(--bad-ink)}.chk.bad span{color:var(--bad-ink)}
 .dr{background:none;border:0;padding:0;margin:0;font:inherit;color:inherit;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;text-decoration-color:var(--muted)}
 .dr:hover,.dr:focus-visible{color:var(--primary);text-decoration-color:var(--primary)}
+.stat .bar{height:4px;border-radius:2px;background:var(--line);margin:5px 0 4px;overflow:hidden}.stat .bar i{display:block;height:100%;width:0;background:var(--ok-ink,#1a7f4b);border-radius:2px;transition:width .2s}.stat .s b{color:var(--head);font-weight:500}
 .stat.go{cursor:pointer}.stat.go:hover{border-color:var(--primary)}
 .chk.go{cursor:pointer;text-align:left;font:inherit}.chk.go:hover{border-color:var(--primary)}
 #d-body table{width:100%;border-collapse:collapse;font-size:13px}
@@ -104,7 +105,7 @@ table.sum tr.now td{background:var(--primary-soft)}
   <div class="stats">
     <div class="stat go" role="button" tabindex="0" data-kpi="open" title="ดูรายชื่อบริษัท"><div class="k">ยอดค้างรับ INV ปี 2026 เป็นต้นไป (รวม VAT หัก WHT)</div><div class="v" id="s-open">–</div><div class="s" id="s-open-n"></div></div>
     <div class="stat go" role="button" tabindex="0" data-kpi="over" title="ดูรายชื่อบริษัท"><div class="k">เกินกำหนดชำระ</div><div class="v hot" id="s-over">–</div><div class="s" id="s-over-n"></div></div>
-    <div class="stat go" role="button" tabindex="0" data-kpi="week" title="ดูรายชื่อบริษัท"><div class="k">คาดว่าเข้าสัปดาห์นี้ (ยังรอชำระ)</div><div class="v" id="s-week">–</div><div class="s" id="s-week-n"></div></div>
+    <div class="stat go" role="button" tabindex="0" data-kpi="week" title="ดูรายชื่อบริษัท"><div class="k">คาดว่าจะเข้าสัปดาห์นี้</div><div class="v" id="s-week">–</div><div class="bar" aria-hidden="true"><i id="s-week-bar"></i></div><div class="s" id="s-week-p"></div><div class="s" id="s-week-n"></div></div>
     <div class="stat"><div class="k">เฉลี่ยวันรับเงิน (จ่ายใน 90 วัน)</div><div class="v" id="s-avg">–</div><div class="s">นับจากวันออก INV</div></div>
   </div>
   <div class="seg" id="tabs"><button class="on" data-t="work" type="button">รายการติดตาม</button><button data-t="sum" type="button">สรุป</button></div>
@@ -253,7 +254,7 @@ function renderKpi() {
   const seg = $('f-seg').value, sal = $('f-sales').value, q = $('f-q').value.trim();
   let k = D.summary;
   if (seg || sal || q) {
-    const base = rowsFor('all'), open = base.filter((r) => (r.state === 'Outstanding' || r.state === 'Overdue') && !r.legacyCheck && !r.old);
+    const base = rowsFor('all', true), open = base.filter((r) => (r.state === 'Outstanding' || r.state === 'Overdue') && !r.legacyCheck && !r.old);
     const sum = (xs) => xs.reduce((t, r) => t + (Number(r.expected) || 0), 0);
     const over = open.filter((r) => r.state === 'Overdue');
     const wk = D.summary.forecast.weeks[0] || {}, inWk = open.filter((r) => r.forecastWeek === wk.weekEnd);
@@ -266,13 +267,21 @@ function renderKpi() {
   $('f-clear').hidden = !(seg || sal || q || $('f-week').value);
   $('s-open').textContent = fmt0(k.open); $('s-open-n').textContent = `${k.openCount} ใบ${tag}`;
   $('s-over').textContent = fmt0(k.overdue); $('s-over-n').textContent = `${k.overdueCount} ใบ${tag}`;
-  const w = k.forecast.weeks[0] || {}; $('s-week').textContent = fmt0(w.expected); $('s-week-n').textContent = `${w.count || 0} ใบ · สัปดาห์ถึง ${w.weekEnd || ''}${tag}`;
+  // This week: what has come in already against everything due in (received + still waiting).
+  const w = k.forecast.weeks[0] || {}, wEnd = (D.summary.forecast.weeks[0] || {}).weekEnd || '';
+  const got = rowsFor('all', true).filter((r) => r.state === 'Paid' && wEnd && r.paidWeek === wEnd);
+  const inAmt = got.reduce((t, r) => t + (Number(String(r.paidAmount ?? '').replace(/,/g, '')) || Number(r.expected) || 0), 0);
+  const wait = Number(w.expected) || 0, total = inAmt + wait, pct = total > 0 ? Math.round(inAmt / total * 100) : 0;
+  $('s-week').textContent = fmt0(total);
+  $('s-week-bar').style.width = pct + '%';
+  $('s-week-p').innerHTML = `เข้าแล้ว <b>${fmt0(inAmt)}</b> / ${fmt0(total)} (${pct}%)`;
+  $('s-week-n').textContent = `ยังรอ ${w.count || 0} ใบ · สัปดาห์ถึง ${w.weekEnd || wEnd}${tag}`;
   $('s-avg').textContent = k.avgDaysToPay ? k.avgDaysToPay + ' วัน' : '–';
 }
 
-function rowsFor(only) {
+function rowsFor(only, noWeek) {
   const mode = only || document.querySelector('#f-state button.on').dataset.v;
-  const seg = $('f-seg').value, sal = $('f-sales').value, q = $('f-q').value.trim().toLowerCase(), wk = $('f-week').value;
+  const seg = $('f-seg').value, sal = $('f-sales').value, q = $('f-q').value.trim().toLowerCase(), wk = noWeek ? '' : $('f-week').value;
   let xs = D.invoices.filter((r) => {
     if (seg && (r.segment || 'Others') !== seg) return false;
     if (sal && (sal === '__none' ? !!(r.salesName || r.salesEmail) : (r.salesName || r.salesEmail) !== sal)) return false;

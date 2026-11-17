@@ -8,7 +8,7 @@ test('sheet reads: shared for GET requests, fresh for writes, retried on 429', a
   require('google-auth-library'); const mod = require.cache[require.resolve('google-auth-library')];
   const calls = []; let fail429 = 0;
   const orig = mod.exports;
-  const Stub = class { async request(o) { calls.push(`${o.method} ${decodeURIComponent(o.url.split('/sheet')[1])}`); if (fail429 > 0) { fail429--; const e = new Error('Quota exceeded'); e.response = { status: 429 }; throw e; } await new Promise((r) => setTimeout(r, 5)); return { data: { values: [['a@globish.co.th', 'A']], valueRanges: [] } }; } };
+  const Stub = class { async request(o) { calls.push(`${o.method} ${decodeURIComponent(o.url.split('/spreadsheets/sheet')[1])}`); if (fail429 > 0) { fail429--; const e = new Error('Quota exceeded'); e.response = { status: 429 }; throw e; } await new Promise((r) => setTimeout(r, 5)); const n = (o.url.match(/ranges=/g) || []).length; return { data: { values: [['a@globish.co.th', 'A']], valueRanges: Array.from({ length: n }, () => ({ values: [['a@globish.co.th', 'A']] })) } }; } };
   mod.exports = { JWT: Stub };
   delete require.cache[require.resolve('../lib/hub')];
   const hub = require('../lib/hub');
@@ -28,9 +28,15 @@ test('sheet reads: shared for GET requests, fresh for writes, retried on 429', a
     // outside any request (cron, sync) → fresh
     await hub.readTable('Users');
     assert.equal(calls.length, 4);
+    // several tables asked for at the same moment → ONE request to Google
+    const before = calls.length;
+    const [u, r, v] = await hub.scope({ method: 'PATCH', headers: {} }, () => Promise.all([hub.readTable('Users'), hub.readTable('Requests'), hub.readTable('InvoiceRequests')]));
+    assert.equal(calls.length, before + 1, 'three tables, one read');
+    assert.ok(/batchGet/.test(calls[calls.length - 1]) && (calls[calls.length - 1].match(/ranges=/g) || []).length === 3);
+    assert.equal(u.length, 1); assert.equal(r.length, 1); assert.equal(v.length, 1);
     // 429 → waits and tries again
     fail429 = 1; const t = Date.now();
     const rows = await hub.scope({ method: 'POST', headers: {} }, () => hub.readTable('Users'));
-    assert.equal(rows.length, 1); assert.equal(calls.length, 6); assert.ok(Date.now() - t >= 1900, 'waited before the retry');
+    assert.equal(rows.length, 1); assert.equal(calls.length, 7); assert.ok(Date.now() - t >= 1900, 'waited before the retry');
   } finally { mod.exports = orig; if (prevMode) process.env.HUB_MODE = prevMode; delete require.cache[require.resolve('../lib/hub')]; }
 });

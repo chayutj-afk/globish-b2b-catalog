@@ -460,5 +460,32 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
   [s, j] = await hand('IV-20261100901'); const hr = ivr(exIds[1]), ha = arRow('IV-20261100901');
   ok(s === 200 && hr.status === 'iv_issued' && hr.peakIvNo === 'IV-20261100901' && /emi=ivH1/.test(hr.peakDocLink || ''), 'issued from the number: link read from PEAK ' + (j.error || ''));
   ok(ha && ha.issueDate === '18/11/2026' && ha.peakIvId === 'ivH1', 'AR row with the PEAK issue date and id: ' + (ha && ha.issueDate + ' ' + ha.peakIvId));
+  console.log('── 13. two requests of the same amount from one QT: a Draft never lands on the sibling');
+  setPeak((p) => { p.quotations.push({ id: 'qOld2', code: 'QO-20240700200', status: 'Approve', isVoid: 0, contactCode: 'CB01142', issuedDate: '20240715', taxStatus: 0, preTaxAmount: 890000, netAmount: 952300, documentLink: 'https://doc.peakaccount.com/quotation?emi=qOld2', products: [{ id: 'L1', productCode: 'B2B-PVT', description: 'License', quantity: 100, price: 8900, discount: 0, vatType: 3 }] }); });
+  const one = { amount: 17800, students: 2, wantedIssueDate: '2026-11-20', creditTermDays: 30, originalDoc: 'no' };
+  [s, j] = await call(BENZ, 'POST', '/api/invoice-requests', ivBody({}, { ...ext, qtNo: 'QO-20240700200', note: 'Students: A / B', invoices: [one, one, one], confirmDuplicate: true }));
+  ok(s === 200, 'three requests of the same amount ' + (j.error || '')); const tw = db().InvoiceRequests.filter((x) => x.qtNo === 'QO-20240700200').map((x) => x.ivRequestId);
+  await call(ACCT, 'PATCH', '/api/invoice-requests', { action: 'qt_adopt', ivRequestId: tw[0], openingInvoiced: 0 });
+  // the app is in the middle of creating the Draft for the first request when PEAK's event arrives
+  setPeak((p) => { p.invoices.push({ id: 'ivRace', code: 'IV-20261100950', status: 'Draft', isVoid: 0, referenceCode: 'QO-20240700200', referenceId: 'qOld2', preTaxAmount: 17800, netAmount: 19046, issuedDate: '20261120', documentLink: 'https://doc.peakaccount.com/invoice?emi=ivRace', products: [] }); });
+  { const hubm = require('../../lib/hub'); process.env.HUB_MODE = 'mock'; process.env.HUB_MOCK_FILE = '/tmp/sales-desk-e2e/db.json';
+    await hubm.scope({ method: 'POST' }, async () => { const r = (await hubm.readTable('InvoiceRequests')).find((x) => x.ivRequestId === tw[0]); await hubm.updateRow('InvoiceRequests', r._row, { status: 'iv_creating' }); }); }
+  [s, j] = await hook('invoice', { PeakInvoices: { invoices: [peak().invoices.find((x) => x.id === 'ivRace')] }, eventType: 'Create' });
+  ok(/draft: not matched/.test(j.results[0]) && ivr(tw[1]).status === 'new' && !ivr(tw[1]).peakIvId && ivr(tw[2]).status === 'new', 'Draft event does not attach to a sibling: ' + j.results[0]);
+  // approved by hand while several requests fit → nobody is guessed
+  setPeak((p) => { p.invoices.find((x) => x.id === 'ivRace').status = 'Approve'; });
+  [s, j] = await hook('invoice', { PeakInvoices: { invoices: [peak().invoices.find((x) => x.id === 'ivRace')] }, eventType: 'Edit' });
+  ok(j.results[0] === 'ambiguous' && tw.every((x) => !ivr(x).peakIvNo), 'approved INV that fits three requests is left for accounting: ' + j.results[0]);
+  // stuck request without a Draft id → accounting can put it back (after 2 minutes)
+  [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { ivRequestId: tw[0], action: 'iv_reset' }); ok(s === 409 && /รอ 2 นาที/.test(j.error || ''), 'reset refused while the Draft may still be in the making');
+  { const hubm = require('../../lib/hub'); await hubm.scope({ method: 'POST' }, async () => { const r = (await hubm.readTable('InvoiceRequests')).find((x) => x.ivRequestId === tw[0]); await hubm.updateRow('InvoiceRequests', r._row, { updatedAt: '17/11/2026 08:00' }); }); }
+  [s, j] = await call(BENZ, 'PATCH', '/api/invoice-requests', { ivRequestId: tw[0], action: 'iv_reset' }); ok(s === 403 || s === 404, 'sales cannot reset');
+  [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { ivRequestId: tw[0], action: 'iv_reset' }); ok(s === 200 && ivr(tw[0]).status === 'new', 'stuck request back in the queue ' + (j.error || ''));
+  // Draft made by the app is tied to its own request by id; its event changes nobody else
+  [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { ivRequestId: tw[0], action: 'iv_make' }); const mine = ivr(tw[0]);
+  ok(s === 200 && mine.status === 'iv_draft' && mine.peakIvId, 'Draft made for the first request ' + (j.error || ''));
+  [s, j] = await hook('invoice', { PeakInvoices: { invoices: [{ id: mine.peakIvId }] }, eventType: 'Edit' });
+  ok(ivr(tw[1]).status === 'new' && ivr(tw[2]).status === 'new' && ivr(tw[0]).peakIvId === mine.peakIvId, 'its own event leaves the siblings alone: ' + j.results[0]);
+  [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { ivRequestId: tw[0], action: 'iv_make' }); ok(s === 409, 'pressing create again is refused (no second INV)');
   done();
 })().catch((e) => { console.error('CRASH', e); ok(false, 'CRASH: the run stopped early: ' + e.message); done(); process.exitCode = 1; });

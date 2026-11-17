@@ -393,8 +393,19 @@ async function update(req, res, user) {
       // Claim the row first so a double click can't make two INVs.
       await hub.writeChecked('InvoiceRequests', 'ivRequestId', row, { status: 'iv_creating', updatedAt: at });
       let out;
-      try { out = (await require('../lib/ivdraft').createForIvRequest(row, qt, users)).fields; }
+      let madeId = '';
+      try {
+        out = (await require('../lib/ivdraft').createForIvRequest(row, qt, users, async (m) => {
+          madeId = m.peakIvId; await hub.updateRow('InvoiceRequests', row._row, { peakIvId: m.peakIvId, peakIvNo: m.peakIvNo });
+        })).fields;
+      }
       catch (e) {
+        // A Draft that already exists in PEAK stays linked (status iv_draft), so pressing again cannot make a second one.
+        if (madeId) {
+          await hub.updateRow('InvoiceRequests', row._row, { status: 'iv_draft', updatedAt: hub.sheetDateTime(), accountNote: `สร้าง INV Draft ใน PEAK แล้ว แต่ขั้นตอนหลังจากนั้นไม่ครบ (${String(e.message).slice(0, 200)}) ตรวจ Draft ใน PEAK`.slice(0, 500) });
+          await hub.log('peak', 'iv_live_partial', id, String(e.message).slice(0, 200));
+          throw bad(`สร้าง INV Draft ใน PEAK แล้ว แต่ขั้นตอนหลังจากนั้นไม่ครบ ตรวจ Draft ใน PEAK: ${String(e.message).slice(0, 200)}`, 502);
+        }
         await hub.updateRow('InvoiceRequests', row._row, { status: 'new', updatedAt: hub.sheetDateTime(), accountNote: `สร้าง INV ใน PEAK ไม่สำเร็จ: ${String(e.message).slice(0, 300)}` });
         await hub.log('peak', 'iv_live_error', id, String(e.message).slice(0, 200));
         throw bad(`สร้าง INV ใน PEAK ไม่สำเร็จ: ${String(e.message).slice(0, 300)}`, e.status === 409 ? 409 : 502);
@@ -408,7 +419,7 @@ async function update(req, res, user) {
       await hub.log('peak', 'iv_live_draft', id, `${user.email} · ${out.peakIvNo}`);
       return res.status(200).json({ ok: true, status: 'iv_draft', peakIvNo: out.peakIvNo, message: out.accountNote });
     }
-    if (!['iv_draft', 'new'].includes(row.status) || !row.peakIvId) throw bad('คำขอนี้ยังไม่มี INV Draft ใน PEAK', 409);
+    if (!['iv_draft', 'new', 'iv_creating'].includes(row.status) || !row.peakIvId) throw bad('คำขอนี้ยังไม่มี INV Draft ใน PEAK', 409);
     const d = await peak.getInvoice(row.peakIvId);
     if (!d) throw bad('ไม่พบ INV นี้ใน PEAK', 404);
     if (Number(d.isVoid) === 1 || /void/i.test(d.status || '')) throw bad(`INV ${d.code} ถูกยกเลิกใน PEAK แล้ว`, 409);
@@ -417,6 +428,20 @@ async function update(req, res, user) {
     await issueInv(row, { ivNo: String(d.code).toUpperCase(), link: d.documentLink || row.peakDocLink, issueDate: dmyOf(d.issuedDate) || row.wantedIssueDate, note: `อนุมัติ INV ใน PEAK แล้ว — ${who}`, peakIvId: d.id }, { checked: true });
     await hub.log('catalog', 'iv_check', id, `${user.email} · ${d.code}`);
     return res.status(200).json({ ok: true, status: 'iv_issued', peakIvNo: d.code });
+  }
+
+  // A request left in "creating" (the step that makes the Draft was cut off): back to the queue.
+  // Only when no Draft is known for it and it has been stuck for a few minutes.
+  if (b.action === 'iv_reset') {
+    if (!can(user, 'approve')) throw bad('ไม่มีสิทธิ์อนุมัติเอกสาร', 403);
+    if (row.status !== 'iv_creating') throw bad('คำขอนี้ไม่ได้ค้างอยู่ รีเฟรชหน้า', 409);
+    if (row.peakIvId) throw bad(`คำขอนี้มี INV Draft ${row.peakIvNo || ''} ใน PEAK แล้ว กด "เช็กสถานะจาก PEAK"`, 409);
+    const m = /^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})/.exec(String(row.updatedAt || ''));
+    const ms = (m ? Date.UTC(+m[3], +m[2] - 1, +m[1], +m[4], +m[5]) - 7 * 3600e3 : 0);
+    if (ms && Date.now() - ms < 2 * 60e3) throw bad('ระบบอาจยังสร้าง INV อยู่ รอ 2 นาทีแล้วลองอีกครั้ง', 409);
+    await hub.updateRow('InvoiceRequests', row._row, { status: 'new', updatedAt: at, accountNote: `ตั้งกลับเป็นรอสร้าง INV (ค้างที่ขั้นสร้าง Draft) — ${user.name || user.email}` });
+    await hub.log('catalog', 'iv_reset', id, user.email);
+    return res.status(200).json({ ok: true });
   }
 
   // Accounting: INV issued from the QT in PEAK (fallback when the sync hasn't picked it up), or rejected.

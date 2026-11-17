@@ -44,6 +44,7 @@ details.more{margin-top:8px}details.more>summary{cursor:pointer;font-size:12.5px
 .opp-dash{color:var(--muted);padding:0 2px}
 .note-box{margin-top:5px;padding:5px 8px;background:var(--primary-soft);border:1px solid var(--primary-line);border-radius:4px}
 .newc{border:1px dashed var(--accent,#f60);border-radius:10px;padding:10px 12px;margin:6px 0 10px}.newc-h{font-size:13px;margin-bottom:6px;color:var(--accent,#c50)}
+.pcard.hit{outline:2px solid var(--primary);outline-offset:2px;transition:outline-color .3s}
 </style>
 </head>
 <body data-page="request">
@@ -51,7 +52,7 @@ details.more{margin-top:8px}details.more>summary{cursor:pointer;font-size:12.5px
 <div class="ov" id="ov-load" hidden><div class="ldbox" role="status" aria-live="polite"><div class="spin"></div><b id="ld-text">กำลังดำเนินการ…</b><small id="ld-sub">กรุณารอสักครู่ อย่าปิดหน้านี้</small></div></div>
 <div class="app"><nav class="rail" id="rail"></nav><div class="main">
 <header class="top"><h1 id="page-title">ขอใบเสนอราคา (QT)</h1><div class="top-r" id="top-r"></div></header>
-<script>(function () { var t = (location.hash || '').slice(1), T = { qt: 'ขอใบเสนอราคา (QT)', inv: 'ขอใบแจ้งหนี้ (INV)', rt: 'ขอใบเสร็จ / ใบกำกับภาษี', mine: 'คำขอของฉัน', pend: 'รออนุมัติ' }; if (!T[t]) t = 'qt'; document.documentElement.setAttribute('data-tab', t); document.getElementById('page-title').textContent = T[t]; })();</script>
+<script>(function () { var t = (location.hash || '').slice(1).split('?')[0], T = { qt: 'ขอใบเสนอราคา (QT)', inv: 'ขอใบแจ้งหนี้ (INV)', rt: 'ขอใบเสร็จ / ใบกำกับภาษี', mine: 'คำขอของฉัน', pend: 'รออนุมัติ' }; if (!T[t]) t = 'qt'; document.documentElement.setAttribute('data-tab', t); document.getElementById('page-title').textContent = T[t]; })();</script>
 <script src="/shell.js"></script>
 
 <main>
@@ -386,6 +387,36 @@ function go(tab) {
   const T = { qt: 'ขอใบเสนอราคา (QT)', inv: 'ขอใบแจ้งหนี้ (INV)', rt: 'ขอใบเสร็จ / ใบกำกับภาษี', mine: 'คำขอของฉัน', pend: 'รออนุมัติ' };
   if ($('page-title')) $('page-title').textContent = T[tab]; document.title = T[tab] + ' · Globish Sales Desk';
   if (tab === 'mine' || tab === 'pend') { AUTO_TAB = tab; loadAll(); }
+}
+// Came from a chat link: open the sub-tab it names and show the document it is about (once).
+let DEEP = null;
+// The card a link pointed at stays outlined for a few seconds, across the re-renders of a refresh.
+let HIT = null;
+function markHit() {
+  const h = HIT; if (!h || !h.q || Date.now() > h.until) { HIT = null; return false; }
+  const box = $(h.box), card = box ? [...box.querySelectorAll('.pcard')].find((c) => c.textContent.toLowerCase().includes(h.q)) : null;
+  if (!card) return false;
+  card.classList.add('hit'); if (!h.scrolled) { h.scrolled = true; card.scrollIntoView({ block: 'center' }); }
+  setTimeout(() => { if (HIT === h) HIT = null; card.classList.remove('hit'); }, Math.max(0, h.until - Date.now()));
+  return true;
+}
+function applyDeep() {
+  const d = DEEP; if (!d) return; DEEP = null;
+  const acct = ME && (ME.perms || []).includes('approve');
+  if (d.tab === 'pend' && acct) {
+    const order = ['qt', 'inv', 'orig', 'rt', 'edit'], i = order.indexOf(d.t);
+    if (i >= 0) setPend(d.t, document.querySelectorAll('#pend-seg button')[i]);
+    // Not waiting any more (already handled): show it under My requests instead.
+    HIT = { box: 'pend-' + (i >= 0 ? d.t : 'qt'), q: d.q.toLowerCase(), until: Date.now() + 8000, scrolled: false };
+    if (markHit()) return;
+    HIT = null;
+    if (!d.q) return;
+    go('mine'); DEEP = null; AUTO_TAB = null;
+  }
+  const t = { orig: 'inv' }[d.t] || (['qt', 'inv', 'rt', 'edit'].includes(d.t) ? d.t : 'qt');
+  setMine(t, document.querySelectorAll('#mine-seg button')[['qt', 'inv', 'rt', 'edit'].indexOf(t)]);
+  if (t === 'qt') $('mq-st').value = '';
+  $('mq-q').value = d.q; renderMine(); renderMineMore();
 }
 // Opening รออนุมัติ / คำขอของฉัน: jump to the sub-tab that has something waiting (once per visit).
 let AUTO_TAB = null;
@@ -1163,7 +1194,7 @@ async function loadAll() {
     const [a, b, c, d] = await Promise.all([api('/api/requests'), api('/api/invoice-requests'), api('/api/invoice-requests?view=receipts'), api('/api/invoice-requests?view=edits')]);
     loadClasses();
     REQS = a.requests; PEAK_LIVE = !!a.peakLive; IVS = b.requests; RTS = c.requests; EDITS = d.requests; fillWho();
-    fillQTPicker(); renderMine(); renderPending(); updateSum(); autoTab();
+    fillQTPicker(); renderMine(); renderPending(); updateSum(); autoTab(); applyDeep(); markHit();
   } catch (e) {
     $('mine-qt').innerHTML = $('mine-inv').innerHTML = `<div class="empty">${esc(e.message)}</div>`;
   }
@@ -1926,9 +1957,11 @@ function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch {} }
   onSegment(); renderInvs(); taxHint('q');
   try { const r = await fetch('/packages.json', { cache: 'no-store' }); if (r.ok) { PKGS = await r.json(); renderItems(); } } catch {}
   try { const d = await api('/api/auth/me'); ME = d.user; $('me').textContent = ME.email; onSegment(); } catch {}
-  const h = (location.hash || '').slice(1);
+  // A link from a chat message: #mine?t=inv&q=IV-… → that tab, that sub-tab, filtered to that document.
+  const readDeep = (hash) => { const [tab, qs] = String(hash || '').split('?'); const u = new URLSearchParams(qs || ''); if (qs && (tab === 'mine' || tab === 'pend')) DEEP = { tab, t: u.get('t') || '', q: (u.get('q') || '').trim() }; return tab; };
+  const h = readDeep((location.hash || '').slice(1));
   if (['qt', 'inv', 'rt', 'mine', 'pend'].includes(h)) go(h);
-  window.addEventListener('hashchange', () => { const t = location.hash.slice(1); if (['qt', 'inv', 'rt', 'mine', 'pend'].includes(t)) go(t); });
+  window.addEventListener('hashchange', () => { const t = readDeep(location.hash.slice(1)); if (['qt', 'inv', 'rt', 'mine', 'pend'].includes(t)) go(t); });
   if ($('q-tax').value.length === 13) onTaxInput('q');
   loadAll();
   if (fromCatalog) setTimeout(() => { $('ov-load').hidden = true; const c = $('q-items').closest('.card'); if (c) window.scrollTo({ top: c.getBoundingClientRect().top + window.scrollY - 70 }); }, 150);

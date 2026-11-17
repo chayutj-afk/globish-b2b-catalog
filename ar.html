@@ -247,7 +247,7 @@ async function load() {
   $('f-sales').innerHTML = '<option value="">ทุกเซล</option>' + sales.map((x) => `<option>${esc(x)}</option>`).join('') + (D.invoices.some((r) => !(r.salesName || r.salesEmail)) ? '<option value="__none">(ไม่มีเจ้าของ)</option>' : ''); $('f-sales').value = keepP;
   const keepG = $('f-seg').value;
   render(); if (keepG) loadSum(); else { S = null; renderSum(); }
-  if (!DEEP) { DEEP = true; const h = new URLSearchParams(location.hash.slice(1)); if (h.get('d')) { history.replaceState(null, '', location.pathname); drill(h.get('d'), h.get('t') || ''); } }
+  if (!DEEP) { DEEP = true; const h = new URLSearchParams(location.hash.slice(1)); if (h.get('d')) { history.replaceState(null, '', location.pathname); drill(h.get('d'), h.get('t') || ''); } else if (h.get('q')) { history.replaceState(null, '', location.pathname); openInList(h.get('q').trim()); } }
 }
 let DEEP = false;
 

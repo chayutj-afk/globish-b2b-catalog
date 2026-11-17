@@ -261,7 +261,7 @@ async function create(req, res, user) {
 
   const entities = [...new Set(rows.map((x) => x.company))];
   const originals = rows.filter((x) => x.originalDoc === 'yes').length;
-  after.push(notify.chat(`🧾 ขอ INV · QT ${r.qtNo} · ${notify.co(entities[0])}${entities.length > 1 ? ` +${entities.length - 1}` : ''} · ${rows.length} ใบ ${money(asked)} บาท · ${user.name || user.email}${over ? ' · ⚠️ เกินยอด QT' : ''}${!r.requestId ? ' · ⚠️ QT นอกระบบ' : ''}${originals ? ' · 📮 ส่งตัวจริง' : ''} · ${notify.link('pend')}`));
+  after.push(notify.chat(`🧾 ขอ INV · QT ${r.qtNo} · ${notify.co(entities[0])}${entities.length > 1 ? ` +${entities.length - 1}` : ''} · ${rows.length} ใบ ${money(asked)} บาท · ${user.name || user.email}${over ? ' · ⚠️ เกินยอด QT' : ''}${!r.requestId ? ' · ⚠️ QT นอกระบบ' : ''}${originals ? ' · 📮 ส่งตัวจริง' : ''} · ${notify.link('pend', undefined, { t: 'inv', q: r.qtNo })}`));
   await Promise.all(after);
 
   res.status(200).json({
@@ -361,7 +361,7 @@ async function update(req, res, user) {
       await notify.chat(`📭 ยกเลิกขอเอกสารตัวจริง · ${row.peakIvNo || 'QT ' + row.qtNo} · ${notify.co(row.company)} · ${user.name || user.email}`);
     }
     if (want === 'yes') {
-      await notify.chat(`📮 ขอเอกสารตัวจริง · ${row.peakIvNo || 'QT ' + row.qtNo} · ${notify.co(row.company)} · ${user.name || user.email} · ${notify.link('pend')}`);
+      await notify.chat(`📮 ขอเอกสารตัวจริง · ${row.peakIvNo || 'QT ' + row.qtNo} · ${notify.co(row.company)} · ${user.name || user.email} · ${notify.link('pend', undefined, { t: 'orig', q: row.peakIvNo || row.qtNo })}`);
     }
     return res.status(200).json({ ok: true, originalStatus: ORIGINAL[want] });
   }
@@ -461,7 +461,7 @@ async function update(req, res, user) {
     if (b.action === 'reject') {
       if (!note) throw bad('ใส่เหตุผลที่ตีกลับ');
       await hub.writeChecked('InvoiceRequests', 'ivRequestId', row, { status: 'rejected', accountNote: `${note} — ${user.name || user.email}`, updatedAt: at });
-      await notify.chat(`↩️ ตีกลับคำขอ INV · QT ${row.qtNo} · ${notify.co(row.company)} · ${await notify.at(row.requestedBy, row.salesName)} · ${notify.link('mine')}\nเหตุผล: ${notify.why(note)}`).catch(() => {});
+      await notify.chat(`↩️ ตีกลับคำขอ INV · QT ${row.qtNo} · ${notify.co(row.company)} · ${await notify.at(row.requestedBy, row.salesName)} · ${notify.link('mine', undefined, { t: 'inv', q: row.ivRequestId })}\nเหตุผล: ${notify.why(note)}`).catch(() => {});
     } else if (b.action === 'reopen') {
       await hub.writeChecked('InvoiceRequests', 'ivRequestId', row, { status: 'new', updatedAt: at });
     } else {
@@ -534,7 +534,7 @@ async function issueInv(row, { ivNo, link, issueDate, note, peakIvId }, opts = {
     if (peakIvId) a.peakIvId = peakIvId;
     await hub.appendRows('Invoices', [a]);
   }
-  if (row.status !== 'iv_issued') await notify.chat(`✅ INV ${ivNo} ออกแล้ว · ${notify.co(row.company)} · ${await notify.at(row.requestedBy, row.salesName)} · ${notify.link('mine')}`).catch(() => {});
+  if (row.status !== 'iv_issued') await notify.chat(`✅ INV ${ivNo} ออกแล้ว · ${notify.co(row.company)} · ${await notify.at(row.requestedBy, row.salesName)} · ${notify.link('mine', undefined, { t: 'inv', q: ivNo })}`).catch(() => {});
 }
 
 // ---------------------------------------------------------------- AR (debt follow-up)
@@ -976,7 +976,7 @@ async function createPayNotice(req, res, user) {
     note: text(b.note, 500), status: 'new', source: 'sales', accountNote: '', doneBy: '', updatedAt: at }]);
   const exp = ar.enrich(a, ar.todayMs()).expected;
   await Promise.all([hub.log('catalog', 'pay_notice', id, `${user.email} · ${ivNo} · ${amount}`),
-    notify.chat(`💰 แจ้งลูกค้าจ่าย ${ivNo} · ${notify.co(a.company)} · ${money(amount)} บาท${Math.abs(exp - amount) > 1 ? ' · ⚠️ ยอดไม่ตรง' : ''} · ${user.name || user.email} · ${notify.link('ar', 'ตรวจและยืนยัน')}`)]);
+    notify.chat(`💰 แจ้งลูกค้าจ่าย ${ivNo} · ${notify.co(a.company)} · ${money(amount)} บาท${Math.abs(exp - amount) > 1 ? ' · ⚠️ ยอดไม่ตรง' : ''} · ${user.name || user.email} · ${notify.link('ar', 'ตรวจและยืนยัน', { q: ivNo })}`)]);
   res.status(200).json({ ok: true, noticeId: id, message: 'แจ้งฝ่ายบัญชีแล้ว รอตรวจเงินเข้า' });
 }
 
@@ -992,7 +992,7 @@ async function updatePayNotice(req, res, user) {
     if (!note) throw bad('ใส่เหตุผล เช่น ยังไม่เห็นเงินเข้าบัญชี');
     await hub.updateRow('PaymentNotices', row._row, { status: 'rejected', accountNote: note, doneBy: who, updatedAt: at });
     await Promise.all([hub.log('catalog', 'pay_reject', row.noticeId, `${user.email} · ${note}`),
-      notify.chat(`↩️ ยังไม่ยืนยันเงินเข้า ${row.ivNo} · ${notify.co(row.company)} · ${await notify.at(row.requestedBy, row.salesName)} · ${notify.link('mine')}\nเหตุผล: ${notify.why(note)}`)]);
+      notify.chat(`↩️ ยังไม่ยืนยันเงินเข้า ${row.ivNo} · ${notify.co(row.company)} · ${await notify.at(row.requestedBy, row.salesName)} · ${notify.link('mine', undefined, { t: 'inv', q: row.ivNo })}\nเหตุผล: ${notify.why(note)}`)]);
     return res.status(200).json({ ok: true });
   }
   if (b.action !== 'pay_confirm') throw bad('คำสั่งไม่ถูกต้อง');
@@ -1104,7 +1104,7 @@ async function createReceipt(req, res, user) {
     docKind: RT_KIND[r.docKind], deliveryChannel: RT_CHANNEL[r.deliveryChannel], paidDate: dmy(r.paidDate), paymentProof: proof,
     status: 'new', peakRtNo: '', peakDocLink: '', sentStatus: needsPost(r.deliveryChannel) ? 'waiting' : '', sentAt: '', trackingNo: '', accountNote: '', updatedAt: at }]);
   await Promise.all([hub.log('catalog', 'receipt_requested', id, `${user.email} · ${r.billName} · ${r.price}`),
-    notify.chat(`🧾 ขอใบเสร็จ · ${notify.co(r.billName)} · ${money(r.price - r.discount)} บาท · ${user.name || user.email} · ${notify.link('pend')}`)]);
+    notify.chat(`🧾 ขอใบเสร็จ · ${notify.co(r.billName)} · ${money(r.price - r.discount)} บาท · ${user.name || user.email} · ${notify.link('pend', undefined, { t: 'rt', q: id })}`)]);
   res.status(200).json({ ok: true, rtRequestId: id, message: 'ส่งคำขอใบเสร็จแล้ว ฝ่ายบัญชีจะออกใน PEAK และแจ้งเลขเอกสารในหน้า "คำขอของฉัน"' });
 }
 
@@ -1144,7 +1144,7 @@ async function rtFromInv(req, res, user) {
     paidDate: a.paidDate, paymentProof: '', deliveryChannel: RT_CHANNEL[ch], docLang: 'TH', note: `ออกจาก INV ${ivNo}`, status: 'issued', peakRtNo: no, peakDocLink: link,
     sentStatus: sent ? 'sent' : 'waiting', sentAt: sent ? at : '', trackingNo: '', accountNote: `ออกใบเสร็จจาก INV — ${user.name || user.email}`, updatedAt: at }]);
   await hub.updateRow('Invoices', a._row, { rtNo: no });
-  await Promise.all([hub.log('catalog', 'rt_from_inv', ivNo, `${user.email} · ${no}`), notify.chat(`🧾 ใบเสร็จ ${no} ออกแล้ว · ${ivNo} · ${notify.co(a.company)}${a.salesEmail ? ' · ' + await notify.at(a.salesEmail, a.salesName) : ''} · ${notify.link('mine')}`)]);
+  await Promise.all([hub.log('catalog', 'rt_from_inv', ivNo, `${user.email} · ${no}`), notify.chat(`🧾 ใบเสร็จ ${no} ออกแล้ว · ${ivNo} · ${notify.co(a.company)}${a.salesEmail ? ' · ' + await notify.at(a.salesEmail, a.salesName) : ''} · ${notify.link('mine', undefined, { t: 'rt', q: no })}`)]);
   res.status(200).json({ ok: true, rtRequestId: id });
 }
 
@@ -1221,7 +1221,7 @@ async function finishRt(row, d, who, opts = {}) {
   const invs = await hub.readTable('Invoices');
   const a = invs.find((x) => String(x.ivNo).toUpperCase() === String(row.refDoc).toUpperCase());
   if (a && !a.rtNo) await hub.updateRow('Invoices', a._row, { rtNo: f.peakRtNo });
-  await notify.chat(`🧾 ใบเสร็จ ${f.peakRtNo} ออกแล้ว · ${row.refDoc} · ${notify.co(row.billName)} · ${await notify.at(row.requestedBy, row.salesName)} · ${notify.link('mine')}`);
+  await notify.chat(`🧾 ใบเสร็จ ${f.peakRtNo} ออกแล้ว · ${row.refDoc} · ${notify.co(row.billName)} · ${await notify.at(row.requestedBy, row.salesName)} · ${notify.link('mine', undefined, { t: 'rt', q: f.peakRtNo })}`);
 }
 
 async function updateReceipt(req, res, user) {
@@ -1268,8 +1268,8 @@ async function updateReceipt(req, res, user) {
     await hub.updateRow('ReceiptRequests', row._row, { sentStatus: 'sent', sentAt: at, trackingNo: text(b.trackingNo, 60), updatedAt: at });
   } else throw bad('คำสั่งไม่ถูกต้อง');
   const owner = ['rt_issued', 'rt_reject'].includes(b.action) ? await notify.at(row.requestedBy, row.salesName) : '';
-  const tell = { rt_issued: () => `🧾 ใบเสร็จ ${text(b.peakRtNo, 40).toUpperCase()} ออกแล้ว · ${notify.co(row.billName)} · ${owner} · ${notify.link('mine')}`,
-    rt_reject: () => `↩️ ตีกลับคำขอใบเสร็จ · ${notify.co(row.billName)} · ${owner} · ${notify.link('mine')}\nเหตุผล: ${notify.why(note)}` }[b.action];
+  const tell = { rt_issued: () => `🧾 ใบเสร็จ ${text(b.peakRtNo, 40).toUpperCase()} ออกแล้ว · ${notify.co(row.billName)} · ${owner} · ${notify.link('mine', undefined, { t: 'rt', q: text(b.peakRtNo, 40).toUpperCase() })}`,
+    rt_reject: () => `↩️ ตีกลับคำขอใบเสร็จ · ${notify.co(row.billName)} · ${owner} · ${notify.link('mine', undefined, { t: 'rt', q: row.rtRequestId })}\nเหตุผล: ${notify.why(note)}` }[b.action];
   await Promise.all([hub.log('catalog', b.action, row.rtRequestId, `${user.email}${note ? ' · ' + note : ''}`), tell ? notify.chat(tell()) : null]);
   res.status(200).json({ ok: true });
 }
@@ -1308,7 +1308,7 @@ async function createEdit(req, res, user) {
   if (rows.some((x) => x.docNo === r.docNo && x.status === 'new')) throw bad(`มีคำขอแก้ ${r.docNo} ที่ยังรอฝ่ายบัญชีอยู่แล้ว`, 409);
   const id = shortId('EDIT'); const at = hub.sheetDateTime();
   await hub.appendRows('EditRequests', [{ editId: id, createdAt: at, requestedBy: user.email, salesName: user.name, ...r, status: 'new', accountNote: '', newDocNo: '', doneBy: '', updatedAt: at }]);
-  await Promise.all([hub.log('catalog', 'edit_requested', id, `${user.email} · ${r.docNo}`), notify.chat(`✏️ ขอแก้ ${r.docType} ${r.docNo} · ${notify.co(r.company)} · ${user.name || user.email} · ${notify.link('pend')}`)]);
+  await Promise.all([hub.log('catalog', 'edit_requested', id, `${user.email} · ${r.docNo}`), notify.chat(`✏️ ขอแก้ ${r.docType} ${r.docNo} · ${notify.co(r.company)} · ${user.name || user.email} · ${notify.link('pend', undefined, { t: 'edit', q: r.docNo })}`)]);
   res.status(200).json({ ok: true, editId: id });
 }
 async function listEdits(req, res, user) {
@@ -1400,7 +1400,7 @@ async function updateEdit(req, res, user) {
   }
   await hub.writeChecked('EditRequests', 'editId', row, { status: b.action === 'edit_done' ? 'done' : 'rejected', accountNote: note, newDocNo: newNo, doneBy: who, updatedAt: at });
   await Promise.all([hub.log('catalog', b.action, row.editId, `${user.email} · ${row.docNo}`),
-    notify.chat(b.action === 'edit_done' ? `✅ แก้ ${row.docType} ${row.docNo}${newNo ? ' → ' + newNo : ''} แล้ว · ${notify.co(row.company)} · ${await notify.at(row.requestedBy, row.salesName)} · ${notify.link('mine')}` : `↩️ ไม่แก้ ${row.docType} ${row.docNo} · ${notify.co(row.company)} · ${await notify.at(row.requestedBy, row.salesName)} · ${notify.link('mine')}\nเหตุผล: ${notify.why(note)}`)]);
+    notify.chat(b.action === 'edit_done' ? `✅ แก้ ${row.docType} ${row.docNo}${newNo ? ' → ' + newNo : ''} แล้ว · ${notify.co(row.company)} · ${await notify.at(row.requestedBy, row.salesName)} · ${notify.link('mine', undefined, { t: 'edit', q: row.docNo })}` : `↩️ ไม่แก้ ${row.docType} ${row.docNo} · ${notify.co(row.company)} · ${await notify.at(row.requestedBy, row.salesName)} · ${notify.link('mine', undefined, { t: 'edit', q: row.docNo })}\nเหตุผล: ${notify.why(note)}`)]);
   res.status(200).json({ ok: true });
 }
 

@@ -364,8 +364,8 @@ async function update(req, res, user) {
   await hub.log('catalog', `qt_${b.action}`, row.requestId, `${user.email}${note ? ' · ' + note : ''}`);
   // Tell the salesperson (tagged) when the request is sent back, or the QT is approved and ready to send out.
   const notify = require('../lib/notify');
-  if (b.action === 'reject') await notify.chat(`↩️ ตีกลับคำขอ QT · ${notify.co(row.company)} · ${await notify.at(row.requestedBy, row.salesName)} · ${notify.link('mine')}\nเหตุผล: ${notify.why(note)}`).catch(() => {});
-  if (b.action === 'qt_approved') await notify.chat(`✅ QT ${row.peakQtNo} อนุมัติแล้ว ใช้ได้เลย · ${notify.co(row.company)} · ${await notify.at(row.requestedBy, row.salesName)} · ${notify.link('mine')}`).catch(() => {});
+  if (b.action === 'reject') await notify.chat(`↩️ ตีกลับคำขอ QT · ${notify.co(row.company)} · ${await notify.at(row.requestedBy, row.salesName)} · ${notify.link('mine', undefined, { t: 'qt', q: row.requestId })}\nเหตุผล: ${notify.why(note)}`).catch(() => {});
+  if (b.action === 'qt_approved') await notify.chat(`✅ QT ${row.peakQtNo} อนุมัติแล้ว ใช้ได้เลย · ${notify.co(row.company)} · ${await notify.at(row.requestedBy, row.salesName)} · ${notify.link('mine', undefined, { t: 'qt', q: row.peakQtNo })}`).catch(() => {});
   if (!makeNow) return res.status(200).json({ ok: true, status });
 
   const merged = { ...row, ...fields };

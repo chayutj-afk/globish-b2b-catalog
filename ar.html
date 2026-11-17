@@ -560,7 +560,7 @@ function showDrill(title, sub, rows, total, basis) {
   $('d-sub').textContent = `${rows.length} ใบ · ${what}${sub ? ' · ' + sub : ''}`;
   const paid = basis === 'paid';
   $('d-body').innerHTML = rows.length ? `<table><thead><tr><th>บริษัท</th><th>INV</th><th>เซล</th><th>ครบกำหนด</th><th>${paid ? 'รับเงิน' : 'นัดจ่าย'}</th><th class="num">ยอด</th></tr></thead><tbody>
-    ${rows.map((r) => `<tr class="go" data-iv="${esc(r.ivNo)}" title="เปิดใบนี้ในรายการติดตาม"><td><b>${esc(r.company)}</b><div class="small">${esc(r.segment || '')}</div></td><td class="mono">${esc(r.ivNo)}</td><td>${esc(r.salesName || '')}</td>
+    ${rows.map((r) => `<tr class="go" data-iv="${esc(r.ivNo)}" title="เปิดใบนี้ในรายการติดตาม"><td><b>${esc(r.company)}</b><div class="small">${esc(r.segment || '')}</div></td><td class="mono">${esc(r.ivNo)}${r.rtNo ? `<div class="small" title="เลขใบเสร็จ">ใบเสร็จ ${esc(r.rtNo)}</div>` : r.state === 'Paid' ? '<div class="small" style="color:var(--warn-ink)">ยังไม่ออกใบเสร็จ</div>' : ''}</td><td>${esc(r.salesName || '')}</td>
       <td>${esc(r.dueDate || '')}${r.daysOverdue ? `<div class="small" style="color:var(--bad-ink)">เกิน ${r.daysOverdue} วัน</div>` : ''}</td>
       <td>${esc((paid ? r.paidDate : r.commitDate) || '')}${paid && r.paidVsCommit !== '' && r.paidVsCommit !== undefined ? `<div class="small">${r.paidVsCommit < 0 ? `ก่อนนัด ${-r.paidVsCommit} วัน` : r.paidVsCommit > 0 ? `ช้า ${r.paidVsCommit} วัน` : 'ตรงนัด'}</div>` : ''}</td>
       <td class="num">${fmt(r.amount)}</td></tr>`).join('')}

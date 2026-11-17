@@ -635,7 +635,7 @@ function drillRows(all, today, key) {
   else if (k === 'vs') { paid = true; xs = all.filter((r) => r.paidMs !== null && r.paidMs >= today - 90 * DAY && r.paidVsCommit !== '' && (a === 'early' ? r.paidVsCommit < 0 : a === 'late' ? r.paidVsCommit > 0 : r.paidVsCommit === 0)); }
   const preVat = k === 'month-inv';
   const rows = xs.map((r) => ({ ivNo: r.ivNo, company: r.company, segment: r.segment, salesName: r.salesName || r.salesEmail || '', issueDate: r.issueDate, dueDate: r.dueDate,
-    commitDate: r.state === 'Paid' ? r.promisedDate : r.commitDate, paidDate: r.paidDate, state: r.state, daysOverdue: r.daysOverdue, paidVsCommit: r.paidVsCommit, peakDocLink: r.peakDocLink || '',
+    commitDate: r.state === 'Paid' ? r.promisedDate : r.commitDate, paidDate: r.paidDate, rtNo: r.rtNo || '', state: r.state, daysOverdue: r.daysOverdue, paidVsCommit: r.paidVsCommit, peakDocLink: r.peakDocLink || '',
     amount: preVat ? r.preVatN : paid ? (ar.num(r.paidAmount) || r.expected) : r.expected }))
     .sort((x, y) => y.amount - x.amount);
   return { rows, total: Math.round(rows.reduce((t, r) => t + (Number(r.amount) || 0), 0) * 100) / 100, basis: preVat ? 'prevat' : paid ? 'paid' : 'expected' };

@@ -1785,6 +1785,25 @@ function ivManual(v) {
         ${date}
         <button class="btn btn-p btn-sm" onclick="ivAction('${id}','issued')">✓ อนุมัติ (ออก INV แล้ว)</button>`;
 }
+// A QT made outside the app (e.g. an old quota QT): read it from PEAK, keep it here, link the INV requests.
+async function qtAdopt(id) {
+  const call = (extra) => api('/api/invoice-requests', { method: 'PATCH', body: JSON.stringify({ ivRequestId: id, action: 'qt_adopt', ...extra }) });
+  try {
+    let p; await withLoading('กำลังอ่าน QT จาก PEAK…', async () => { p = (await call({ preview: true })).preview; });
+    const row = (k, val) => `<tr><td style="padding:3px 14px 3px 0">${k}</td><td style="text-align:right"><b>${val}</b></td></tr>`;
+    const ok = await ask({ title: `นำ QT ${p.qtNo} เข้าระบบ?`, ok: '📥 นำเข้า', html: `<p><b>${esc(p.company)}</b>${p.link ? ` · <a href="${esc(p.link)}" target="_blank" rel="noopener">เปิด QT ใน PEAK ↗</a>` : ''}</p>
+      <table class="small" style="margin:6px 0 10px">${row('ยอด QT (ก่อน VAT)', fmt(p.total))}${p.inAppCount ? row(`INV ที่ระบบรู้แล้ว ${p.inAppCount} ใบ`, fmt(p.inApp)) : ''}${row(`คำขอ INV ที่รออยู่ ${p.waitingCount} ใบ`, fmt(p.waiting))}</table>
+      ${p.exists ? '<p class="small">QT นี้อยู่ในระบบแล้ว ระบบจะผูกคำขอ INV เข้ากับ QT ให้</p>' : `<div class="fg"><label for="ad-open">ยอดที่ออก INV จาก QT นี้ไปแล้ว ก่อนใช้ระบบ (ก่อน VAT) *</label><input id="ad-open" type="text" inputmode="decimal" placeholder="0 ถ้ายังไม่เคยออก" autocomplete="off"><div class="small" style="margin-top:4px">ไม่ต้องรวม INV ที่ระบบรู้แล้วและคำขอที่รออยู่ข้างบน · PEAK ไม่บอกว่า QT ใบหนึ่งออก INV ไปแล้วเท่าไร จึงต้องกรอกครั้งเดียวตรงนี้</div></div>`}
+      <p class="small">ระบบอ่านจาก PEAK อย่างเดียว ไม่แก้เอกสารใน PEAK · หลังนำเข้า เซลจะเห็น QT นี้พร้อมยอดคงเหลือ และกดสร้าง INV Draft จากคำขอได้</p>` });
+    if (!ok) return;
+    const raw = ((document.getElementById('ad-open') || {}).value || '').replace(/,/g, '').trim();
+    if (!p.exists && (raw === '' || !(Number(raw) >= 0))) { alertMsg('ใส่ยอดที่ออก INV ไปแล้วก่อนใช้ระบบ (ใส่ 0 ถ้ายังไม่เคยออก)'); return; }
+    await withLoading('กำลังนำ QT เข้าระบบ…', async () => {
+      const d = await call({ openingInvoiced: Number(raw) || 0 }); await loadAll();
+      alertMsg(d.over ? `นำเข้าแล้ว ผูกคำขอ INV ${d.linked} ใบ · คำขอที่รออยู่รวมกันเกินยอดคงเหลือของ QT ${fmt(-d.left)} บาท ตรวจก่อนออก INV` : `นำ QT เข้าระบบแล้ว ผูกคำขอ INV ${d.linked} ใบ · คงเหลือหลังคำขอที่รออยู่ ${fmt(d.left)} บาท`, !d.over);
+    });
+  } catch (e) { alertMsg(e.message, false); }
+}
 async function ivMake(id) {
   const v = IVS.find((x) => x.ivRequestId === id) || {};
   const ok = await ask({ title: 'สร้าง INV Draft ใน PEAK?', ok: '🧾 สร้าง Draft', html: `<p><b>${esc(v.company)}</b> · QT ${esc(v.qtNo)} · ${fmt(ivAmt(v).amt)}</p><p class="small">ระบบจะสร้าง INV สถานะ Draft จาก QT ใบเดิมใน PEAK ตามยอด วันที่ และเครดิตเทอมที่ Sales ขอ แนบหลักฐาน และติดกลุ่มจัดประเภทให้ จากนั้นตรวจและอนุมัติใน PEAK</p>` });

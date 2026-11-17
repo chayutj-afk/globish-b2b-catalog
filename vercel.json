@@ -31,7 +31,7 @@
   ],
   "functions": {
     "api/invoice-requests.js": {
-      "maxDuration": 30
+      "maxDuration": 60
     },
     "api/contacts.js": {
       "maxDuration": 30
@@ -46,7 +46,7 @@
       "maxDuration": 30
     },
     "api/requests.js": {
-      "maxDuration": 30
+      "maxDuration": 60
     }
   },
   "crons": [

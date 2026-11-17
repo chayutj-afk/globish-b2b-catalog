@@ -387,6 +387,7 @@ async function update(req, res, user) {
     if (peak.mode() === 'off') throw bad('ยังไม่ได้เปิดการเชื่อมต่อ PEAK API', 409);
     const who = user.name || user.email;
     if (b.action === 'iv_make') {
+      const t0 = Date.now();
       if (row.status !== 'new' || row.peakIvId) throw bad(`คำขอนี้มี INV ใน PEAK แล้ว (${row.peakIvNo || row.status}) รีเฟรชหน้า`, 409);
       const [reqs, users] = await Promise.all([hub.readTable('Requests'), hub.readTable('Users')]);
       const qt = reqs.find((x) => x.requestId === row.requestId);
@@ -413,9 +414,14 @@ async function update(req, res, user) {
       out.updatedAt = hub.sheetDateTime();
       out.accountNote = `${out.accountNote} — ${who}`.slice(0, 500);
       await hub.updateRow('InvoiceRequests', row._row, out);
-      // The evidence Sales attached goes on the INV too.
-      const ev = await drive.download(row.evidenceLink).catch(() => null);
-      if (ev) await attachToPeak('invoice', out.peakIvId, ev, `INV-EVIDENCE_${row.ivRequestId}`);
+      // The evidence Sales attached goes on the INV too, when there is time left: PEAK can take several
+      // seconds per call, and the Draft itself must never be lost to the function's time limit.
+      if (Date.now() - t0 < 35e3) {
+        const ev = await drive.download(row.evidenceLink).catch(() => null);
+        if (ev) await attachToPeak('invoice', out.peakIvId, ev, `INV-EVIDENCE_${row.ivRequestId}`);
+      } else {
+        await hub.updateRow('InvoiceRequests', row._row, { accountNote: `${out.accountNote} · PEAK ช้า: ยังไม่ได้แนบหลักฐานเข้า INV แนบเองใน PEAK`.slice(0, 500) }).catch(() => {});
+      }
       await hub.log('peak', 'iv_live_draft', id, `${user.email} · ${out.peakIvNo}`);
       return res.status(200).json({ ok: true, status: 'iv_draft', peakIvNo: out.peakIvNo, message: out.accountNote });
     }

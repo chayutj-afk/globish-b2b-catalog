@@ -371,6 +371,8 @@ async function api(url, opts = {}) {
   if (wr) try { sessionStorage.setItem('gc_w', Date.now()); } catch {}
   if (r.status === 401) { location.href = '/signin.html?next=' + encodeURIComponent(location.pathname + location.hash); throw new Error('ต้องเข้าสู่ระบบใหม่'); }
   const d = await r.json().catch(() => null);
+  // 504 / 502 with no JSON: the server ran out of time. The work may or may not have been done.
+  if (!d && (r.status === 504 || r.status === 502)) throw new Error('ระบบใช้เวลานานเกินไป (PEAK หรือ Google Sheets ตอบช้า) งานอาจทำไปแล้วบางส่วน: รอสักครู่ กดรีเฟรช แล้วดูสถานะของรายการนี้ก่อนกดซ้ำ');
   if (!r.ok || !d || !d.ok) throw new Error((d && d.error) || `HTTP ${r.status}`);
   return d;
 }

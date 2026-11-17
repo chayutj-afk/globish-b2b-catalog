@@ -36,6 +36,7 @@ details.more{margin-top:8px}details.more>summary{cursor:pointer;font-size:12.5px
 .inv-head b{font-size:14px;color:var(--head);font-weight:500}
 .opp{display:flex;align-items:center;gap:3px;flex-wrap:nowrap;min-width:0}
 .opp-pre{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--muted);margin-right:3px;white-space:nowrap}
+.opp select.opp-kind[hidden]{display:none}
 .opp select.opp-kind{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--head);background:var(--input);border:1px solid var(--line2);border-radius:6px;height:36px;padding:0 2px 0 6px;margin-right:4px;width:104px;min-width:104px;flex:0 0 104px;cursor:pointer}
 .opp-g{display:flex;gap:3px;flex:4 1 0;min-width:0}.opp-g+.opp-dash+.opp-g{flex:5 1 0}
 .opp .od{flex:1 1 0;min-width:0;max-width:32px;height:36px;padding:0;text-align:center;border:1px solid var(--line2);border-radius:4px;background:var(--input);color:var(--head);font-family:ui-monospace,Menlo,monospace;font-size:15px}
@@ -138,7 +139,7 @@ details.more{margin-top:8px}details.more>summary{cursor:pointer;font-size:12.5px
     <div id="i-balance"></div>
     <div class="row c4">
       <div class="fg"><label>ประเภทลูกค้า <span class="small">(PEAK)</span> *</label><select id="i-seg" class="ctype" data-blank="1" onchange="onInvSeg()"><option value="">— เลือก —</option><option value="B2B" data-code="G012-00002">B2B</option><option value="B2C" data-code="G012-00001">B2C</option><option value="B2S" data-code="G012-00003">B2S</option></select></div>
-      <div class="fg" id="i-opp-wrap"><label>Opportunity ID / Lead ID ใน CRM *</label><div class="opp" id="i-opp" data-p="i"></div><input type="hidden" id="i-opp-y"><input type="hidden" id="i-opp-n"></div>
+      <div class="fg" id="i-opp-wrap"><label>Opportunity ID ใน CRM *</label><div class="opp" id="i-opp" data-p="i"></div><div class="sub" id="i-opp-hint"></div><input type="hidden" id="i-opp-y"><input type="hidden" id="i-opp-n"></div>
       <div class="fg"><label>เลขผู้เสียภาษีของลูกค้าตาม QT *</label><input id="i-tax" type="text" maxlength="13" inputmode="numeric" placeholder="13 หลัก" oninput="digits(this);taxHint('i')"><div class="sub" id="i-tax-hint"></div></div>
       <div class="fg"><label>รหัสสาขา</label><input id="i-branch" type="text" maxlength="5" inputmode="numeric" placeholder="00000" oninput="digits(this)"></div>
     </div>
@@ -340,7 +341,7 @@ function setOpp(p, id) { const m = /CRM-(OPP|LEAD)-(\d{4})-(\d{5})/.exec(id || '
 // Opportunity ID as digit boxes: CRM-OPP- [□□□□]-[□□□□□]; the hidden p-opp-y / p-opp-n hold the values.
 function buildOpp(p) {
   const box = (k) => `<input class="od" data-k="${k}" type="text" inputmode="numeric" maxlength="1" aria-label="หลักที่ ${k + 1}" autocomplete="off">`;
-  $(p + '-opp').innerHTML = `<select class="opp-kind" aria-label="ชนิดของรหัส CRM" title="ใช้ Lead ID เมื่อ lead ยังไม่ได้ convert เป็น Opportunity"><option value="OPP">CRM-OPP-</option><option value="LEAD">CRM-LEAD-</option></select><span class="opp-g">${[0, 1, 2, 3].map(box).join('')}</span><span class="opp-dash">–</span><span class="opp-g">${[4, 5, 6, 7, 8].map(box).join('')}</span>`;
+  $(p + '-opp').innerHTML = `${p === 'i' ? '<span class="opp-pre">CRM-OPP-</span>' : ''}<select ${p === 'i' ? 'hidden disabled' : ''} class="opp-kind" aria-label="ชนิดของรหัส CRM" title="ใช้ Lead ID เมื่อ lead ยังไม่ได้ convert เป็น Opportunity"><option value="OPP">CRM-OPP-</option><option value="LEAD">CRM-LEAD-</option></select><span class="opp-g">${[0, 1, 2, 3].map(box).join('')}</span><span class="opp-dash">–</span><span class="opp-g">${[4, 5, 6, 7, 8].map(box).join('')}</span>`;
   const boxes = [...$(p + '-opp').querySelectorAll('.od')];
   const sync = () => { const d = boxes.map((b) => b.value).join(''); $(p + '-opp-y').value = d.slice(0, 4).trim(); $(p + '-opp-n').value = d.slice(4).trim(); };
   const fill = (digits, from) => { for (let k = from, j = 0; k < 9 && j < digits.length; k++, j++) boxes[k].value = digits[j]; sync(); boxes[Math.min(from + digits.length, 8)].focus(); };
@@ -1009,7 +1010,8 @@ function onPickQT() {
   freshenQT(q);
   if (q) {
     $('i-qt').value = q.peakQtNo || ''; $('i-company').value = q.company || ''; $('i-tax').value = q.taxId || '';
-    $('i-branch').value = q.branch || ''; setOpp('i', q.opportunityId); taxHint('i');
+    $('i-branch').value = q.branch || ''; const lead = /^CRM-LEAD-/.test(q.opportunityId || ''); setOpp('i', lead ? '' : q.opportunityId); taxHint('i');
+    $('i-opp-hint').textContent = lead ? `QT นี้ขอด้วย Lead ID (${q.opportunityId}) · ออก INV ได้เมื่อ convert เป็น Opportunity แล้ว ใส่ Opportunity ID ที่ได้จาก CRM` : '';
     $('i-seg').value = q.segment || '';
     if (q.whtRate !== undefined && q.whtRate !== '') { $('i-wht').value = q.whtRate; $('i-wht-hint').textContent = 'ดึงจาก QT ' + whtText(q.whtRate) + ' · เปลี่ยนได้ถ้าใบนี้ต่างจาก QT'; }
     INVS.forEach((x) => { if (!x.creditTermDays && q.creditTermDays) x.creditTermDays = q.creditTermDays; });
@@ -1046,8 +1048,8 @@ async function submitINV() {
   if (body.taxId.length !== 13) return msg('i-msg', 'err', 'กรอกเลขผู้เสียภาษี 13 หลักของลูกค้าตาม QT');
   if (!body.segment) return msg('i-msg', 'err', 'เลือกกลุ่มลูกค้า');
   if (body.whtRate === '') return msg('i-msg', 'err', 'เลือกหัก ณ ที่จ่าย (ไม่หัก / 1% / 2% / 3% / 5%)');
-  if (oppOf(body.segment) && !body.opportunityId) return msg('i-msg', 'err', `ใส่ Opportunity ID หรือ Lead ID จาก CRM สำหรับลูกค้า ${body.segment}`);
-  if (body.opportunityId && !OPP_OK(body.opportunityId)) return msg('i-msg', 'err', 'รหัส CRM ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN หรือ CRM-LEAD-YYYY-NNNNN');
+  if (oppOf(body.segment) && !body.opportunityId) return msg('i-msg', 'err', `ใส่ Opportunity ID จาก CRM สำหรับลูกค้า ${body.segment} (lead ต้อง convert เป็น Opportunity ก่อนออก INV)`);
+  if (body.opportunityId && !/^CRM-OPP-\d{4}-\d{5}$/.test(body.opportunityId)) return msg('i-msg', 'err', 'Opportunity ID ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN');
   const badInv = INVS.findIndex((x) => !x.students || !x.wantedIssueDate || x.creditTermDays === '' || x.creditTermDays === undefined);
   if (badInv >= 0) return msg('i-msg', 'err', `INV ใบที่ ${badInv + 1}: ใส่จำนวนผู้เรียน วันที่ต้องการให้ลงใน INV และเครดิตเทอมให้ครบ`);
   const f = $('i-file').files[0];

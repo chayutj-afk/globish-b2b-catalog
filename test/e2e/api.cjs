@@ -127,6 +127,7 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
   console.log('── 4. INV from QT');
   r = req(q1);
   [s, j] = await call(BEE, 'POST', '/api/invoice-requests', ivBody(r)); ok(s === 400 || s === 404, 'other sales cannot bill my QT ' + s);
+  [s, j] = await call(BENZ, 'POST', '/api/invoice-requests', ivBody(r, { opportunityId: 'CRM-LEAD-2026-14563' })); ok(s === 400 && /convert/.test(j.error || ''), 'INV with a Lead ID is refused: the lead must be converted first ' + s + ' ' + (j.error || '').slice(0, 60));
   [s, j] = await call(BENZ, 'POST', '/api/invoice-requests', ivBody(r, { file: undefined })); ok(s === 400, 'evidence file required');
   [s, j] = await call(BENZ, 'POST', '/api/invoice-requests', ivBody(r, { invoices: [{ amount: 40000, students: 2, wantedIssueDate: '2026-11-20', creditTermDays: 30, originalDoc: 'no' }] })); ok(s === 400 && /เกินยอด/.test(j.error), 'over the QT without a reason refused');
   [s, j] = await call(BENZ, 'POST', '/api/invoice-requests', ivBody(r, { invoices: [{ amount: 15900, students: 1, wantedIssueDate: '2026-11-20', creditTermDays: 30, originalDoc: 'no', label: 'งวด 1' }, { amount: 15900, students: 1, wantedIssueDate: '2026-12-20', creditTermDays: 30, originalDoc: 'yes', originalRecipient: 'คุณเอ', originalAddress: '1 ถนน', label: 'งวด 2' }] }));

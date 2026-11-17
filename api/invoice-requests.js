@@ -16,7 +16,7 @@ const DEAD = new Set(['rejected', 'iv_void', 'rt_void']);
 const hub = require('../lib/hub');
 const drive = require('../lib/drive');
 const notify = require('../lib/notify');
-const { OPP_RE, normaliseOppId } = require('../lib/crm');
+const { OPP_ONLY_RE, OPP_RE, normaliseOppId } = require('../lib/crm');
 const { validTaxId, normBranch } = require('../lib/taxid');
 const ar = require('../lib/ar');
 const peakdoc = require('../lib/peakdoc');
@@ -91,7 +91,8 @@ function validate(b) {
   };
   if (!r.qtNo) throw bad('ใส่เลขที่ใบเสนอราคา (QT) ที่ต้องการออก INV');
   if (!['0', '1', '2', '3', '5'].includes(r.whtRate)) throw bad('เลือกหัก ณ ที่จ่าย (ไม่หัก / 1% / 2% / 3% / 5%)');
-  if (r.opportunityId && !OPP_RE.test(r.opportunityId)) throw bad('Opportunity ID / Lead ID ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN หรือ CRM-LEAD-YYYY-NNNNN');
+  if (/^CRM-LEAD-/.test(r.opportunityId)) throw bad('ออก INV ได้เมื่อ lead ถูก convert เป็น Opportunity แล้วเท่านั้น ใส่ Opportunity ID (CRM-OPP-YYYY-NNNNN)');
+  if (r.opportunityId && !OPP_ONLY_RE.test(r.opportunityId)) throw bad('Opportunity ID ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN');
   checkEntity(r, 'ลูกค้าตาม QT');
   if (!EVIDENCE.includes(r.evidenceType)) throw bad('เลือกประเภทหลักฐานที่ลูกค้ายอมรับ');
   if (r.evidenceType === 'อื่นๆ' && !r.evidenceOther) throw bad('ระบุว่าหลักฐานเป็นเอกสารอะไร');
@@ -180,7 +181,8 @@ async function create(req, res, user) {
     if (linked.peakQtNo && (await hub.readTable('EditRequests')).some((x) => x.docType === 'QT' && x.docNo === String(linked.peakQtNo).toUpperCase() && x.status === 'new')) {
       throw bad(`QT ${linked.peakQtNo} มีคำขอแก้ไขที่รอฝ่ายบัญชีอยู่ ขอ INV ได้หลังฝ่ายบัญชีแก้เสร็จ`, 409);
     }
-    if (!r.opportunityId) r.opportunityId = linked.opportunityId || '';
+    // A QT asked for with a Lead ID does not pass its ID on: the INV needs the Opportunity ID.
+    if (!r.opportunityId && !/^CRM-LEAD-/.test(linked.opportunityId || '')) r.opportunityId = linked.opportunityId || '';
     r.segment = linked.segment || r.segment;
   }
   // Customer type (PEAK G012): the QT's own, or picked on the form for a QT outside the app.
@@ -196,7 +198,7 @@ async function create(req, res, user) {
   const basis = incl ? 'รวม VAT' : 'ก่อน VAT';
   // CRM Opportunity ID: as the customer type says (B2S has none).
   if (ctype.opp === false) r.opportunityId = '';
-  else if (!r.opportunityId) throw bad(`ใส่ Opportunity ID หรือ Lead ID จาก CRM (CRM-OPP-YYYY-NNNNN / CRM-LEAD-YYYY-NNNNN) สำหรับลูกค้า ${ctype.name}`);
+  else if (!r.opportunityId) throw bad(`ใส่ Opportunity ID จาก CRM (CRM-OPP-YYYY-NNNNN) สำหรับลูกค้า ${ctype.name} · ถ้า QT ใช้ Lead ID ต้อง convert เป็น Opportunity ก่อนออก INV`);
 
   // Same QT + same billed tax ID + same amount already requested (not rejected) → probably sent twice.
   if (b.confirmDuplicate !== true) {

@@ -494,5 +494,12 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
   setPeak((p) => { const x = p.invoices.find((y) => y.id === mine.peakIvId); x.code = 'IV-20261100977'; });
   [s, j] = await hook('invoice', { PeakInvoices: { invoices: [{ id: mine.peakIvId }] }, eventType: 'Edit' });
   ok(arRow('IV-20261100977') && !arRow(no1) && ivr(tw[0]).peakIvNo === 'IV-20261100977' && db().Invoices.filter((x) => x.peakIvId === mine.peakIvId).length === 1, 'AR row and request follow the new number, no second row: ' + j.results[0]);
+  console.log('── 15. approval event that arrives before PEAK shows the INV as approved');
+  [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { ivRequestId: tw[1], action: 'iv_make' }); const lag = ivr(tw[1]);
+  ok(s === 200 && lag.status === 'iv_draft', 'second request: Draft made ' + (j.error || ''));
+  const stale = { ...peak().invoices.find((y) => y.id === lag.peakIvId) }; // the payload still says Draft…
+  setPeak((p) => { const x = p.invoices.find((y) => y.id === lag.peakIvId); x.status = 'Approve'; }); // …while PEAK is approved a moment later
+  [s, j] = await hook('invoice', { PeakInvoices: { invoices: [stale] }, eventType: 'Edit' });
+  ok(/issued/.test(j.results[0]) && ivr(tw[1]).status === 'iv_issued' && arRow(ivr(tw[1]).peakIvNo), 'looked again and issued it, no "check status" needed: ' + j.results[0]);
   done();
 })().catch((e) => { console.error('CRASH', e); ok(false, 'CRASH: the run stopped early: ' + e.message); done(); process.exitCode = 1; });

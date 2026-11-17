@@ -5,7 +5,7 @@ R="$(cd "$(dirname "$0")" && pwd)"; D=/tmp/sales-desk-e2e; mkdir -p $D /tmp/sale
 pkill -f "dev-server.mjs 3950" 2>/dev/null
 node "$R/seed.cjs" $D/db.json && cp "$R/peak-seed.json" $D/peak.json
 cd "$R/../.."
-AUTH_SECRET=qa-secret-qa-secret-qa-secret-qa-secret-1234 HUB_MODE=mock HUB_MOCK_FILE=$D/db.json FAKE_PEAK_FILE=$D/peak.json \
+PEAK_HOOK_RECHECK_MS=30,30 AUTH_SECRET=qa-secret-qa-secret-qa-secret-qa-secret-1234 HUB_MODE=mock HUB_MOCK_FILE=$D/db.json FAKE_PEAK_FILE=$D/peak.json \
 PEAK_MODE=prod PEAK_CONNECT_ID=cid PEAK_PASSWORD=pw PEAK_USER_TOKEN=ut PEAK_WEBHOOK_KEY=hookkey123 OWNER_EMAILS=admin@globish.co.th CRON_SECRET=cron123 GCHAT_WEBHOOK_URL='https://chat.googleapis.com/v1/spaces/MAIN/messages?key=k&token=t' GCHAT_FINANCE_WEBHOOK_URL='https://chat.googleapis.com/v1/spaces/FIN/messages?key=k&token=t' \
 nohup node --require "$R/fakepeak.cjs" test/dev-server.mjs 3950 > $D/server.log 2>&1 &
 for i in $(seq 1 20); do curl -s -o /dev/null localhost:3950/signin.html && break; node -e "setTimeout(()=>{},300)"; done

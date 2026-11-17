@@ -1772,30 +1772,18 @@ async function qtActionDo(id, action) {
   catch (e) { $('qm-' + id).innerHTML = `<span class="err-line">${esc(e.message)}</span>`; }
 }
 function ivManual(v) {
-  return `<input id="ivn-${esc(v.ivRequestId)}" type="text" maxlength="40" placeholder="เลข INV เช่น IV-20261100014" style="width:200px">
-        <label class="small" for="ivd-${esc(v.ivRequestId)}" style="white-space:nowrap">วันที่ออก INV (ตาม PEAK)</label>
-        <input id="ivd-${esc(v.ivRequestId)}" type="date" title="วันที่ออก INV ตามเอกสารใน PEAK · วันครบกำหนด = วันนี้ + เครดิตเทอม" value="${isoD(v.wantedIssueDate)}" style="width:150px">
-        <input id="ivl-${esc(v.ivRequestId)}" class="grow" type="text" maxlength="500" placeholder="ลิงก์เอกสาร INV ใน PEAK *">
-        <button class="btn ${PEAK_LIVE ? 'btn-g' : 'btn-p'} btn-sm" onclick="ivAction('${esc(v.ivRequestId)}','issued')">✓ อนุมัติ (ออก INV แล้ว)</button>`;
-}
-// A QT made outside the app (e.g. an old quota QT): read it from PEAK, keep it here, link the INV requests.
-async function qtAdopt(id) {
-  const call = (extra) => api('/api/invoice-requests', { method: 'PATCH', body: JSON.stringify({ ivRequestId: id, action: 'qt_adopt', ...extra }) });
-  try {
-    let p; await withLoading('กำลังอ่าน QT จาก PEAK…', async () => { p = (await call({ preview: true })).preview; });
-    const row = (k, val) => `<tr><td style="padding:3px 14px 3px 0">${k}</td><td style="text-align:right"><b>${val}</b></td></tr>`;
-    const ok = await ask({ title: `นำ QT ${p.qtNo} เข้าระบบ?`, ok: '📥 นำเข้า', html: `<p><b>${esc(p.company)}</b>${p.link ? ` · <a href="${esc(p.link)}" target="_blank" rel="noopener">เปิด QT ใน PEAK ↗</a>` : ''}</p>
-      <table class="small" style="margin:6px 0 10px">${row('ยอด QT (ก่อน VAT)', fmt(p.total))}${p.inAppCount ? row(`INV ที่ระบบรู้แล้ว ${p.inAppCount} ใบ`, fmt(p.inApp)) : ''}${row(`คำขอ INV ที่รออยู่ ${p.waitingCount} ใบ`, fmt(p.waiting))}</table>
-      ${p.exists ? '<p class="small">QT นี้อยู่ในระบบแล้ว ระบบจะผูกคำขอ INV เข้ากับ QT ให้</p>' : `<div class="fg"><label for="ad-open">ยอดที่ออก INV จาก QT นี้ไปแล้ว ก่อนใช้ระบบ (ก่อน VAT) *</label><input id="ad-open" type="text" inputmode="decimal" placeholder="0 ถ้ายังไม่เคยออก" autocomplete="off"><div class="small" style="margin-top:4px">ไม่ต้องรวม INV ที่ระบบรู้แล้วและคำขอที่รออยู่ข้างบน · PEAK ไม่บอกว่า QT ใบหนึ่งออก INV ไปแล้วเท่าไร จึงต้องกรอกครั้งเดียวตรงนี้</div></div>`}
-      <p class="small">ระบบอ่านจาก PEAK อย่างเดียว ไม่แก้เอกสารใน PEAK · หลังนำเข้า เซลจะเห็น QT นี้พร้อมยอดคงเหลือ และกดสร้าง INV Draft จากคำขอได้</p>` });
-    if (!ok) return;
-    const raw = ((document.getElementById('ad-open') || {}).value || '').replace(/,/g, '').trim();
-    if (!p.exists && (raw === '' || !(Number(raw) >= 0))) { alertMsg('ใส่ยอดที่ออก INV ไปแล้วก่อนใช้ระบบ (ใส่ 0 ถ้ายังไม่เคยออก)'); return; }
-    await withLoading('กำลังนำ QT เข้าระบบ…', async () => {
-      const d = await call({ openingInvoiced: Number(raw) || 0 }); await loadAll();
-      alertMsg(d.over ? `นำเข้าแล้ว ผูกคำขอ INV ${d.linked} ใบ · คำขอที่รออยู่รวมกันเกินยอดคงเหลือของ QT ${fmt(-d.left)} บาท ตรวจก่อนออก INV` : `นำ QT เข้าระบบแล้ว ผูกคำขอ INV ${d.linked} ใบ · คงเหลือหลังคำขอที่รออยู่ ${fmt(d.left)} บาท`, !d.over);
-    });
-  } catch (e) { alertMsg(e.message, false); }
+  const id = esc(v.ivRequestId);
+  const date = `<label class="small" for="ivd-${id}" style="white-space:nowrap">วันที่ออก INV (ตาม PEAK)</label>
+        <input id="ivd-${id}" type="date" title="วันที่ออก INV ตามเอกสารใน PEAK · วันครบกำหนด = วันนี้ + เครดิตเทอม" value="${isoD(v.wantedIssueDate)}" style="width:150px">
+        <input id="ivl-${id}" class="grow" type="text" maxlength="500" placeholder="ลิงก์เอกสาร INV ใน PEAK${PEAK_LIVE ? '' : ' *'}">`;
+  const no = `<input id="ivn-${id}" type="text" maxlength="40" placeholder="เลข INV เช่น IV-20261100014" aria-label="เลข INV" style="width:200px">`;
+  // PEAK connected: the number is enough, the date and link are read from PEAK.
+  if (PEAK_LIVE) return `${no}
+        <button class="btn btn-g btn-sm" onclick="ivAction('${id}','issued')" title="ระบบอ่านวันที่ออกและลิงก์ของ INV เลขนี้จาก PEAK ให้ ไม่แก้อะไรใน PEAK">✓ อนุมัติ (ดึงวันที่และลิงก์จาก PEAK)</button>
+        <details class="rej" style="flex-basis:100%"><summary class="small">ใส่วันที่และลิงก์เอง</summary><div class="pc-act" style="padding:8px 0 0">${date}</div></details>`;
+  return `${no}
+        ${date}
+        <button class="btn btn-p btn-sm" onclick="ivAction('${id}','issued')">✓ อนุมัติ (ออก INV แล้ว)</button>`;
 }
 async function ivMake(id) {
   const v = IVS.find((x) => x.ivRequestId === id) || {};
@@ -1812,12 +1800,13 @@ async function ivCheck(id) {
 async function ivAction(id, action) {
   const v = IVS.find((x) => x.ivRequestId === id) || {};
   const body = { ivRequestId: id, action, seen: seenOf(v) };
-  if (action === 'issued') { body.peakIvNo = $('ivn-' + id).value.trim(); body.peakDocLink = $('ivl-' + id).value.trim(); body.issueDate = $('ivd-' + id).value; if (!body.issueDate) { $('ivm-' + id).innerHTML = '<span class="err-line">ใส่วันที่ออก INV</span>'; return; } if (!body.peakIvNo || !body.peakDocLink) { $('ivm-' + id).innerHTML = '<span class="err-line">ใส่เลข INV และลิงก์เอกสาร INV ใน PEAK</span>'; return; } }
+  if (action === 'issued') { body.peakIvNo = $('ivn-' + id).value.trim(); body.peakDocLink = $('ivl-' + id).value.trim(); const auto = PEAK_LIVE && !body.peakDocLink; body.auto = auto; if (!auto) body.issueDate = $('ivd-' + id).value; if (!body.peakIvNo) { $('ivm-' + id).innerHTML = '<span class="err-line">ใส่เลข INV</span>'; return; } if (!auto && !body.issueDate) { $('ivm-' + id).innerHTML = '<span class="err-line">ใส่วันที่ออก INV</span>'; return; } if (!auto && !body.peakDocLink) { $('ivm-' + id).innerHTML = '<span class="err-line">ใส่เลข INV และลิงก์เอกสาร INV ใน PEAK</span>'; return; } }
   if (action === 'reject') { body.note = $('ivr-' + id).value.trim(); if (!body.note) { $('ivm-' + id).innerHTML = '<span class="err-line">ใส่เหตุผลก่อน</span>'; return; } }
   const ok = await ask(action === 'issued'
-    ? { title: 'ยืนยันว่าออก INV แล้ว?', ok: '✓ อนุมัติ', html: `<p><b>${esc(v.company)}</b> · ${fmt(toNum(v.amountPreVat))}</p><p>เลข INV: <b class="mono">${esc(body.peakIvNo)}</b> · วันที่ ${esc(body.issueDate)}<br><span class="small">ลิงก์: ${esc(body.peakDocLink)}</span></p><p class="small">Sales จะเห็นเลข INV และเปิดเอกสารได้ทันที · INV นี้จะเข้าหน้าติดตามหนี้ (AR) อัตโนมัติ</p>` }
+    ? { title: 'ยืนยันว่าออก INV แล้ว?', ok: '✓ อนุมัติ', html: `<p><b>${esc(v.company)}</b> · ${fmt(toNum(v.amountPreVat))}</p><p>เลข INV: <b class="mono">${esc(body.peakIvNo)}</b>${body.auto ? '<br><span class="small">ระบบจะอ่านวันที่ออกและลิงก์จาก PEAK และตรวจว่ายอดตรงกับคำขอนี้</span>' : ` · วันที่ ${esc(body.issueDate)}<br><span class="small">ลิงก์: ${esc(body.peakDocLink)}</span>`}</p><p class="small">Sales จะเห็นเลข INV และเปิดเอกสารได้ทันที · INV นี้จะเข้าหน้าติดตามหนี้ (AR) อัตโนมัติ</p>` }
     : { title: 'ตีกลับคำขอ INV นี้?', ok: 'ตีกลับ', kind: 'danger', html: `<p><b>${esc(v.company)}</b> · ${fmt(toNum(v.amountPreVat))}</p><p>เหตุผล: ${esc(body.note)}</p>` });
   if (!ok) return;
+  delete body.auto;
   try { await withLoading('กำลังบันทึก…', async () => { await api('/api/invoice-requests', { method: 'PATCH', body: JSON.stringify(body) }); await loadAll(); }); }
   catch (e) { $('ivm-' + id).innerHTML = `<span class="err-line">${esc(e.message)}</span>`; }
 }

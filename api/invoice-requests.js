@@ -437,13 +437,27 @@ async function update(req, res, user) {
       const ivNo = text(b.peakIvNo, 40).toUpperCase();
       if (!/^[A-Z]{1,6}-?\d{6,}$/.test(ivNo)) throw bad('ใส่เลข INV จาก PEAK เช่น IV-20261100014');
       // Accounting issues the INV from the QT in PEAK; approving here needs the link to that INV.
-      const link = text(b.peakDocLink, 500);
+      let link = text(b.peakDocLink, 500), fromPeak = null;
+      // Only the number given: read the date, link and id of that INV from PEAK (read-only).
+      if (!link && require('../lib/peak').mode() !== 'off') {
+        const iv = await require('../lib/peak').findInvoiceByCode(ivNo);
+        if (!iv || Number(iv.isVoid) === 1 || /void/i.test(iv.status || '')) throw bad(`ไม่พบ INV ${ivNo} ใน PEAK (หรือถูก void แล้ว) ตรวจเลขอีกครั้ง`, 404);
+        if (!/approve/i.test(iv.status || '')) throw bad(`INV ${ivNo} ใน PEAK ยังไม่อนุมัติ (สถานะ ${iv.status || '-'}) อนุมัติใน PEAK ก่อน`, 409);
+        if (!iv.documentLink) throw bad(`PEAK ไม่ส่งลิงก์ของ INV ${ivNo} มา ใส่ลิงก์เองในช่อง "ใส่วันที่และลิงก์เอง"`);
+        const want = n0(row.amountPreVat), got = n0(iv.preTaxAmount);
+        if (want > 0 && Math.abs(want - got) > 1 && !(n0(row.amountInclVat) > 0 && Math.abs(n0(row.amountInclVat) - n0(iv.netAmount)) <= 1)) {
+          throw bad(`ยอด INV ${ivNo} ใน PEAK (${money(got)} ก่อน VAT) ไม่ตรงกับคำขอนี้ (${money(want)}) ตรวจว่าใส่เลขถูกการ์ด ถ้าตั้งใจออกยอดนี้ ให้ใส่วันที่และลิงก์เอง`, 409);
+        }
+        const ymd = /^(\d{4})-?(\d{2})-?(\d{2})/.exec(String(iv.issuedDate || ''));
+        fromPeak = { id: iv.id, issueDate: ymd ? `${ymd[3]}/${ymd[2]}/${ymd[1]}` : '' };
+        link = iv.documentLink;
+      }
       if (!/^https:\/\/(doc|secure)\.peakaccount\.com\//.test(link)) throw bad('ใส่ลิงก์เอกสาร INV จาก PEAK (https://doc.peakaccount.com/… หรือ https://secure.peakaccount.com/…)');
       await assertDoc('INV', { no: ivNo, link, ref: row.ivRequestId, taxId: row.taxId });
       // Issue date as it is on the INV in PEAK (defaults to the date sales asked for).
-      const issueDate = dmy(text(b.issueDate, 10)) || row.wantedIssueDate;
+      const issueDate = (fromPeak && fromPeak.issueDate) || dmy(text(b.issueDate, 10)) || row.wantedIssueDate;
       if (!ar.parseDate(issueDate)) throw bad('ใส่วันที่ออก INV ตามเอกสารใน PEAK');
-      await issueInv(row, { ivNo, link, issueDate, note }, { checked: true });
+      await issueInv(row, { ivNo, link, issueDate, note, ...(fromPeak ? { peakIvId: fromPeak.id } : {}) }, { checked: true });
     }
     await hub.log('catalog', `iv_${b.action}`, id, `${user.email}${note ? ' · ' + note : ''}`);
     return res.status(200).json({ ok: true });

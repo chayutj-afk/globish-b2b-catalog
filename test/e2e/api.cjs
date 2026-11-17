@@ -448,5 +448,17 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
   ok(s === 400 && /เกินยอด QT/.test(j.error || ''), 'balance check counts the opening amount: ' + (j.error || s));
   [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { ivRequestId: exIds[0], action: 'iv_make' });
   ok(s === 200 && j.peakIvNo, 'INV Draft made from the adopted QT: ' + (j.error || j.peakIvNo));
+  console.log('── 12. INV made by hand in PEAK: the number alone is enough');
+  setPeak((p) => { p.invoices.push({ id: 'ivH1', code: 'IV-20261100901', status: 'Approve', isVoid: 0, preTaxAmount: 89000, netAmount: 95230, issuedDate: '20261118', dueDate: '20261218', documentLink: 'https://doc.peakaccount.com/invoice?emi=ivH1', products: [] },
+    { id: 'ivH2', code: 'IV-20261100902', status: 'Approve', isVoid: 0, preTaxAmount: 50000, netAmount: 53500, issuedDate: '20261118', documentLink: 'https://doc.peakaccount.com/invoice?emi=ivH2', products: [] },
+    { id: 'ivH3', code: 'IV-20261100903', status: 'Draft', isVoid: 0, preTaxAmount: 89000, netAmount: 95230, issuedDate: '20261118', documentLink: 'https://doc.peakaccount.com/invoice?emi=ivH3', products: [] }); });
+  const hand = (no) => call(ACCT, 'PATCH', '/api/invoice-requests', { ivRequestId: exIds[1], action: 'issued', peakIvNo: no });
+  [s, j] = await hand('IV-20261100999'); ok(s === 404, 'number not in PEAK refused: ' + (j.error || s));
+  [s, j] = await hand('IV-20261100903'); ok(s === 409 && /ยังไม่อนุมัติ/.test(j.error || ''), 'Draft INV refused');
+  [s, j] = await hand('IV-20261100902'); ok(s === 409 && /ไม่ตรงกับคำขอ/.test(j.error || ''), 'INV with another amount refused (wrong card)');
+  ok(ivr(exIds[1]).status === 'new', 'request untouched after the refusals');
+  [s, j] = await hand('IV-20261100901'); const hr = ivr(exIds[1]), ha = arRow('IV-20261100901');
+  ok(s === 200 && hr.status === 'iv_issued' && hr.peakIvNo === 'IV-20261100901' && /emi=ivH1/.test(hr.peakDocLink || ''), 'issued from the number: link read from PEAK ' + (j.error || ''));
+  ok(ha && ha.issueDate === '18/11/2026' && ha.peakIvId === 'ivH1', 'AR row with the PEAK issue date and id: ' + (ha && ha.issueDate + ' ' + ha.peakIvId));
   done();
 })().catch((e) => { console.error('CRASH', e); ok(false, 'CRASH: the run stopped early: ' + e.message); done(); process.exitCode = 1; });

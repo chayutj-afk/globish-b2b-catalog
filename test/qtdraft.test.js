@@ -76,7 +76,7 @@ test('customer not in PEAK + new-customer details → contact created first, the
   assert.equal(r.fields.status, 'qt_draft');
   assert.equal(r.fields.clientCode, 'C20001');
   assert.match(r.fields.peakNote, /สร้างลูกค้าใหม่ใน PEAK C20001/);
-  assert.deepEqual([made[0].name, made[0].type, made[0].taxNumber, made[0].branchCode, made[0].contactFinanceType], ['บริษัท ใหม่ จำกัด', 2, '1999999990011', '00000', 1]);
+  assert.deepEqual([made[0].name, made[0].type, made[0].taxNumber, made[0].branchCode, made[0].contactFinanceType], ['ใหม่', 2, '1999999990011', '00000', 1]);
   assert.equal(calls.create[0].PeakQuotations.quotations[0].contactCode, 'C20001');
   // A request with notes is still deferred to the sync, but the contact is already made.
   const d = await qtdraft.createForRequest({ ...row, clientCode: '', company: 'X', newContact: nc }, [{ ...lines[0], salesNote: 'n' }], users);

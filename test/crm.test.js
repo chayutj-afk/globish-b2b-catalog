@@ -9,6 +9,10 @@ test('Opportunity ID is normalised from typed text or a pasted CRM link', () => 
   assert.equal(normaliseOppId(' crm-opp-2026-00123 '), 'CRM-OPP-2026-00123');
   assert.equal(normaliseOppId('https://globish-b2b.s.frappe.cloud/app/opportunity/CRM-OPP-2025-01067'), 'CRM-OPP-2025-01067');
   assert.ok(!OPP_RE.test(normaliseOppId('OPP-123')));
+  // a lead that is not converted yet: the Lead ID, same shape
+  assert.equal(normaliseOppId('https://globish-b2b.s.frappe.cloud/app/lead/crm-lead-2026-14563'), 'CRM-LEAD-2026-14563');
+  assert.ok(OPP_RE.test('CRM-LEAD-2026-14563'));
+  assert.ok(!OPP_RE.test('CRM-DEAL-2026-14563'));
 });
 
 const qt = { segment: 'B2B', dealType: 'Retention', company: 'Co', taxId: '0105555555554', docLang: 'TH', wantedQtDate: '2026-11-15', creditTermDays: 30, whtRate: '3', customerEmail: 'a@b.co', items: [{ packageId: 'SPD-03-36', students: 10 }] };

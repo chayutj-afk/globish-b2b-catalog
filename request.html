@@ -36,6 +36,7 @@ details.more{margin-top:8px}details.more>summary{cursor:pointer;font-size:12.5px
 .inv-head b{font-size:14px;color:var(--head);font-weight:500}
 .opp{display:flex;align-items:center;gap:3px;flex-wrap:nowrap;min-width:0}
 .opp-pre{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--muted);margin-right:3px;white-space:nowrap}
+.opp select.opp-kind{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--head);background:var(--input);border:1px solid var(--line2);border-radius:6px;height:36px;padding:0 2px 0 6px;margin-right:4px;width:104px;min-width:104px;flex:0 0 104px;cursor:pointer}
 .opp-g{display:flex;gap:3px;flex:4 1 0;min-width:0}.opp-g+.opp-dash+.opp-g{flex:5 1 0}
 .opp .od{flex:1 1 0;min-width:0;max-width:32px;height:36px;padding:0;text-align:center;border:1px solid var(--line2);border-radius:4px;background:var(--input);color:var(--head);font-family:ui-monospace,Menlo,monospace;font-size:15px}
 .opp .od:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft)}
@@ -63,7 +64,7 @@ details.more{margin-top:8px}details.more>summary{cursor:pointer;font-size:12.5px
         <select id="q-segment" class="ctype" data-blank="1" onchange="changeSegment()"><option value="">— เลือกประเภทลูกค้า —</option><option value="B2B" data-code="G012-00002">B2B</option><option value="B2C" data-code="G012-00001">B2C</option><option value="B2S" data-code="G012-00003">B2S</option></select><div class="sub" id="q-type-sub"></div></div>
       <div class="fg"><label>ประเภทดีล</label>
         <select id="q-deal"><option value="New Logo">New Logo (ลูกค้าใหม่)</option><option value="Retention">Retention (ต่อสัญญา)</option><option value="Others">อื่นๆ</option></select></div>
-      <div class="fg" id="q-opp-wrap"><label id="q-opp-label">Opportunity ID ใน CRM *</label>
+      <div class="fg" id="q-opp-wrap"><label id="q-opp-label">Opportunity ID / Lead ID ใน CRM *</label>
         <div class="opp" id="q-opp" data-p="q"></div><input type="hidden" id="q-opp-y"><input type="hidden" id="q-opp-n"></div>
     </div>
     <div class="row c3" id="q-cls" hidden></div>
@@ -137,7 +138,7 @@ details.more{margin-top:8px}details.more>summary{cursor:pointer;font-size:12.5px
     <div id="i-balance"></div>
     <div class="row c4">
       <div class="fg"><label>ประเภทลูกค้า <span class="small">(PEAK)</span> *</label><select id="i-seg" class="ctype" data-blank="1" onchange="onInvSeg()"><option value="">— เลือก —</option><option value="B2B" data-code="G012-00002">B2B</option><option value="B2C" data-code="G012-00001">B2C</option><option value="B2S" data-code="G012-00003">B2S</option></select></div>
-      <div class="fg" id="i-opp-wrap"><label>Opportunity ID ใน CRM *</label><div class="opp" id="i-opp" data-p="i"></div><input type="hidden" id="i-opp-y"><input type="hidden" id="i-opp-n"></div>
+      <div class="fg" id="i-opp-wrap"><label>Opportunity ID / Lead ID ใน CRM *</label><div class="opp" id="i-opp" data-p="i"></div><input type="hidden" id="i-opp-y"><input type="hidden" id="i-opp-n"></div>
       <div class="fg"><label>เลขผู้เสียภาษีของลูกค้าตาม QT *</label><input id="i-tax" type="text" maxlength="13" inputmode="numeric" placeholder="13 หลัก" oninput="digits(this);taxHint('i')"><div class="sub" id="i-tax-hint"></div></div>
       <div class="fg"><label>รหัสสาขา</label><input id="i-branch" type="text" maxlength="5" inputmode="numeric" placeholder="00000" oninput="digits(this)"></div>
     </div>
@@ -323,21 +324,23 @@ const qtAmt = (q) => (q.vatMode === 'incl'
 // An INV request's amount: VAT-inclusive (with the pre-VAT part) when its QT is VAT-inclusive.
 const ivAmt = (v) => { const inc = toNum(v.amountInclVat); return inc && toNum(v.amountPreVat) && Math.abs(inc - toNum(v.amountPreVat) * 1.07) < 1 && ((REQS.find((x) => x.requestId === v.requestId)) || {}).vatMode === 'incl'
   ? { amt: inc, lbl: 'รวม VAT', sub: `ก่อน VAT ${fmt(toNum(v.amountPreVat))}` } : { amt: toNum(v.amountPreVat), lbl: 'ก่อน VAT', sub: '' }; };
-const normOpp = (v) => { const s = String(v || '').trim().toUpperCase(); const m = /CRM-OPP-\d{4}-\d{5}/.exec(s); return m ? m[0] : s.replace(/\s+/g, ''); };
-const OPP_OK = (s) => /^CRM-OPP-\d{4}-\d{5}$/.test(s);
+const normOpp = (v) => { const s = String(v || '').trim().toUpperCase(); const m = /CRM-(?:OPP|LEAD)-\d{4}-\d{5}/.exec(s); return m ? m[0] : s.replace(/\s+/g, ''); };
+const OPP_OK = (s) => /^CRM-(?:OPP|LEAD)-\d{4}-\d{5}$/.test(s);
 function digits(el) { const v = el.value.replace(/\D/g, ''); if (v !== el.value) el.value = v; }
 function oppInput(el, next) { digits(el); if (el.value.length === 4) $(next).focus(); }
 function oppPaste(e, p) {
   const t = (e.clipboardData || window.clipboardData).getData('text') || '';
   const m = /(\d{4})-(\d{5})/.exec(t);
-  if (m) { e.preventDefault(); setOpp(p, `CRM-OPP-${m[1]}-${m[2]}`); }
+  if (m) { e.preventDefault(); setOpp(p, `CRM-${/LEAD/i.test(t) ? 'LEAD' : oppKind(p)}-${m[1]}-${m[2]}`); }
 }
-function getOpp(p) { const y = $(p + '-opp-y').value, n = $(p + '-opp-n').value; return y || n ? `CRM-OPP-${y}-${n}` : ''; }
-function setOpp(p, id) { const m = /CRM-OPP-(\d{4})-(\d{5})/.exec(id || ''); $(p + '-opp-y').value = m ? m[1] : ''; $(p + '-opp-n').value = m ? m[2] : ''; paintOpp(p); }
+// The ID is the Opportunity's, or the Lead's while the lead is not converted yet (same shape, other prefix).
+const oppKind = (p) => { const k = $(p + '-opp').querySelector('.opp-kind'); return k && k.value === 'LEAD' ? 'LEAD' : 'OPP'; };
+function getOpp(p) { const y = $(p + '-opp-y').value, n = $(p + '-opp-n').value; return y || n ? `CRM-${oppKind(p)}-${y}-${n}` : ''; }
+function setOpp(p, id) { const m = /CRM-(OPP|LEAD)-(\d{4})-(\d{5})/.exec(id || ''); $(p + '-opp-y').value = m ? m[2] : ''; $(p + '-opp-n').value = m ? m[3] : ''; const k = $(p + '-opp').querySelector('.opp-kind'); if (k && m) k.value = m[1]; paintOpp(p); }
 // Opportunity ID as digit boxes: CRM-OPP- [□□□□]-[□□□□□]; the hidden p-opp-y / p-opp-n hold the values.
 function buildOpp(p) {
   const box = (k) => `<input class="od" data-k="${k}" type="text" inputmode="numeric" maxlength="1" aria-label="หลักที่ ${k + 1}" autocomplete="off">`;
-  $(p + '-opp').innerHTML = `<span class="opp-pre">CRM-OPP-</span><span class="opp-g">${[0, 1, 2, 3].map(box).join('')}</span><span class="opp-dash">–</span><span class="opp-g">${[4, 5, 6, 7, 8].map(box).join('')}</span>`;
+  $(p + '-opp').innerHTML = `<select class="opp-kind" aria-label="ชนิดของรหัส CRM" title="ใช้ Lead ID เมื่อ lead ยังไม่ได้ convert เป็น Opportunity"><option value="OPP">CRM-OPP-</option><option value="LEAD">CRM-LEAD-</option></select><span class="opp-g">${[0, 1, 2, 3].map(box).join('')}</span><span class="opp-dash">–</span><span class="opp-g">${[4, 5, 6, 7, 8].map(box).join('')}</span>`;
   const boxes = [...$(p + '-opp').querySelectorAll('.od')];
   const sync = () => { const d = boxes.map((b) => b.value).join(''); $(p + '-opp-y').value = d.slice(0, 4).trim(); $(p + '-opp-n').value = d.slice(4).trim(); };
   const fill = (digits, from) => { for (let k = from, j = 0; k < 9 && j < digits.length; k++, j++) boxes[k].value = digits[j]; sync(); boxes[Math.min(from + digits.length, 8)].focus(); };
@@ -351,6 +354,7 @@ function buildOpp(p) {
     b.addEventListener('paste', (e) => {
       const t = (e.clipboardData || window.clipboardData).getData('text') || '';
       const m = /(\d{4})\D?(\d{5})/.exec(t); const d = m ? m[1] + m[2] : t.replace(/\D/g, '');
+      const kd = /CRM-(OPP|LEAD)-/i.exec(t); if (kd) $(p + '-opp').querySelector('.opp-kind').value = kd[1].toUpperCase();
       if (d) { e.preventDefault(); fill(d.slice(0, 9), m ? 0 : k); }
     });
     b.addEventListener('focus', () => b.select());
@@ -536,7 +540,7 @@ function onSegment() {
   $('q-opp-wrap').hidden = !seg || !oppOf(seg);
   const T = typeOf(seg);
   if ($('q-type-sub')) $('q-type-sub').textContent = T ? `${T.vat === 'incl' ? 'ราคารวม VAT' : 'ราคาก่อน VAT'}${T.opp ? '' : ' · ไม่ต้องใส่ Opportunity ID'}` : '';
-  $('q-opp-label').textContent = 'Opportunity ID ใน CRM *';
+  $('q-opp-label').textContent = 'Opportunity ID / Lead ID ใน CRM *';
   const k = KINDS[seg];
   const add = [];
   if (k.includes('catalog') && !(ME && ME.catalog === false)) add.push('<a class="btn btn-o" href="/catalog?return=request" data-keep="1" onclick="saveDraft()">➕ เลือกจาก B2B Catalog</a>');
@@ -829,12 +833,12 @@ async function submitQT() {
     if (!/^\d{5}$/.test(nc.postCode)) return msg('q-msg', 'err', 'รหัสไปรษณีย์ลูกค้าใหม่ต้องมี 5 หลัก');
   }
   if (CART.some((it) => !KINDS[seg].includes(kindOf(it)))) return msg('q-msg', 'err', `มีรายการที่ลูกค้า ${seg} ใช้ไม่ได้ ลบออกก่อนส่ง`);
-  if (oppOf(seg) && !body.opportunityId) return msg('q-msg', 'err', `ใส่ Opportunity ID จาก CRM สำหรับลูกค้า ${seg}`);
+  if (oppOf(seg) && !body.opportunityId) return msg('q-msg', 'err', `ใส่ Opportunity ID หรือ Lead ID จาก CRM สำหรับลูกค้า ${seg}`);
   if (!body.wantedQtDate) return msg('q-msg', 'err', 'ใส่วันที่ต้องการให้ลงใน QT');
   if (body.creditTermDays === '') return msg('q-msg', 'err', 'ใส่เครดิตเทอม (วัน)');
   if (body.whtRate === '') return msg('q-msg', 'err', 'เลือกหัก ณ ที่จ่าย (ไม่หัก / 1% / 2% / 3% / 5%)');
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.customerEmail)) return msg('q-msg', 'err', 'ใส่อีเมลลูกค้าสำหรับส่งเอกสาร');
-  if (body.opportunityId && !OPP_OK(body.opportunityId)) return msg('q-msg', 'err', 'Opportunity ID ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN');
+  if (body.opportunityId && !OPP_OK(body.opportunityId)) return msg('q-msg', 'err', 'รหัส CRM ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN หรือ CRM-LEAD-YYYY-NNNNN');
   if (body.taxId.length !== 13) return msg('q-msg', 'err', 'กรอกเลขประจำตัวผู้เสียภาษี 13 หลัก (บังคับทุกกลุ่มลูกค้า บุคคลธรรมดาใช้เลขบัตรประชาชน)');
   if (!/^\d{5}$/.test(body.branch)) return msg('q-msg', 'err', 'เลือกหรือกรอกรหัสสาขา 5 หลัก');
   const badSvc = CART.find((it) => kindOf(it) === 'service' && it.svc !== 'ok' && it.svc !== 'inactive');
@@ -1042,8 +1046,8 @@ async function submitINV() {
   if (body.taxId.length !== 13) return msg('i-msg', 'err', 'กรอกเลขผู้เสียภาษี 13 หลักของลูกค้าตาม QT');
   if (!body.segment) return msg('i-msg', 'err', 'เลือกกลุ่มลูกค้า');
   if (body.whtRate === '') return msg('i-msg', 'err', 'เลือกหัก ณ ที่จ่าย (ไม่หัก / 1% / 2% / 3% / 5%)');
-  if (oppOf(body.segment) && !body.opportunityId) return msg('i-msg', 'err', `ใส่ Opportunity ID จาก CRM สำหรับลูกค้า ${body.segment}`);
-  if (body.opportunityId && !OPP_OK(body.opportunityId)) return msg('i-msg', 'err', 'Opportunity ID ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN');
+  if (oppOf(body.segment) && !body.opportunityId) return msg('i-msg', 'err', `ใส่ Opportunity ID หรือ Lead ID จาก CRM สำหรับลูกค้า ${body.segment}`);
+  if (body.opportunityId && !OPP_OK(body.opportunityId)) return msg('i-msg', 'err', 'รหัส CRM ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN หรือ CRM-LEAD-YYYY-NNNNN');
   const badInv = INVS.findIndex((x) => !x.students || !x.wantedIssueDate || x.creditTermDays === '' || x.creditTermDays === undefined);
   if (badInv >= 0) return msg('i-msg', 'err', `INV ใบที่ ${badInv + 1}: ใส่จำนวนผู้เรียน วันที่ต้องการให้ลงใน INV และเครดิตเทอมให้ครบ`);
   const f = $('i-file').files[0];

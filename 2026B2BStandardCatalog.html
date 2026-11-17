@@ -2196,7 +2196,7 @@ let LAST_CALC = null;
 let CART = [];
 const CART_KEY = 'gc_quote_cart_v1';
 const SUPP_LABELS = ['Hero tickets','Hero duration','Private Class','Discussion Class','Speedy English','GB+: AI','GB+: LI','Engoo Standard','Engoo Premium Lite','VPA','VPA+','GECB 2 Skills','GECB 4 Skills','Workshop','Master Class','Business Simulation'];
-const normOpp = (v) => { const s = String(v || '').trim().toUpperCase(); const m = /CRM-OPP-\d{4}-\d{5}/.exec(s); return m ? m[0] : s.replace(/\s+/g, ''); };
+const normOpp = (v) => { const s = String(v || '').trim().toUpperCase(); const m = /CRM-(?:OPP|LEAD)-\d{4}-\d{5}/.exec(s); return m ? m[0] : s.replace(/\s+/g, ''); };
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
 function loadCart() {

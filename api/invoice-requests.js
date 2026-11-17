@@ -91,7 +91,7 @@ function validate(b) {
   };
   if (!r.qtNo) throw bad('ใส่เลขที่ใบเสนอราคา (QT) ที่ต้องการออก INV');
   if (!['0', '1', '2', '3', '5'].includes(r.whtRate)) throw bad('เลือกหัก ณ ที่จ่าย (ไม่หัก / 1% / 2% / 3% / 5%)');
-  if (r.opportunityId && !OPP_RE.test(r.opportunityId)) throw bad('Opportunity ID ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN');
+  if (r.opportunityId && !OPP_RE.test(r.opportunityId)) throw bad('Opportunity ID / Lead ID ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN หรือ CRM-LEAD-YYYY-NNNNN');
   checkEntity(r, 'ลูกค้าตาม QT');
   if (!EVIDENCE.includes(r.evidenceType)) throw bad('เลือกประเภทหลักฐานที่ลูกค้ายอมรับ');
   if (r.evidenceType === 'อื่นๆ' && !r.evidenceOther) throw bad('ระบุว่าหลักฐานเป็นเอกสารอะไร');
@@ -196,7 +196,7 @@ async function create(req, res, user) {
   const basis = incl ? 'รวม VAT' : 'ก่อน VAT';
   // CRM Opportunity ID: as the customer type says (B2S has none).
   if (ctype.opp === false) r.opportunityId = '';
-  else if (!r.opportunityId) throw bad(`ใส่ Opportunity ID จาก CRM (CRM-OPP-YYYY-NNNNN) สำหรับลูกค้า ${ctype.name}`);
+  else if (!r.opportunityId) throw bad(`ใส่ Opportunity ID หรือ Lead ID จาก CRM (CRM-OPP-YYYY-NNNNN / CRM-LEAD-YYYY-NNNNN) สำหรับลูกค้า ${ctype.name}`);
 
   // Same QT + same billed tax ID + same amount already requested (not rejected) → probably sent twice.
   if (b.confirmDuplicate !== true) {

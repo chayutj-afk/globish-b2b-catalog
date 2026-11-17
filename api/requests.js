@@ -64,8 +64,8 @@ function validate(b, type) {
   r.segment = type.name;
   if (!DEAL_TYPES.includes(r.dealType)) throw bad('เลือกประเภทดีล (New Logo / Retention / Others)');
   if (!type.opp) r.opportunityId = '';
-  if (r.opportunityId && !OPP_RE.test(r.opportunityId)) throw bad('Opportunity ID ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN');
-  if (type.opp && !r.opportunityId) throw bad(`ใส่ Opportunity ID จาก CRM (CRM-OPP-YYYY-NNNNN) สำหรับลูกค้า ${r.segment}`);
+  if (r.opportunityId && !OPP_RE.test(r.opportunityId)) throw bad('Opportunity ID / Lead ID ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN หรือ CRM-LEAD-YYYY-NNNNN');
+  if (type.opp && !r.opportunityId) throw bad(`ใส่ Opportunity ID หรือ Lead ID จาก CRM (CRM-OPP-YYYY-NNNNN / CRM-LEAD-YYYY-NNNNN) สำหรับลูกค้า ${r.segment}`);
   if (!r.company) throw bad('กรอกชื่อบริษัทหรือหน่วยงาน');
   // The 13-digit tax ID (+ branch) is the single source of truth for the customer in every segment.
   // Client code is only a hint; the PEAK sync matches on tax ID and flags a mismatch.

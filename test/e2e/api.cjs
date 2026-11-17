@@ -522,5 +522,10 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
   setPeak((p) => { p.quotations.find((x) => x.id === r17.peakQtId).status = 'Approve'; });
   [s, j] = await hook('quotation', { PeakQuotations: { quotations: [staleQ] }, eventType: 'Edit' });
   ok(j.results[0] === 'approved' && req(q17).status === 'qt_approved', 'looked again and approved the QT: ' + j.results[0]);
+  console.log('── 18. a Void event is believed even when the payload still shows the old status');
+  { const v = db().InvoiceRequests.find((x) => x.status === 'iv_issued' && x.peakIvId && x.ivRequestId === tw[1]);
+    const doc = { ...peak().invoices.find((y) => y.id === v.peakIvId) }; // status still "Approve", isVoid 0
+    [s, j] = await hook('invoice', { PeakInvoices: { invoices: [doc] }, eventType: 'Void' });
+    ok(arRow(v.peakIvNo).docStatus === 'Cancelled' && ivr(tw[1]).status === 'iv_void', 'INV taken out of AR on the Void event: ' + j.results[0]); }
   done();
 })().catch((e) => { console.error('CRASH', e); ok(false, 'CRASH: the run stopped early: ' + e.message); done(); process.exitCode = 1; });

@@ -269,13 +269,17 @@ function renderKpi() {
   $('s-over').textContent = fmt0(k.overdue); $('s-over-n').textContent = `${k.overdueCount} ใบ${tag}`;
   // This week: what has come in already against everything due in (received + still waiting).
   const w = k.forecast.weeks[0] || {}, wEnd = (D.summary.forecast.weeks[0] || {}).weekEnd || '';
-  const got = rowsFor('all', true).filter((r) => r.state === 'Paid' && wEnd && r.paidWeek === wEnd);
-  const inAmt = got.reduce((t, r) => t + (Number(String(r.paidAmount ?? '').replace(/,/g, '')) || Number(r.expected) || 0), 0);
-  const wait = Number(w.expected) || 0, total = inAmt + wait, pct = total > 0 ? Math.round(inAmt / total * 100) : 0;
+  // "In" = the money has a received date in this week AND its receipt has been issued. Money recorded
+  // this week whose receipt is not out yet still counts toward the week's total, shown as waiting for a receipt.
+  const amt = (xs) => xs.reduce((t, r) => t + (Number(String(r.paidAmount ?? '').replace(/,/g, '')) || Number(r.expected) || 0), 0);
+  const paidWk = rowsFor('all', true).filter((r) => r.state === 'Paid' && wEnd && r.paidWeek === wEnd);
+  const got = paidWk.filter((r) => String(r.rtNo || '').trim()), noRt = paidWk.filter((r) => !String(r.rtNo || '').trim());
+  const inAmt = amt(got);
+  const wait = Number(w.expected) || 0, total = inAmt + amt(noRt) + wait, pct = total > 0 ? Math.round(inAmt / total * 100) : 0;
   $('s-week').textContent = fmt0(total);
   $('s-week-bar').style.width = pct + '%';
   $('s-week-p').innerHTML = `เข้าแล้ว <b>${fmt0(inAmt)}</b> / ${fmt0(total)} (${pct}%)`;
-  $('s-week-n').textContent = `ยังรอ ${w.count || 0} ใบ · สัปดาห์ถึง ${w.weekEnd || wEnd}${tag}`;
+  $('s-week-n').textContent = `ยังรอ ${w.count || 0} ใบ${noRt.length ? ` · รับเงินแล้วรอใบเสร็จ ${noRt.length} ใบ` : ''} · สัปดาห์ถึง ${w.weekEnd || wEnd}${tag}`;
   $('s-avg').textContent = k.avgDaysToPay ? k.avgDaysToPay + ' วัน' : '–';
 }
 

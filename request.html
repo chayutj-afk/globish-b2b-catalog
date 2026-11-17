@@ -194,6 +194,10 @@ details.more{margin-top:8px}details.more>summary{cursor:pointer;font-size:12.5px
     <p class="hint">ขอใบเสร็จ / ใบกำกับภาษีหลังลูกค้าชำระเงิน สำหรับรายการที่<b>ไม่มี INV</b> (ส่วนใหญ่ B2C / B2E ที่จ่ายผ่าน Whitehouse) เลขเอกสารจะขึ้นในหน้า "คำขอของฉัน"</p>
     <div class="msg info">ลูกค้าที่มี INV แล้ว (เช่น B2B) <b>ไม่ต้องกรอกฟอร์มนี้</b> เมื่อบันทึกรับเงินแล้ว ฝ่ายบัญชีจะออกใบเสร็จจาก INV ให้ และเลขใบเสร็จจะขึ้นในคำขอ INV ของคุณ</div>
     <div class="row c3">
+      <div class="fg" style="grid-column:span 2"><label>อ้างอิงใบเสนอราคา (ถ้ามี QT แต่ลูกค้าจ่ายเลย ไม่ออก INV)</label><select id="r-qt" onchange="onRtQT()"><option value="">— ไม่มี QT (เช่น จ่ายผ่าน Whitehouse) —</option></select><div class="sub">เลือกแล้วระบบเติมชื่อ เลขภาษี สาขา และยอดจาก QT ให้ แก้ได้ถ้าไม่ตรง</div></div>
+      <div class="fg" id="r-qtno-wrap" hidden><label>เลขที่ QT นอกระบบ *</label><input id="r-qtno" type="text" maxlength="40" placeholder="QO-2026110001"></div>
+    </div>
+    <div class="row c3">
       <div class="fg"><label>ประเภทลูกค้า <span class="small">(PEAK)</span> *</label><select id="r-seg" class="ctype" onchange="onRtSeg()"><option value="B2C" data-code="G012-00001">B2C</option><option value="B2B" data-code="G012-00002">B2B</option><option value="B2S" data-code="G012-00003">B2S</option></select></div><div class="fg" id="r-cls-w"></div>
       <div class="fg"><label>ประเภทเอกสาร *</label><select id="r-kind" onchange="onRtKind()"><option value="company">ใบเสร็จ/ใบกำกับภาษี ในนามบริษัท</option><option value="person">ใบเสร็จ/ใบกำกับภาษี ในนามบุคคล</option></select></div>
       <div class="fg"><label>ภาษาเอกสาร</label><select id="r-lang"><option value="TH">ภาษาไทย</option><option value="EN">English</option></select></div>
@@ -967,7 +971,25 @@ function fillQTPicker() {
     return `<option value="${esc(q.requestId)}"${ed ? ' disabled' : ''}>${esc(q.peakQtNo || q.requestId)} · ${esc(q.company)} · ${ed ? 'รอฝ่ายบัญชีแก้ QT ขอ INV ยังไม่ได้' : `คงเหลือ ${fmt(qtLeft(q))} (${qtAmt(q).lbl})`}</option>`;
   }).join('') + '<option value="__ext">QT นอกระบบ (ออกใน PEAK เอง ไม่ได้ขอผ่านระบบ)</option>';
   sel.value = keep;
+  // Receipt form: a QT the customer paid straight away, with no INV.
+  const rs = $('r-qt'), rk = rs.value;
+  rs.innerHTML = '<option value="">— ไม่มี QT (เช่น จ่ายผ่าน Whitehouse) —</option>' + REQS.filter((q) => QT_LIVE.includes(q.status) && q.peakQtNo && (qtLeft(q) > 0.01 || q.requestId === rk)).map((q) =>
+    `<option value="${esc(q.requestId)}">${esc(q.peakQtNo)} · ${esc(q.company)} · คงเหลือ ${fmt(qtLeft(q))} (${qtAmt(q).lbl})</option>`).join('') + '<option value="__ext">QT นอกระบบ (ออกใน PEAK เอง ไม่ได้ขอผ่านระบบ)</option>';
+  rs.value = rk;
 }
+function onRtQT() {
+  const pick = $('r-qt').value, q = REQS.find((x) => x.requestId === pick);
+  $('r-qtno-wrap').hidden = pick !== '__ext';
+  if (!q) return;
+  if (q.segment && [...$('r-seg').options].some((o) => o.value === q.segment)) { $('r-seg').value = q.segment; onRtSeg(); }
+  $('r-kind').value = 'company'; onRtKind();
+  $('r-tax').value = q.taxId || ''; $('r-branch').value = q.branch || '00000'; $('r-name').value = q.company || '';
+  if (q.whtRate !== undefined && q.whtRate !== '' && [...$('r-wht').options].some((o) => o.value === String(q.whtRate))) $('r-wht').value = String(q.whtRate);
+  $('r-price').value = qtLeft(q) > 0 ? qtLeft(q) : '';
+  if (q.customerEmail && !$('r-email').value) $('r-email').value = q.customerEmail;
+  taxHintEl($('r-tax-hint'), $('r-tax').value);
+}
+const rtQtNo = () => { const pick = $('r-qt').value; if (pick === '__ext') return $('r-qtno').value.trim().toUpperCase(); const q = REQS.find((x) => x.requestId === pick); return q ? q.peakQtNo : ''; };
 // PEAK API on: check the picked QT against PEAK (it may have been edited there) before pricing the INV.
 let QT_FRESH = {};
 async function freshenQT(q) {
@@ -1326,6 +1348,7 @@ const RT_ST = { new: ['รอฝ่ายบัญชีออก', 'new'], rt_d
 const ED_ST = { new: ['รอฝ่ายบัญชีแก้', 'new'], done: ['แก้แล้ว', 'green'], rejected: ['ตีกลับ', 'red'] };
 // Receipt request that replaces a receipt Whitehouse already issued: the old number, read from the reference.
 const oldRt = (r) => { const m = /^ใบเสร็จเดิม\s+([A-Z0-9-]+)/i.exec(String((r && r.refDoc) || '')); return m ? m[1].toUpperCase() : ''; };
+const qtRef = (r) => { const m = /(?:^|· )QT\s+([A-Z0-9-]+)/i.exec(String((r && r.refDoc) || '')); return m ? m[1].toUpperCase() : ''; };
 function onRtSeg() { $('r-price-l').textContent = `ราคาขาย ${basisOf($('r-seg').value)} (ก่อนหักส่วนลด) *`; }
 function onRtKind() { const per = $('r-kind').value === 'person'; $('r-branch-wrap').hidden = per; $('r-tax-l').textContent = per ? 'เลขบัตรประชาชน (13 หลัก) *' : 'เลขประจำตัวผู้เสียภาษี (13 หลัก) *'; }
 function onRtCh() { const c = $('r-ch').value; $('r-email-wrap').hidden = !/email/.test(c); $('r-dlv-wrap').hidden = !/post/.test(c); }
@@ -1342,12 +1365,13 @@ function taxHintEl(el, t) { el.textContent = t.length === 13 && !validTax(t) ? '
 async function submitRT() {
   const v = (id) => $(id).value.trim();
   const body = { action: 'receipt', segment: v('r-seg'), customerType: ($('r-seg').selectedOptions[0] || { dataset: {} }).dataset.code || '', classPicks: Object.fromEntries((CLS || []).map((g) => [g.code, ($('rcls-' + g.code) || {}).value || ''])), docKind: v('r-kind'), docLang: v('r-lang'), taxId: v('r-tax'), branch: v('r-kind') === 'person' ? '00000' : v('r-branch').padStart(5, '0'),
-    billName: v('r-name'), address: v('r-addr'), whStudent: v('r-stu'), packages: v('r-pkg'), refDoc: [v('r-oldrt') ? 'ใบเสร็จเดิม ' + v('r-oldrt').toUpperCase() : '', v('r-ref') ? (/^\d+$/.test(v('r-ref')) ? 'Order ' + v('r-ref') : v('r-ref')) : ''].filter(Boolean).join(' · '), description: v('r-desc'),
+    billName: v('r-name'), address: v('r-addr'), whStudent: v('r-stu'), packages: v('r-pkg'), refDoc: [v('r-oldrt') ? 'ใบเสร็จเดิม ' + v('r-oldrt').toUpperCase() : '', rtQtNo() ? 'QT ' + rtQtNo() : '', v('r-ref') ? (/^\d+$/.test(v('r-ref')) ? 'Order ' + v('r-ref') : v('r-ref')) : ''].filter(Boolean).join(' · '), description: v('r-desc'),
     price: v('r-price'), discount: v('r-disc'), whtRate: v('r-wht'), paidDate: v('r-paid'), deliveryChannel: v('r-ch'), email: v('r-email'), deliveryAddress: v('r-dlv'), note: v('r-note') };
   const need = [[body.taxId.length === 13, 'กรอกเลข 13 หลัก'], [body.billName, 'ใส่ชื่อที่ออกในเอกสาร'], [body.address, 'ใส่ที่อยู่ตามเอกสาร'],
     [!whNeeded(body.segment) || body.whStudent, 'ใส่ชื่อ / ID ผู้เรียนใน Whitehouse'], [!whNeeded(body.segment) || body.packages, 'ใส่ Package ID / รหัสคอร์ส'], [body.packages || body.description, 'ใส่ชื่อคอร์ส / รายละเอียดที่ให้ขึ้นในเอกสาร'],
     [toNum(body.price) > 0, 'ใส่ราคาขาย'], [body.whtRate !== '', 'เลือกหัก ณ ที่จ่าย'], [body.paidDate, 'ใส่วันที่ลูกค้าชำระ'],
     [!/email/.test(body.deliveryChannel) || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email), 'ใส่อีเมลลูกค้าให้ถูกต้อง']];
+  need.push([$('r-qt').value !== '__ext' || rtQtNo(), 'ใส่เลขที่ QT นอกระบบ']);
   const miss = need.find((x) => !x[0]); if (miss) return msg('r-msg', 'err', miss[1]);
   const f = $('r-file').files[0]; if (f && f.size > 3 * 1024 * 1024) return msg('r-msg', 'err', 'ไฟล์ใหญ่เกิน 3 MB');
   const net = toNum(body.price) - toNum(body.discount);
@@ -1358,7 +1382,8 @@ async function submitRT() {
     const d = await withLoading('กำลังส่งคำขอใบเสร็จ…', () => postChecked('/api/invoice-requests', body, true));
     if (!d) { msg('r-msg', 'info', 'ยังไม่ได้ส่ง'); return; }
     $('r-msg').innerHTML = `<div class="done-card"><b>✓ ส่งคำขอ ${esc(d.rtRequestId)} แล้ว</b><div style="margin:6px 0 10px">${esc(d.message)}</div><button class="btn btn-o btn-sm" onclick="go('mine');setMine('rt',document.querySelectorAll('#mine-seg button')[2])">ดูในคำขอของฉัน</button></div>`;
-    ['r-tax', 'r-branch', 'r-name', 'r-addr', 'r-stu', 'r-pkg', 'r-ref', 'r-oldrt', 'r-desc', 'r-price', 'r-disc', 'r-wht', 'r-paid', 'r-email', 'r-dlv', 'r-note'].forEach((id) => { $(id).value = ''; }); $('r-file').value = ''; $('r-tax-hint').textContent = '';
+    $('r-qt').value = ''; $('r-qtno-wrap').hidden = true;
+    ['r-qtno', 'r-tax', 'r-branch', 'r-name', 'r-addr', 'r-stu', 'r-pkg', 'r-ref', 'r-oldrt', 'r-desc', 'r-price', 'r-disc', 'r-wht', 'r-paid', 'r-email', 'r-dlv', 'r-note'].forEach((id) => { $(id).value = ''; }); $('r-file').value = ''; $('r-tax-hint').textContent = '';
     loadAll();
   } catch (e) { msg('r-msg', 'err', e.message); } finally { btn.disabled = false; }
 }
@@ -1436,6 +1461,7 @@ function renderPendingMore() {
   const F = (label, val) => (val ? `<div class="f"><span>${label}</span><b>${val}</b></div>` : '');
   const card = (r) => `<div class="pcard"><div class="pc-body"><div class="pc-top"><div class="pc-title">${esc(r.billName)}<small>${esc(r.rtRequestId)} · ${esc(r.createdAt)} · โดย ${esc(r.salesName)}</small></div><div class="pc-amt"><b>${fmt(toNum(r.price) - toNum(r.discount))}</b><span>ราคาหลังส่วนลด</span></div></div>
     <div class="facts">${F('ประเภท', esc(r.docKind))}${F('กลุ่ม', esc(r.segment))}${F('เลขภาษี / สาขา', esc(r.taxId) + ' / ' + esc(r.branch))}${F('ผู้เรียน WH', esc(r.whStudent))}${F('Package', esc(r.packages))}${F('ราคา / ส่วนลด', fmt(toNum(r.price)) + (toNum(r.discount) ? ' / ' + fmt(toNum(r.discount)) : ''))}${F('หัก ณ ที่จ่าย', whtShort(r.whtRate))}${F('ชำระเมื่อ', esc(r.paidDate))}${F('อ้างอิง', esc(r.refDoc))}${F('ส่งเอกสาร', esc(r.deliveryChannel) + (r.email ? ' · ' + esc(r.email) : ''))}${F('ภาษา', esc(r.docLang))}${F('หลักฐาน', /^https:\/\//.test(r.paymentProof || '') ? `<a href="${esc(r.paymentProof)}" target="_blank" rel="noopener">เปิดดู ↗</a>` : '')}</div>
+    ${qtRef(r) ? `<div class="pc-note"><b>📄 ออกใบเสร็จจาก QT ${(() => { const q = REQS.find((x) => String(x.peakQtNo).toUpperCase() === qtRef(r)); return q ? docLink(q.peakQtNo, q.peakDocLink) : esc(qtRef(r)) + ' (นอกระบบ)'; })()}</b> · ลูกค้าจ่ายเลยโดยไม่ออก INV · ตรวจว่ายอดนี้ยังไม่เคยออก INV จาก QT ใบเดียวกัน</div>` : ''}
     ${oldRt(r) ? `<div class="pc-note warn"><b>♻️ ออกแทนใบเสร็จเดิม ${esc(oldRt(r))}</b> · WH ออกใบเสร็จใบนี้ไปแล้ว (ชื่อเดิม) ให้ยกเลิกใบเดิม แล้วออกใหม่<b>เลขเดิม</b>ตามชื่อและที่อยู่ในคำขอนี้</div>` : ''}
     <div class="pc-note">ที่อยู่: ${esc(r.address)}${r.deliveryAddress ? '<br>ส่งที่: ' + esc(r.deliveryAddress) : ''}${r.description ? '<br>รายละเอียด: ' + esc(r.description) : ''}${r.note ? '<br>💬 ' + esc(r.note) : ''}</div></div>`;
   const paidHtml = paidI.length ? `<div class="sec-h">รับเงินแล้ว รอออกใบเสร็จจาก INV <span class="n">${paidI.length} รายการ</span></div>${PEAK_LIVE ? `<p style="margin:0 0 8px"><button class="btn btn-o btn-sm" type="button" onclick="rtFindAll()">🔎 หาใบเสร็จที่ออกใน PEAK ไว้แล้ว (${paidI.length} ใบ)</button> <span class="small">ใบที่ PEAK มีใบเสร็จอยู่แล้ว ระบบจะเติมเลขให้และเอาออกจากคิวนี้ ไม่สร้างอะไรใน PEAK</span></p>` : ''}<p class="hint">ยืนยันเงินเข้าแล้ว (เซลแจ้ง หรือบัญชีบันทึกเอง) ${PEAK_LIVE ? 'เลือกบัญชีที่เงินเข้าแล้วสร้างใบเสร็จ Draft ใน PEAK' : 'ออกใบเสร็จจาก INV ใน PEAK แล้วใส่เลขและลิงก์'} ช่องทางส่งตั้งตามที่เซลแจ้งไว้</p>` + paidI.map((v) => { const k = esc(v.peakIvNo); return `<div class="pcard"><div class="pc-body"><div class="pc-top"><div class="pc-title">${esc(v.company)}<small>${docLink(v.peakIvNo, v.peakDocLink)} · ${esc(v.salesName)}</small></div><div class="pc-amt"><b>${fmt(toNum(v.ar.paidAmount))}</b><span>รับเงิน ${esc(v.ar.paidDate)}${v.ar.paymentMethod ? ' · ' + esc(PAY_METHOD_TH[v.ar.paymentMethod] || v.ar.paymentMethod) : ''}</span></div></div>${v.payNotice ? `<div class="pc-note small">${v.payNotice.source === 'sales' ? `แจ้งโดย ${esc(v.payNotice.salesName)}` : 'ลูกค้าแจ้งบัญชีโดยตรง'}${/^https:\/\//.test(v.payNotice.slipLink || '') ? ` · <a href="${esc(v.payNotice.slipLink)}" target="_blank" rel="noopener">ดูสลิป ↗</a>` : ''}</div>` : ''}</div>

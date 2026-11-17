@@ -9,7 +9,7 @@
 
 const crypto = require('crypto');
 const { checkOrigin, sendError } = require('../lib/session');
-const { requireUser, can, visibility } = require('../lib/users');
+const { requireUser, can, visibility, docLinkFor } = require('../lib/users');
 const users = require('../lib/users');
 // Requests that no longer count (turned down, or their INV / receipt voided in PEAK).
 const DEAD = new Set(['rejected', 'iv_void', 'rt_void']);
@@ -1111,7 +1111,7 @@ async function createReceipt(req, res, user) {
 async function listReceipts(req, res, user) {
   const rows = await hub.readTable('ReceiptRequests');
   const sees = await visibility(user);
-  const out = rows.filter((r) => sees(r.requestedBy)).reverse().slice(0, 150).map(({ _row, ...r }) => r);
+  const out = rows.filter((r) => sees(r.requestedBy)).reverse().slice(0, 150).map(({ _row, ...r }) => docLinkFor(user, 'RT', r));
   res.status(200).json({ ok: true, requests: out });
 }
 
@@ -1464,7 +1464,7 @@ async function list(req, res, user) {
       const e = ar.enrich(a, today);
       return { ...r, ar: { state: e.state, dueDate: e.dueDate, expected: e.expected, paidDate: a.paidDate, paidAmount: a.paidAmount, paymentMethod: a.paymentMethod, rtNo: a.rtNo, daysOverdue: e.daysOverdue, commitDate: a.commitDate, followStatus: a.followStatus } };
     });
-  res.status(200).json({ ok: true, uploads: drive.enabled(), requests: out });
+  res.status(200).json({ ok: true, uploads: drive.enabled(), requests: out.map((r) => docLinkFor(user, 'INV', r)) });
 }
 
 module.exports = (req, res) => require('../lib/hub').scope(req, () => inner(req, res));

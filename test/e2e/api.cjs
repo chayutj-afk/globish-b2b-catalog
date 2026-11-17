@@ -501,5 +501,18 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
   setPeak((p) => { const x = p.invoices.find((y) => y.id === lag.peakIvId); x.status = 'Approve'; }); // …while PEAK is approved a moment later
   [s, j] = await hook('invoice', { PeakInvoices: { invoices: [stale] }, eventType: 'Edit' });
   ok(/issued/.test(j.results[0]) && ivr(tw[1]).status === 'iv_issued' && arRow(ivr(tw[1]).peakIvNo), 'looked again and issued it, no "check status" needed: ' + j.results[0]);
+  console.log('── 16. the PEAK link of a Draft is for accounting only (QT, INV, receipt)');
+  [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { ivRequestId: tw[2], action: 'iv_make' }); ok(s === 200 && ivr(tw[2]).peakDocLink, 'third request: Draft with a link in the sheet ' + (j.error || ''));
+  const seeIv = async (who) => ((await call(who, 'GET', '/api/invoice-requests'))[1].requests || []);
+  let mineIv = await seeIv(BENZ);
+  ok(mineIv.find((x) => x.ivRequestId === tw[2]).peakDocLink === '' && mineIv.find((x) => x.ivRequestId === tw[2]).peakIvNo, 'sales: INV Draft shows its number, no link');
+  ok(mineIv.find((x) => x.ivRequestId === tw[1]).peakDocLink, 'sales: issued INV has its link');
+  ok((await seeIv(ACCT)).find((x) => x.ivRequestId === tw[2]).peakDocLink, 'accounting: Draft link kept');
+  const allQ = db().Requests, dq = allQ.find((x) => x.status === 'qt_draft' && x.peakDocLink && x.requestedBy === 'benz@globish.co.th'), aq = allQ.find((x) => x.status === 'qt_approved' && x.peakDocLink && x.requestedBy === 'benz@globish.co.th');
+  [s, j] = await call(BENZ, 'GET', '/api/requests'); const qs = j.requests || [];
+  ok(!dq || qs.find((x) => x.requestId === dq.requestId).peakDocLink === '', 'sales: QT Draft has no link' + (dq ? '' : ' (no QT Draft in the data: skipped)'));
+  ok(!aq || !!qs.find((x) => x.requestId === aq.requestId).peakDocLink, 'sales: approved QT has its link' + (aq ? '' : ' (skipped)'));
+  const rtRows = db().ReceiptRequests; [s, j] = await call(BENZ, 'GET', '/api/invoice-requests?view=receipts');
+  ok((j.requests || []).every((x) => x.status === 'issued' || !x.peakDocLink), 'sales: receipts that are not issued carry no link (' + rtRows.filter((x) => x.status !== 'issued' && x.peakDocLink).length + ' Draft receipts with a link in the sheet)');
   done();
 })().catch((e) => { console.error('CRASH', e); ok(false, 'CRASH: the run stopped early: ' + e.message); done(); process.exitCode = 1; });

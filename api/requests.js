@@ -5,7 +5,7 @@
 
 const crypto = require('crypto');
 const { checkOrigin, sendError } = require('../lib/session');
-const { requireUser, can, visibility } = require('../lib/users');
+const { requireUser, can, visibility, docLinkFor } = require('../lib/users');
 const { priceItem, priceCustomKeyHS, priceService, priceSurcharge, vatIncluded, vatSplit } = require('../lib/pricing');
 const { validTaxId, normBranch } = require('../lib/taxid');
 const hub = require('../lib/hub');
@@ -246,7 +246,7 @@ async function list(req, res, user) {
   lines.filter((l) => ids.has(l.requestId)).forEach((l) => { (byId[l.requestId] = byId[l.requestId] || []).push(l); });
   res.status(200).json({
     ok: true, peakLive: peak.mode() !== 'off',
-    requests: mine.map(({ _row, _createdMs, _invoicedPreVat, _remainingPreVat, ...r }) => ({ ...r,
+    requests: mine.map(({ _row, _createdMs, _invoicedPreVat, _remainingPreVat, ...r0 }) => docLinkFor(user, 'QT', r0)).map((r) => ({ ...r,
       // AG empty (rows from before the VAT split): the segment decides.
       vatMode: r.vatMode || (vatIncluded(r.segment) ? 'incl' : 'excl'),
       newContact: r.newContact && !r.clientCode ? require('../lib/newcontact').summary(require('../lib/newcontact').parse(r.newContact)) : '',

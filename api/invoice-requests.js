@@ -213,7 +213,8 @@ async function create(req, res, user) {
   }
 
   // Balance check: never silently bill more than the QT.
-  const prior = alreadyInvoiced(existing, r, incl);
+  const opening = linked ? n0(linked.openingInvoiced) : 0;
+  const prior = round2(alreadyInvoiced(existing, r, incl) + (incl ? round2(opening * 1.07) : opening));
   const asked = round2(invoices.reduce((s, v) => s + v.amount, 0));
   const qtTotal = !linked ? 0 : incl ? (n0(linked.totalInclVat) || round2(n0(linked.totalPreVat) * 1.07)) : n0(linked.totalPreVat);
   // A QT invoiced in full takes no more INV (customer buys more → a new QT).
@@ -267,6 +268,69 @@ async function create(req, res, user) {
     ok: true, batchId, ivRequestIds: rows.map((x) => x.ivRequestId), evidenceLink, asked, remaining, vatMode: incl ? 'incl' : 'excl',
     message: `ส่งคำขอออก INV ${rows.length} ใบแล้ว ฝ่ายบัญชีจะตรวจหลักฐานและออกเอกสารใน PEAK`,
   });
+}
+
+// PATCH { action: 'qt_adopt', ivRequestId, preview?: true, openingInvoiced? }  (accounting only)
+// A pending INV request that names a QT made outside the app (e.g. a quota QT from an earlier year):
+// read that QT from PEAK, add it as a request here so its balance is tracked, and link every INV
+// request that names it. PEAK cannot list the INVs made from a QT, so accounting enters once what
+// was invoiced before the app. Read-only in PEAK.
+async function adoptQt(req, res, user) {
+  checkOrigin(req);
+  if (!can(user, 'approve')) throw bad('เฉพาะฝ่ายบัญชี', 403);
+  const b = req.body || {};
+  const peak = require('../lib/peak');
+  const [ivs, reqs] = await Promise.all([hub.readTable('InvoiceRequests'), hub.readTable('Requests')]);
+  const row = ivs.find((x) => x.ivRequestId === text(b.ivRequestId, 60));
+  if (!row) throw bad('ไม่พบคำขอ INV นี้', 404);
+  const code = String(row.qtNo || '').trim().toUpperCase();
+  if (row.requestId || !code) throw bad('คำขอนี้ผูกกับ QT ในระบบอยู่แล้ว', 409);
+  const up = (x) => String(x || '').trim().toUpperCase();
+  const same = ivs.filter((x) => !x.requestId && up(x.qtNo) === code && !DEAD.has(x.status));
+  const sum = (list) => round2(list.reduce((t, x) => t + n0(x.amountPreVat), 0));
+  const waiting = same.filter((x) => x.status === 'new'), known = same.filter((x) => x.status !== 'new');
+  let have = reqs.find((x) => up(x.peakQtNo) === code && !['rejected', 'qt_void', 'cancelled'].includes(x.status));
+  let q = null;
+  if (!have) {
+    if (peak.mode() === 'off') throw bad('ยังไม่ได้เปิดการเชื่อมต่อ PEAK API', 503);
+    q = await peak.findQuotationByCode(code);
+    if (!q) throw bad(`ไม่พบ QT ${code} ใน PEAK (หรือถูก void แล้ว) ตรวจเลข QT ในคำขอ`, 404);
+    if (!/approve/i.test(q.status || '')) throw bad(`QT ${code} ใน PEAK ยังไม่อนุมัติ (สถานะ ${q.status || '-'})`, 409);
+  }
+  const total = have ? n0(have.totalPreVat) : n0(q.preTaxAmount);
+  const info = { qtNo: code, company: have ? have.company : (q.contactName || row.company), total, inApp: sum(known), inAppCount: known.length,
+    waiting: sum(waiting), waitingCount: waiting.length, link: have ? have.peakDocLink : (q.documentLink || ''), exists: !!have,
+    issuedDate: q ? String(q.issuedDate || '') : '' };
+  if (b.preview === true) return res.status(200).json({ ok: true, preview: info });
+
+  const opening = round2(n0(b.openingInvoiced));
+  if (opening < 0) throw bad('ยอดที่ออก INV ไปแล้วต้องไม่ติดลบ');
+  if (!have && opening + info.inApp > total + 0.01) throw bad(`ยอดที่ออก INV ไปแล้ว (${money(opening + info.inApp)}) เกินยอด QT (${money(total)}) ตรวจตัวเลขอีกครั้ง`);
+  const at = hub.sheetDateTime();
+  let requestId = have && have.requestId;
+  if (!have) {
+    requestId = `LEGACY-${code}`;
+    if (reqs.some((x) => x.requestId === requestId)) requestId = `LEGACY-${code}-${Date.now().toString(36).toUpperCase()}`;
+    const ymd = String(q.issuedDate || '').replace(/\D/g, '');
+    const incl = Number(q.taxStatus) === 1;
+    await hub.appendRows('Requests', [{
+      requestId, createdAt: /^\d{8}$/.test(ymd) ? `${ymd.slice(6)}/${ymd.slice(4, 6)}/${ymd.slice(0, 4)} 00:00` : at,
+      requestedBy: row.requestedBy, salesName: row.salesName, segment: row.segment || 'B2B', clientCode: q.contactCode || '',
+      company: q.contactName || row.company, taxId: row.taxId, branch: row.branch, docLang: 'TH', status: 'qt_approved',
+      note: `QT นอกระบบ นำเข้าจาก PEAK โดย ${user.name || user.email} เมื่อ ${at}`,
+      peakQtNo: code, peakQtId: q.id, totalPreVat: n0(q.preTaxAmount), totalInclVat: n0(q.netAmount), vatMode: incl ? 'incl' : 'excl',
+      qtApprovedAt: at, updatedAt: at, opportunityId: row.opportunityId || '', peakDocLink: q.documentLink || '', whtRate: row.whtRate || '',
+      openingInvoiced: opening || '',
+    }]);
+  }
+  for (const x of same) await hub.updateRow('InvoiceRequests', x._row, { requestId, updatedAt: at });
+  if (!have) {
+    // Classification of the QT in PEAK (customer type, seller): best effort, the QT is usable without it.
+    try { const fresh = (await hub.readTable('Requests')).find((x) => x.requestId === requestId); await require('../lib/peaksync').syncQuotationClasses(fresh, q); } catch (e) { /* ignore */ }
+  }
+  const left = round2(total - (have ? n0(have.openingInvoiced) : opening) - info.inApp - info.waiting);
+  await hub.log('catalog', 'qt_adopt', requestId, `${user.email} · ${code} · ยอด QT ${money(total)} · ออกก่อนใช้ระบบ ${money(opening)} · ผูกคำขอ INV ${same.length} ใบ`);
+  res.status(200).json({ ok: true, requestId, linked: same.length, total, left, over: left < -0.01 });
 }
 
 // PATCH { ivRequestId, action: 'original', originalDoc: 'yes'|'no', recipient?, address? }  (owner or op)
@@ -1365,6 +1429,7 @@ async function inner(req, res) {
     const user = await requireUser(req);
     const act = String((req.body || {}).action || '');
     if (req.method === 'POST') return await ({ legacy_import: importLegacy, receipt: createReceipt, edit: createEdit, pay_notice: createPayNotice }[act] || create)(req, res, user);
+    if (req.method === 'PATCH' && act === 'qt_adopt') return await adoptQt(req, res, user);
     if (req.method === 'PATCH' && act === 'rt_find') { checkOrigin(req); return await rtFind(req, res, user); }
     if (req.method === 'PATCH') return await (act.startsWith('ar_') ? arUpdate : act.startsWith('rt_') ? updateReceipt : act.startsWith('edit_') ? updateEdit : act.startsWith('pay_') ? updatePayNotice : update)(req, res, user);
     if (req.method === 'GET') return await list(req, res, user);

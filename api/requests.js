@@ -224,17 +224,21 @@ async function list(req, res, user) {
   const [rows, lines, ivs] = await Promise.all([hub.readTable('Requests'), hub.readTable('RequestLines'), hub.readTable('InvoiceRequests')]);
   const invoiced = {}, invoicedIncl = {};
   const n = (x) => Number(String(x ?? '').replace(/,/g, '')) || 0;
+  // Invoiced before the app (QT brought in from PEAK): part of the balance.
+  rows.forEach((r) => { const o = n(r.openingInvoiced); if (o > 0) { invoiced[r.requestId] = o; invoicedIncl[r.requestId] = Math.round(o * 107) / 100; } });
   ivs.filter((v) => v.requestId && !['rejected', 'iv_void'].includes(v.status)).forEach((v) => {
     invoiced[v.requestId] = (invoiced[v.requestId] || 0) + n(v.amountPreVat);
     invoicedIncl[v.requestId] = (invoicedIncl[v.requestId] || 0) + (n(v.amountInclVat) || Math.round(n(v.amountPreVat) * 107) / 100);
   });
+  const busy = new Set(ivs.filter((v) => v.requestId && ['new', 'iv_draft'].includes(v.status)).map((v) => v.requestId));
   const sees = await visibility(user);
   const mine = rows
     .filter((r) => sees(r.requestedBy))
     .map((r) => ({ ...r, _createdMs: parseSheetDate(r.createdAt) }))
     .sort((a, b) => (b._createdMs || 0) - (a._createdMs || 0))
     // newest 50, plus every approved QT that still has a balance to invoice (e.g. QTs imported from PEAK)
-    .filter((r, i) => i < 50 || (['qt_approved', 'accepted', 'iv_requested'].includes(r.status)
+    // …and every QT an INV request is still waiting on (an old QT can be used up by the requests in the queue)
+    .filter((r, i) => i < 50 || busy.has(r.requestId) || (['qt_approved', 'accepted', 'iv_requested'].includes(r.status)
       && (Number(String(r.totalPreVat).replace(/,/g, '')) || 0) - (invoiced[r.requestId] || 0) > 0.01))
     .slice(0, 400);
   const ids = new Set(mine.map((r) => r.requestId));

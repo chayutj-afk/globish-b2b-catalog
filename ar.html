@@ -75,6 +75,7 @@ table.sum tr.now td{background:var(--primary-soft)}
 .dr{background:none;border:0;padding:0;margin:0;font:inherit;color:inherit;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;text-decoration-color:var(--muted)}
 .dr:hover,.dr:focus-visible{color:var(--primary);text-decoration-color:var(--primary)}
 .stat .bar{height:4px;border-radius:2px;background:var(--line);margin:5px 0 4px;overflow:hidden}.stat .bar i{display:block;height:100%;width:0;background:var(--ok-ink,#1a7f4b);border-radius:2px;transition:width .2s}.stat .s b{color:var(--head);font-weight:500}
+.st.warn{background:color-mix(in srgb,var(--warn-ink) 12%,transparent);border-color:color-mix(in srgb,var(--warn-ink) 35%,transparent);color:var(--warn-ink)}
 .stat.go{cursor:pointer}.stat.go:hover{border-color:var(--primary)}
 .chk.go{cursor:pointer;text-align:left;font:inherit}.chk.go:hover{border-color:var(--primary)}
 #d-body table{width:100%;border-collapse:collapse;font-size:13px}
@@ -121,6 +122,7 @@ table.sum tr.now td{background:var(--primary-soft)}
         <div class="seg">
           <button class="on" data-v="due" type="button" title="เกินกำหนด ครบกำหนดใน 7 วัน หรือถึงวันติดตามครั้งถัดไป">ต้องตาม</button>
           <button data-v="recommit" type="button" title="เลยวันที่ลูกค้านัดจ่ายแล้วยังไม่จ่าย ต้องหาวันนัดใหม่">ต้องหาวันนัดใหม่</button>
+          <button data-v="nocf" type="button" title="วันนัดจ่ายยังเป็นวันครบกำหนดที่ระบบใส่ให้ตอนออก INV และยังไม่มีบันทึกการติดตาม = ยังไม่ได้ยืนยันวันจ่ายจริงกับลูกค้า">ยังไม่ยืนยันวันจ่าย</button>
           <button data-v="await" type="button" id="b-await" hidden title="ออกใบเสร็จแล้ว (ล่วงหน้า หรือรับเช็คมาแล้ว) แต่เงินยังไม่เข้าบัญชี ยังนับเป็นยอดค้างรับ">รอเงินเข้า</button>
           <button data-v="open" type="button" title="INV ปี 2026 เป็นต้นไปที่ยังไม่ได้รับเงิน">ค้างทั้งหมด</button>
           <button data-v="Paid" type="button">จ่ายแล้ว</button>
@@ -237,7 +239,7 @@ async function load() {
   $('b-check').hidden = !s.legacyCheckCount; $('g-old').hidden = !s.legacyCheckCount;
   $('b-await').hidden = !D.invoices.some((r) => r.awaitCash);
   if ($('b-await').hidden && $('b-await').classList.contains('on')) { $('b-await').classList.remove('on'); document.querySelector('#f-state button[data-v="due"]').classList.add('on'); }
-  $('f-hint').innerHTML = `<b>ต้องตาม</b> = เกินกำหนด หรือครบกำหนดใน 7 วัน หรือถึงวันติดตามครั้งถัดไป เรียงจากเกินนานสุด<br><b>ต้องหาวันนัดใหม่</b> = เลยวันที่ลูกค้านัดจ่ายแล้วยังไม่จ่าย<br><b>รอเงินเข้า</b> = ออกใบเสร็จแล้ว (ล่วงหน้า หรือรับเช็ค) แต่เงินยังไม่เข้าบัญชี ยังนับเป็นยอดค้างรับ<br><b>ค้างทั้งหมด</b> = INV ปี 2026 เป็นต้นไปที่ยังไม่ได้รับเงิน เลือกดูเฉพาะเกินกำหนดหรือยังไม่ถึงกำหนดได้${s.oldCount ? `<br><b>ค้างเก่าก่อนปี 2026</b> ${s.oldCount} ใบ (${fmt0(s.old)} บาท) แยกไว้ ดูได้ที่แท็บ "สรุป"` : ''}${s.legacyCheckCount ? `<br><b>รอตรวจกับ PEAK</b> ${s.legacyCheckCount} ใบ (${fmt0(s.legacyCheck)} บาท) = ข้อมูลที่ย้ายมาและยังไม่มีใครตรวจ ไม่นับในยอดค้างรับจนกว่าจะตรวจ` : ''}`;
+  $('f-hint').innerHTML = `<b>ต้องตาม</b> = เกินกำหนด หรือครบกำหนดใน 7 วัน หรือถึงวันติดตามครั้งถัดไป เรียงจากเกินนานสุด<br><b>ยังไม่ยืนยันวันจ่าย</b> = วันนัดจ่ายยังเป็นวันครบกำหนดที่ระบบใส่ให้ตอนออก INV และยังไม่มีบันทึกการติดตาม ให้ติดต่อลูกค้าเพื่อยืนยันวันจ่ายจริง แล้วบันทึกการติดตาม<br><b>ต้องหาวันนัดใหม่</b> = เลยวันที่ลูกค้านัดจ่ายแล้วยังไม่จ่าย<br><b>รอเงินเข้า</b> = ออกใบเสร็จแล้ว (ล่วงหน้า หรือรับเช็ค) แต่เงินยังไม่เข้าบัญชี ยังนับเป็นยอดค้างรับ<br><b>ค้างทั้งหมด</b> = INV ปี 2026 เป็นต้นไปที่ยังไม่ได้รับเงิน เลือกดูเฉพาะเกินกำหนดหรือยังไม่ถึงกำหนดได้${s.oldCount ? `<br><b>ค้างเก่าก่อนปี 2026</b> ${s.oldCount} ใบ (${fmt0(s.old)} บาท) แยกไว้ ดูได้ที่แท็บ "สรุป"` : ''}${s.legacyCheckCount ? `<br><b>รอตรวจกับ PEAK</b> ${s.legacyCheckCount} ใบ (${fmt0(s.legacyCheck)} บาท) = ข้อมูลที่ย้ายมาและยังไม่มีใครตรวจ ไม่นับในยอดค้างรับจนกว่าจะตรวจ` : ''}`;
   const segs = D.segments || [];
   const sales = [...new Set(D.invoices.map((r) => r.salesName || r.salesEmail).filter(Boolean))].sort();
   const keepS = $('f-seg').value, keepP = $('f-sales').value;
@@ -283,6 +285,10 @@ function renderKpi() {
   $('s-avg').textContent = k.avgDaysToPay ? k.avgDaysToPay + ' วัน' : '–';
 }
 
+// The commit date is still the due date the system filled in when the INV was issued, and nobody has
+// logged a follow-up: the payment date has not been confirmed with the customer yet.
+const noCF = (r) => (r.state === 'Outstanding' || r.state === 'Overdue') && !r.legacyCheck && !r.awaitCash
+  && !!r.commitDate && pd(r.commitDate) === pd(r.dueDate) && !(r.followUps || []).length;
 function rowsFor(only, noWeek) {
   const mode = only || document.querySelector('#f-state button.on').dataset.v;
   const seg = $('f-seg').value, sal = $('f-sales').value, q = $('f-q').value.trim().toLowerCase(), wk = noWeek ? '' : $('f-week').value;
@@ -297,6 +303,7 @@ function rowsFor(only, noWeek) {
     if (mode === 'old') return r.old && (r.state === 'Outstanding' || r.state === 'Overdue');
     if (r.old && mode !== 'Paid') return false; // the old book is on the summary tab
     if (mode === 'open') { const du = only ? '' : $('f-due').value; return (r.state === 'Outstanding' || r.state === 'Overdue') && (!du || r.state === du); }
+    if (mode === 'nocf') return noCF(r);
     if (mode === 'recommit') return r.needCommit;
     if (mode === 'await') return r.awaitCash;
     if (mode === 'due') {
@@ -336,7 +343,7 @@ function render() {
       <td>${esc(r.dueDate)}<div class="sub">${st(r.state)}${r.awaitCash ? ' <span class="st blue">ออกใบเสร็จแล้ว รอเงินเข้า</span>' : ''}</div></td>
       <td class="num">${d ? `<span class="days ${d > 90 ? 'd90' : d > 30 ? 'd30' : ''}">${d}</span>` : ''}</td>
       <td class="num">${fmt(r.state === 'Paid' ? (toNum(r.paidAmount) || r.expected) : r.expected)}</td>
-      <td>${esc(r.followStatus || '')}${r.commitDate ? `<div class="sub">นัดจ่าย ${esc(r.commitDate)}</div>` : ''}${r.needCommit && !r.legacyCheck ? '<div class="sub late">เลยวันนัด ต้องหาวันใหม่</div>' : ''}</td>
+      <td>${esc(r.followStatus || '')}${r.commitDate ? `<div class="sub">นัดจ่าย ${esc(r.commitDate)}</div>` : ''}${noCF(r) ? '<div class="sub"><span class="st warn" title="วันนัดจ่ายยังเป็นวันครบกำหนดที่ระบบใส่ให้ และยังไม่มีบันทึกการติดตาม">ยังไม่ยืนยันวันจ่าย</span></div>' : ''}${r.needCommit && !r.legacyCheck ? '<div class="sub late">เลยวันนัด ต้องหาวันใหม่</div>' : ''}</td>
       <td>${esc(r.nextActionDate || '')}</td></tr>${open ? detail(r) : ''}`;
   }).join('') || `<tr><td colspan="8" class="empty">ไม่มีรายการ</td></tr>`;
   $('more').innerHTML = xs.length > SHOW ? `<button class="btn btn-g btn-sm" onclick="SHOW+=100;render()">แสดงเพิ่ม (${xs.length - SHOW} รายการ)</button>` : `<span class="small">${xs.length} รายการ</span>`;

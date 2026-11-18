@@ -1685,6 +1685,7 @@ function renderPending() {
       ${F('Opportunity', esc(q.opportunityId))}
       ${(() => { let p = null; try { p = JSON.parse(q.classPicks || 'null'); } catch {} return p ? Object.entries(p).map(([g, v]) => F(esc(((CLS || []).find((x) => x.code === g) || { name: g }).name), esc(v ? clsName(g, v) : 'ไม่ติด'))).join('') : ''; })()}
     </div>
+    ${qNote(q)}
     ${q.newContact && !q.clientCode ? `<div class="pc-note">🆕 ลูกค้าใหม่: ${esc(q.company)} · ${esc(q.taxId)} / ${esc(q.branch)} · ${esc(q.newContact)}<br><span class="small">กดอนุมัติแล้วระบบจะสร้างลูกค้านี้ใน PEAK ก่อนสร้าง QT ตรวจชื่อ เลขภาษี และที่อยู่ให้ตรงเอกสารลูกค้า</span></div>` : ''}${q.note ? `<div class="pc-note">💬 Sales: ${esc(q.note)}</div>` : ''}${(q.lines || []).filter((l) => l.salesNote && !l.qtDescription).map((l) => `<div class="pc-note warn">✍️ Sales เขียนเพิ่มในรายการ (จะเรียบเรียงรวมกับคำอธิบายใน QT): ${esc(l.salesNote)}</div>`).join('')}${q.belowFloor ? `<div class="pc-note warn">ต่ำกว่าราคาขั้นต่ำ Catalog: ${esc(q.belowFloor)}</div>` : ''}${fix && q.peakNote ? `<div class="pc-note err">${esc(q.peakNote)}</div>` : ''}
     <details style="margin-top:12px"><summary class="small" style="cursor:pointer">ดูรายการสินค้า (${(q.lines || []).length} บรรทัด)</summary>
       <div style="overflow-x:auto;margin-top:6px"><table class="items"><thead><tr><th>รายการ (ข้อความที่จะลงใน QT)</th><th class="num">จำนวน</th><th class="num">ราคา/หน่วย</th><th class="num">ส่วนลด</th></tr></thead><tbody>${lineRows(q)}</tbody></table></div></details>
@@ -1709,7 +1710,7 @@ function renderPending() {
       ${q.peakNote ? `<div class="pc-note">${esc(q.peakNote)}</div>` : ''}</div>
       <div class="pc-act">${q.status === 'qt_creating' ? '<span class="small">กำลังสร้างใน PEAK…</span>' : PEAK_LIVE ? `<button class="btn btn-p btn-sm" onclick="qtAction('${esc(q.requestId)}','retry')">↻ ลองสร้างอีกครั้ง</button>` : ''}<span class="sp"></span>${q.status === 'approved' ? rej(q.requestId, 'qtAction', 'qn') : ''}<span id="qm-${esc(q.requestId)}"></span></div></div>`).join('') : '')
     + (draftQ.length ? secH('QT Draft รออนุมัติใน PEAK', draftQ.length) + `<p class="hint">${PEAK_LIVE ? 'อนุมัติ QT ใน PEAK ก่อน (ปุ่ม "แก้ไข / อนุมัติใน PEAK ↗") แล้วกด <b>เช็กสถานะจาก PEAK</b> ระบบไม่ได้อนุมัติแทน แค่อ่านสถานะ (หรือรอระบบเช็กเองรอบ 10:49 / 17:49)' : 'อนุมัติใน PEAK แล้วกดปุ่มนี้ (หรือรอระบบอัปเดตรอบ 10:49 / 17:49)'} จากนั้น Sales จะเปิดลิงก์ QT ส่งลูกค้าได้</p>` + draftQ.map((q) => `<div class="pcard"><div class="pc-body">
-      <div class="pc-top"><div class="pc-title">${esc(q.company)}<small>${esc(q.peakQtNo)} · ${esc(q.requestId)} · โดย ${esc(q.salesName)}</small></div><div class="pc-amt"><b>${fmt(qtAmt(q).total)}</b><span>ยอด${qtAmt(q).lbl}</span></div></div></div>
+      <div class="pc-top"><div class="pc-title">${esc(q.company)}<small>${esc(q.peakQtNo)} · ${esc(q.requestId)} · โดย ${esc(q.salesName)}</small></div><div class="pc-amt"><b>${fmt(qtAmt(q).total)}</b><span>ยอด${qtAmt(q).lbl}</span></div></div>${qNote(q)}</div>
       <div class="pc-act">${q.peakDocLink ? `<a class="btn btn-o btn-sm" href="${esc(peakEdit(q.peakDocLink, 'quotation'))}" target="_blank" rel="noopener">แก้ไข / อนุมัติใน PEAK ↗</a>` : ''}<details class="rej"><summary>เผลอยกเลิก QT นี้ใน PEAK?</summary><div class="in"><span class="small">ระบบจะสร้าง QT Draft ใหม่จากข้อมูลเดิม</span><button class="btn btn-danger btn-sm" onclick="qtAction('${esc(q.requestId)}','qt_voided')">QT ถูกยกเลิกแล้ว สร้างใหม่</button></div></details><span class="sp"></span><button class="btn btn-p btn-sm" onclick="qtAction('${esc(q.requestId)}','qt_approved')"${PEAK_LIVE ? ' title="ไม่ได้อนุมัติแทน: อ่านสถานะ QT จาก PEAK ถ้าอนุมัติใน PEAK แล้ว Sales จะส่ง QT ให้ลูกค้าได้"' : ''}>${PEAK_LIVE ? '↻ เช็กสถานะจาก PEAK' : '✓ อนุมัติ QT ใน PEAK แล้ว'}</button><span id="qm-${esc(q.requestId)}"></span></div></div>`).join('') : '');
   $('pend-inv').innerHTML = (waitI.length ? waitI.map((v) => {
     const q = REQS.find((x) => x.requestId === v.requestId);
@@ -1855,6 +1856,14 @@ async function ivReset(id) {
   if (!ok) return;
   try { await withLoading('กำลังบันทึก…', async () => { await api('/api/invoice-requests', { method: 'PATCH', body: JSON.stringify({ ivRequestId: id, action: 'iv_reset' }) }); await loadAll(); }); }
   catch (e) { $('ivm-' + id).innerHTML = `<span class="err-line">${esc(e.message)}</span>`; }
+}
+// The note Sales wrote to accounting on a QT request ("หมายเหตุถึงฝ่ายบัญชี"). It is not sent to PEAK (the
+// remark there prints on the customer's document), so it is shown here with a copy button.
+const qNote = (q) => { const n = String(q.note || '').replace(/^\[ตรวจเลขภาษี[^\]]*\]\s*/, '').trim(); return n ? `<div class="pc-note" style="display:flex;gap:10px;align-items:flex-start"><span style="flex:1;white-space:pre-wrap">💬 Sales ถึงบัญชี: <span class="nt">${esc(n)}</span></span><button class="btn btn-o btn-sm" onclick="copySib(this)" title="คัดลอกไปวางในช่องความคิดเห็นของ QT ที่ PEAK (ไม่พิมพ์บนเอกสารลูกค้า)">คัดลอก</button></div>` : ''; };
+function copySib(btn) {
+  const t = (btn.parentElement.querySelector('.nt') || {}).textContent || '';
+  const done = () => { const x = btn.textContent; btn.textContent = 'คัดลอกแล้ว ✓'; setTimeout(() => { btn.textContent = x; }, 1500); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done, () => {});
 }
 function copyNote(id, btn) {
   const v = IVS.find((x) => x.ivRequestId === id) || {};

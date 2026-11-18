@@ -10,6 +10,32 @@
 <link rel="stylesheet" href="/app.css">
 <style>
 .tab{display:none}.tab.on{display:block}
+.hbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.hbar input[type=search]{flex:1 1 240px;min-width:180px;padding:8px 11px;border:1px solid var(--line2);border-radius:4px;font-size:13.5px;background:var(--input);color:var(--ink)}
+.hbar .sel{width:auto}
+.hchips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.hchip{border:1px solid var(--line);background:var(--panel);border-radius:9999px;padding:5px 12px;font-size:12.5px;color:var(--ink);cursor:pointer;min-height:32px;font-family:inherit}
+.hchip b{font-weight:500;color:var(--head);margin-left:4px}
+.hchip.on{background:var(--head);border-color:var(--head);color:var(--panel)}.hchip.on b{color:var(--panel)}
+.hday{display:flex;align-items:baseline;gap:8px;margin:18px 0 6px;font-size:13px;color:var(--head);font-weight:500}
+.hday span{font-size:12px;color:var(--muted);font-weight:400}
+.hlist{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.hrow{display:grid;grid-template-columns:52px 190px minmax(0,1fr) 110px 130px;gap:12px;align-items:start;padding:11px 16px;border:0;border-top:1px solid var(--line);cursor:pointer;width:100%;background:none;text-align:left;font:inherit;color:inherit}
+.hlist>.hrow:first-child{border-top:0}.hrow:hover{background:var(--panel-2)}
+.hrow:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
+.hrow .t{font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.hrow .who{font-size:12.5px;color:var(--ink)}.hrow .who small{display:block;color:var(--muted);font-size:11px}
+.hrow .ti{min-width:0}.hrow .ti b{display:block;font-weight:500;color:var(--head);font-size:14px}
+.hrow .ti small{display:block;font-size:12px;color:var(--muted);line-height:1.5;overflow-wrap:anywhere}
+.hrow .am{text-align:right;font-size:13.5px;color:var(--head);font-variant-numeric:tabular-nums}
+.hrow .st{margin:0;justify-self:start}
+.lgsum{width:100%;border-collapse:collapse;font-size:13px}
+.lgsum th{text-align:left;font-weight:500;color:var(--muted);font-size:12px;padding:6px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+.lgsum td{padding:8px 10px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+.lgsum .num{text-align:right}.lgsum tr:last-child td{border-bottom:0}
+.lgsum button{background:none;border:0;padding:0;font:inherit;color:var(--primary);cursor:pointer;text-align:left}
+.lgsum small{color:var(--muted);margin-left:6px}
+@media(max-width:760px){.hrow{grid-template-columns:auto minmax(0,1fr);gap:4px 10px;padding:12px 14px}.hrow .ti,.hrow .who{grid-column:1/-1}.hrow .am{grid-column:1/-1;text-align:left}.hrow .am:empty{display:none}.hrow .who small{display:inline;margin-left:4px}.hbar .sel{flex:1 1 140px}}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
 @media(max-width:760px){.stats{grid-template-columns:1fr 1fr}}
 .stat{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px}
@@ -109,7 +135,7 @@ table.sum tr.now td{background:var(--primary-soft)}
     <div class="stat go" role="button" tabindex="0" data-kpi="week" title="ดูรายชื่อบริษัท"><div class="k">คาดว่าจะเข้าสัปดาห์นี้</div><div class="v" id="s-week">–</div><div class="bar" aria-hidden="true"><i id="s-week-bar"></i></div><div class="s" id="s-week-p"></div><div class="s" id="s-week-n"></div></div>
     <div class="stat"><div class="k">เฉลี่ยวันรับเงิน (จ่ายใน 90 วัน)</div><div class="v" id="s-avg">–</div><div class="s">นับจากวันออก INV</div></div>
   </div>
-  <div class="seg" id="tabs"><button class="on" data-t="work" type="button">รายการติดตาม</button><button data-t="sum" type="button">สรุป</button></div>
+  <div class="seg" id="tabs"><button class="on" data-t="work" type="button">รายการติดตาม</button><button data-t="sum" type="button">สรุป</button><button data-t="log" type="button" id="t-log" hidden>🕘 ประวัติการทำงาน</button></div>
 
   <section class="tab on" id="tab-work">
     <div class="card" id="pn-card" hidden>
@@ -142,6 +168,17 @@ table.sum tr.now td{background:var(--primary-soft)}
         <div class="acts" style="padding:0" id="pc-btns"></div>
       </details>
     </div>
+  </section>
+
+  <section class="tab" id="tab-log">
+    <p class="hint">ใครบันทึกการติดตาม แก้วันนัดจ่าย หรือบันทึกรับเงิน เมื่อไร ใช้ตัวกรอง<b>กลุ่มลูกค้า</b>ด้านบนได้ กดที่แถวเพื่อเปิด INV ใบนั้นในรายการติดตาม</p>
+    <div class="hbar"><input type="search" id="lg-q" placeholder="ค้นหา ชื่อลูกค้า หรือเลข INV" aria-label="ค้นหาในประวัติ" oninput="logRender(1)">
+      <select class="sel" id="lg-days" aria-label="ช่วงเวลา" onchange="logRender(1)"><option value="0">วันนี้</option><option value="6" selected>7 วันล่าสุด</option><option value="29">30 วันล่าสุด</option><option value="-1">ทั้งหมด</option></select>
+      <select class="sel" id="lg-who" aria-label="ผู้ทำรายการ" onchange="logRender(1)"><option value="">ทุกคน</option></select>
+      <button class="btn btn-g btn-sm" type="button" onclick="logLoad()">↻ รีเฟรช</button></div>
+    <div class="card"><h2>ภาพรวมรายคน <span class="small" id="lg-range"></span></h2><div class="wrap" id="lg-sum"><div class="empty">กำลังโหลด...</div></div></div>
+    <div class="hchips" id="lg-chips" role="group" aria-label="กรองตามประเภท"></div>
+    <div id="lg-list" aria-live="polite"></div>
   </section>
 
   <section class="tab" id="tab-sum">
@@ -201,7 +238,8 @@ let D = null, OPEN = null, SHOW = 100, STASH = null;
 document.querySelectorAll('#tabs button').forEach((b) => b.onclick = () => {
   document.querySelectorAll('#tabs button').forEach((x) => x.classList.toggle('on', x === b));
   document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('on', t.id === 'tab-' + b.dataset.t));
-  const sum = b.dataset.t === 'sum';
+  const sum = b.dataset.t !== 'work'; // summary and work log: the sales / search filters of the list do not apply
+  if (b.dataset.t === 'log' && !LOG) logLoad();
   if (sum && !STASH) { STASH = { s: $('f-sales').value, q: $('f-q').value }; $('f-sales').value = ''; $('f-q').value = ''; }
   else if (!sum && STASH) { $('f-sales').value = STASH.s; $('f-q').value = STASH.q; STASH = null; }
   $('f-sales').hidden = $('f-q').hidden = sum;
@@ -210,7 +248,7 @@ document.querySelectorAll('#tabs button').forEach((b) => b.onclick = () => {
 document.querySelectorAll('#f-state button').forEach((b) => b.onclick = () => { document.querySelectorAll('#f-state button').forEach((x) => x.classList.toggle('on', x === b)); SHOW = 100; render(); });
 // The group filter and the group select of the summary tab move together.
 const hasOpt = (el, v) => [...el.options].some((o) => o.value === v);
-$('f-seg').onchange = () => { SHOW = 100; render(); loadSum(); };
+$('f-seg').onchange = () => { SHOW = 100; render(); loadSum(); logRender(1); };
 $('f-sales').onchange = () => { SHOW = 100; render(); };
 $('f-due').onchange = () => { SHOW = 100; render(); };
 $('f-week').onchange = () => { SHOW = 100; render(); };
@@ -580,6 +618,67 @@ $('d-close').onclick = closeDrill;
 $('ov-drill').onclick = (e) => { if (e.target === $('ov-drill')) closeDrill(); };
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('ov-drill').hidden) closeDrill(); });
 // Jump from the list of a figure to that INV in the work list.
+// ── Work log (accounting / collectors): /api/invoice-requests?view=arlog
+let LOG = null, LG_TYPE = '', LG_SHOW = 60;
+async function logLoad() {
+  try { LOG = (await api('/api/invoice-requests?view=arlog')).entries; } catch (e) { $('lg-sum').innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+  logRender(1);
+}
+const lgDay = (n) => { const t = new Date(Date.now() + 7 * 3600e3 - n * 864e5); return t.getUTCFullYear() * 1e4 + (t.getUTCMonth() + 1) * 100 + t.getUTCDate(); };
+const LG_CLS = { follow: 'blue', paid: 'green', commit: '', notice: '', reject: 'red', rt: 'green', edit: '', owner: '' };
+const LG_GROUPS = [['', 'ทั้งหมด'], ['follow', '📞 ติดตาม'], ['paid', '💰 รับเงิน'], ['commit', '📅 แก้วันนัดจ่าย'], ['other', 'อื่นๆ']];
+const lgGroup = (e) => (['follow', 'paid', 'commit'].includes(e.type) ? e.type : 'other');
+function lgSub(e) {
+  const p = [e.ivNo];
+  if (e.type === 'follow') { p.push(e.channel, e.result); if (e.commitDate) p.push('นัดจ่าย ' + e.commitDate); if (e.next) p.push('ติดตามอีกครั้ง ' + e.next); }
+  if (e.type === 'paid' || e.type === 'notice') { if (e.paidDate) p.push('เงินเข้า ' + e.paidDate); if (e.method) p.push(e.method); }
+  if (e.type === 'commit' && e.commitDate) p.push('วันนัดล่าสุด ' + e.commitDate);
+  if (e.note) p.push(e.type === 'follow' ? '💬 ' + e.note : e.note);
+  return p.filter(Boolean).join(' · ');
+}
+function logSetType(v) { LG_TYPE = v; logRender(1); }
+function logSetWho(w) { $('lg-who').value = w; logRender(1); }
+function logRender(reset) {
+  if (!LOG) return;
+  if (reset) LG_SHOW = 60;
+  const q = $('lg-q').value.trim().toLowerCase(), days = Number($('lg-days').value), seg = $('f-seg').value, who = $('lg-who').value;
+  const from = days < 0 ? 0 : lgDay(days);
+  const inRange = LOG.filter((e) => Math.floor(e.ts / 1e4) >= from && (!seg || e.segment === seg) && (!q || [e.company, e.ivNo, e.note, e.result].some((x) => String(x || '').toLowerCase().includes(q))));
+  // Per person, over the period and filters above (not narrowed by the person picker, so everyone stays comparable).
+  const per = new Map();
+  for (const e of inRange) {
+    if (e.type === 'notice') continue; // what Sales reported is not collection work
+    const p = per.get(e.by) || { by: e.by, role: e.role, follow: 0, ivs: new Set(), commit: 0, paid: 0, amount: 0, other: 0, last: e.at };
+    if (e.type === 'follow') { p.follow++; p.ivs.add(e.ivNo); } else if (e.type === 'commit') p.commit++; else if (e.type === 'paid') { p.paid++; p.amount += Number(e.amount) || 0; } else p.other++;
+    per.set(e.by, p);
+  }
+  const people = [...per.values()].sort((a, b) => (b.follow + b.paid + b.commit) - (a.follow + a.paid + a.commit));
+  const cur = who;
+  $('lg-who').innerHTML = '<option value="">ทุกคน</option>' + [...new Set(LOG.map((e) => e.by))].sort((a, b) => a.localeCompare(b, 'th')).map((w) => `<option${w === cur ? ' selected' : ''}>${esc(w)}</option>`).join('');
+  $('lg-range').textContent = `${$('lg-days').selectedOptions[0].textContent}${seg ? ' · ' + seg : ''}`;
+  $('lg-sum').innerHTML = people.length ? `<table class="lgsum"><thead><tr><th>ผู้ทำรายการ</th><th class="num">ติดตาม (ครั้ง)</th><th class="num">INV ที่ติดตาม</th><th class="num">แก้วันนัดจ่าย</th><th class="num">บันทึกรับเงิน (ใบ)</th><th class="num">ยอดรับเงิน</th><th>ทำล่าสุด</th></tr></thead><tbody>${people.map((p) => `<tr><td><button type="button" onclick="logSetWho(this.dataset.w)" data-w="${esc(p.by)}" title="ดูเฉพาะรายการของคนนี้">${esc(p.by)}</button><small>${esc(p.role)}</small></td><td class="num">${p.follow || '–'}</td><td class="num">${p.ivs.size || '–'}</td><td class="num">${p.commit || '–'}</td><td class="num">${p.paid || '–'}</td><td class="num">${p.amount ? fmt(p.amount) : '–'}</td><td>${esc(p.last)}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">ไม่มีรายการในช่วงนี้</div>';
+  const base = inRange.filter((e) => !who || e.by === who);
+  const cnt = {}; base.forEach((e) => { cnt[lgGroup(e)] = (cnt[lgGroup(e)] || 0) + 1; });
+  $('lg-chips').innerHTML = LG_GROUPS.map(([v, t]) => `<button type="button" class="hchip${LG_TYPE === v ? ' on' : ''}" aria-pressed="${LG_TYPE === v}" onclick="logSetType('${v}')">${t}<b>${v ? cnt[v] || 0 : base.length}</b></button>`).join('');
+  const rows = base.filter((e) => !LG_TYPE || lgGroup(e) === LG_TYPE);
+  if (!rows.length) { $('lg-list').innerHTML = '<div class="empty">ไม่พบรายการตามตัวกรองนี้ ลองขยายช่วงเวลา</div>'; return; }
+  const today = lgDay(0), yest = lgDay(1), DOW = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
+  const perDay = {}; rows.forEach((e) => { const d = Math.floor(e.ts / 1e4); perDay[d] = (perDay[d] || 0) + 1; });
+  let html = '', last = 0;
+  rows.slice(0, LG_SHOW).forEach((e) => {
+    const d = Math.floor(e.ts / 1e4);
+    if (d !== last) {
+      const dt = new Date(Date.UTC(Math.floor(d / 1e4), Math.floor(d / 100) % 100 - 1, d % 100));
+      html += `${last ? '</div>' : ''}<div class="hday">${d === today ? 'วันนี้ · ' : d === yest ? 'เมื่อวาน · ' : ''}${DOW[dt.getUTCDay()]} ${esc(e.at.slice(0, 10))} <span>${perDay[d]} รายการ</span></div><div class="hlist">`;
+      last = d;
+    }
+    html += `<button type="button" class="hrow" onclick="openInList(this.dataset.iv)" data-iv="${esc(e.ivNo)}" title="เปิด ${esc(e.ivNo)} ในรายการติดตาม"><span class="t">${esc(e.at.slice(11) || '–')}</span><span class="st ${LG_CLS[e.type] || ''}">${esc(e.label)}</span><span class="ti"><b>${esc(e.company || e.ivNo || '-')}</b><small>${esc(lgSub(e))}</small></span><span class="am">${e.amount ? fmt(e.amount) : ''}</span><span class="who">${esc(e.by)}<small>${esc(e.role)}</small></span></button>`;
+  });
+  html += '</div>';
+  if (rows.length > LG_SHOW) html += `<div class="more"><button class="btn btn-o btn-sm" type="button" onclick="logMore()">แสดงเพิ่มอีก ${Math.min(60, rows.length - LG_SHOW)} รายการ</button> <span class="small">แสดง ${LG_SHOW} จาก ${rows.length}</span></div>`;
+  $('lg-list').innerHTML = html;
+}
+function logMore() { LG_SHOW += 60; logRender(); }
 function openInList(iv) {
   closeDrill();
   STASH = null; $('f-sales').hidden = $('f-q').hidden = false;
@@ -692,7 +791,7 @@ $('imp-go').onclick = async () => {
   catch (e) { $('imp-msg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
 };
 let CAN_EDIT = false;
-window.SHELL_ME.then((u) => { if (!u) return; const P = u.perms || []; $('imp').hidden = !P.includes('users'); CAN_EDIT = P.includes('ar'); CAN_RT = P.includes('approve'); if (!P.includes('ar_view')) { $('msg').innerHTML = '<div class="msg err">ไม่มีสิทธิ์ดูหน้าติดตามหนี้ (ขอสิทธิ์จากผู้ดูแลที่หน้าจัดการผู้ใช้)</div>'; return; } load(); });
+window.SHELL_ME.then((u) => { if (!u) return; const P = u.perms || []; $('imp').hidden = !P.includes('users'); CAN_EDIT = P.includes('ar'); $('t-log').hidden = !CAN_EDIT; CAN_RT = P.includes('approve'); if (!P.includes('ar_view')) { $('msg').innerHTML = '<div class="msg err">ไม่มีสิทธิ์ดูหน้าติดตามหนี้ (ขอสิทธิ์จากผู้ดูแลที่หน้าจัดการผู้ใช้)</div>'; return; } load(); });
 </script>
 </body>
 </html>

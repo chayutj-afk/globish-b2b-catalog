@@ -553,5 +553,16 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
     ok(!(j.entries || []).some((e) => /@/.test(e.by)), 'people are shown by name, not email');
     [s, j] = await call(BENZ, 'GET', '/api/invoice-requests?view=history');
     ok(s === 403, 'Sales gets 403: ' + s); }
+  console.log('── 22. debt page work log: follow-ups and money in, by person');
+  { const iv = db().Invoices.find((x) => !x.paidDate && x.ivNo);
+    [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_followup', ivNo: iv.ivNo, channel: 'Call', result: 'Committed', commitDate: '2027-01-15', note: 'โทรคุยกับการเงินแล้ว' });
+    ok(s === 200, 'collector logs a follow-up: ' + (j.error || s));
+    [s, j] = await call(COL, 'GET', '/api/invoice-requests?view=arlog');
+    const f = (j.entries || []).find((e) => e.type === 'follow' && e.ivNo === iv.ivNo && e.note === 'โทรคุยกับการเงินแล้ว');
+    ok(s === 200 && f && f.by && !/@/.test(f.by) && f.channel === 'Call' && f.commitDate === '15/01/2027', 'the follow-up is in the log with who, channel, note and the commit date: ' + (j.error || JSON.stringify(f)));
+    ok((j.entries || []).some((e) => e.type === 'paid' && e.amount > 0), 'money recorded earlier in the run is listed with its amount');
+    ok((j.entries || []).every((e, i, a) => !i || a[i - 1].ts >= e.ts), 'newest first');
+    [s, j] = await call(BENZ, 'GET', '/api/invoice-requests?view=arlog');
+    ok(s === 403, 'Sales gets 403: ' + s); }
   done();
 })().catch((e) => { console.error('CRASH', e); ok(false, 'CRASH: the run stopped early: ' + e.message); done(); process.exitCode = 1; });

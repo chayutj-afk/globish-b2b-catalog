@@ -1450,6 +1450,11 @@ async function importLegacy(req, res, user) {
 async function list(req, res, user) {
   if (req.query && req.query.view === 'ar') return arList(req, res, user);
   if (req.query && req.query.view === 'receipts') return listReceipts(req, res, user);
+  // Work log of the debt page (accounting / collectors / admin): follow-ups, commit dates, money in. Read only.
+  if (req.query && req.query.view === 'arlog') {
+    if (!isOp(user)) throw bad('ไม่มีสิทธิ์ดูประวัติการทำงาน', 403);
+    return res.status(200).json({ ok: true, ...(await require('../lib/arlog').load()) });
+  }
   // Approval history (accounting): every action from SyncLog joined to its request. Read only.
   if (req.query && req.query.view === 'history') {
     if (!can(user, 'approve') && !isOp(user)) throw bad('ไม่มีสิทธิ์ดูประวัติการอนุมัติ', 403);

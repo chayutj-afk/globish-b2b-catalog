@@ -527,5 +527,12 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
     const doc = { ...peak().invoices.find((y) => y.id === v.peakIvId) }; // status still "Approve", isVoid 0
     [s, j] = await hook('invoice', { PeakInvoices: { invoices: [doc] }, eventType: 'Void' });
     ok(arRow(v.peakIvNo).docStatus === 'Cancelled' && ivr(tw[1]).status === 'iv_void', 'INV taken out of AR on the Void event: ' + j.results[0]); }
+  console.log('── 19. paid through Whitehouse: WH order / receipt number instead of a slip');
+  { const base = { action: 'pay_notice', ivRequestId: tw[0], paidDate: '2026-11-13', amount: 19046, paymentMethod: 'Bank Transfer', deliveryChannel: 'sales' };
+    [s, j] = await call(BENZ, 'POST', '/api/invoice-requests', base); ok(s === 400 && /Whitehouse|WH/.test(j.error || ''), 'no slip and no WH reference refused: ' + (j.error || s));
+    [s, j] = await call(BENZ, 'POST', '/api/invoice-requests', { ...base, whOrderId: 'ORD-778899', whReceiptNo: 'WH-RT-0042', note: 'ลูกค้าจ่ายเอง' });
+    const pn = db().PaymentNotices.find((x) => x.noticeId === j.noticeId);
+    ok(s === 200 && pn && pn.note === 'จ่ายผ่าน WH · Order ORD-778899 · ใบเสร็จ WH WH-RT-0042 · ลูกค้าจ่ายเอง' && !pn.slipLink, 'notice kept with the WH order and receipt, no slip needed: ' + (j.error || (pn && pn.note)));
+    { const t = (peak().chat || []).map((x) => x.text).join('\n'); ok(/จ่ายผ่าน WH: Order ORD-778899, ใบเสร็จ WH WH-RT-0042/.test(t), 'chat message says it was paid through WH'); } }
   done();
 })().catch((e) => { console.error('CRASH', e); ok(false, 'CRASH: the run stopped early: ' + e.message); done(); process.exitCode = 1; });

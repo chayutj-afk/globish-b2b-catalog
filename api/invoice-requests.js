@@ -962,21 +962,25 @@ async function createPayNotice(req, res, user) {
   if (!(amount > 0 && amount < 1e9)) throw bad('ใส่ยอดที่ลูกค้าโอน');
   const method = text(b.paymentMethod, 40);
   if (!ar.PAY_METHODS.includes(method)) throw bad('เลือกวิธีชำระเงิน');
-  if (!b.file) throw bad('แนบสลิป / หลักฐานการโอน');
+  // Paid through Whitehouse (B2C / B2E): the WH order and the receipt WH already issued, so accounting can
+  // reconcile. With either of them the slip is optional (the WH record is the evidence).
+  const whOrder = text(b.whOrderId, 60), whRt = text(b.whReceiptNo, 60);
+  if (!b.file && !whOrder && !whRt) throw bad('แนบสลิป / หลักฐานการโอน (หรือใส่ Order ID / เลขใบเสร็จของ Whitehouse ถ้าจ่ายผ่าน WH)');
   const ch = text(b.deliveryChannel, 20);
   if (!PAY_CHANNELS.includes(ch)) throw bad('เลือกช่องทางส่งใบเสร็จ');
   const email = text(b.email, 120), addr = text(b.deliveryAddress, 600);
   if (needsEmail(ch) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw bad('ใส่อีเมลลูกค้าสำหรับส่งใบเสร็จ');
   if (needsPost(ch) && !addr) throw bad('ใส่ที่อยู่ส่งใบเสร็จตัวจริง');
   const id = shortId('PAY');
-  const slip = await drive.upload(b.file, { kind: 'payment', docNo: ivNo, company: a.company, ref: id });
+  const slip = b.file ? await drive.upload(b.file, { kind: 'payment', docNo: ivNo, company: a.company, ref: id }) : '';
+  const whRef = [whOrder && `Order ${whOrder}`, whRt && `ใบเสร็จ WH ${whRt}`].filter(Boolean).join(' · ');
   const at = hub.sheetDateTime();
   await hub.appendRows('PaymentNotices', [{ noticeId: id, createdAt: at, requestedBy: user.email, salesName: user.name, ivRequestId: iv.ivRequestId, ivNo,
     company: a.company, paidDate, amount: round2(amount), paymentMethod: method, slipLink: slip, deliveryChannel: ch, email, deliveryAddress: addr,
-    note: text(b.note, 500), status: 'new', source: 'sales', accountNote: '', doneBy: '', updatedAt: at }]);
+    note: [whRef && `จ่ายผ่าน WH · ${whRef}`, text(b.note, 500)].filter(Boolean).join(' · ').slice(0, 700), status: 'new', source: 'sales', accountNote: '', doneBy: '', updatedAt: at }]);
   const exp = ar.enrich(a, ar.todayMs()).expected;
   await Promise.all([hub.log('catalog', 'pay_notice', id, `${user.email} · ${ivNo} · ${amount}`),
-    notify.chat(`💰 แจ้งลูกค้าจ่าย ${ivNo} · ${notify.co(a.company)} · ${money(amount)} บาท${Math.abs(exp - amount) > 1 ? ' · ⚠️ ยอดไม่ตรง' : ''} · ${user.name || user.email} · ${notify.link('ar', 'ตรวจและยืนยัน', { q: ivNo })}`)]);
+    notify.chat(`💰 แจ้งลูกค้าจ่าย ${ivNo} · ${notify.co(a.company)} · ${money(amount)} บาท${Math.abs(exp - amount) > 1 ? ' · ⚠️ ยอดไม่ตรง' : ''}${whRef ? ` · จ่ายผ่าน WH: ${whRef.replace(' · ', ', ')}` : ''} · ${user.name || user.email} · ${notify.link('ar', 'ตรวจและยืนยัน', { q: ivNo })}`)]);
   res.status(200).json({ ok: true, noticeId: id, message: 'แจ้งฝ่ายบัญชีแล้ว รอตรวจเงินเข้า' });
 }
 
@@ -1462,7 +1466,7 @@ async function list(req, res, user) {
       const a = byReq.get(r.ivRequestId) || (r.peakIvNo && byNo.get(String(r.peakIvNo).toUpperCase()));
       if (!a) return r;
       const e = ar.enrich(a, today);
-      return { ...r, ar: { state: e.state, dueDate: e.dueDate, expected: e.expected, paidDate: a.paidDate, paidAmount: a.paidAmount, paymentMethod: a.paymentMethod, rtNo: a.rtNo, daysOverdue: e.daysOverdue, commitDate: a.commitDate, followStatus: a.followStatus } };
+      return { ...r, ar: { state: e.state, segment: a.segment || '', dueDate: e.dueDate, expected: e.expected, paidDate: a.paidDate, paidAmount: a.paidAmount, paymentMethod: a.paymentMethod, rtNo: a.rtNo, daysOverdue: e.daysOverdue, commitDate: a.commitDate, followStatus: a.followStatus } };
     });
   res.status(200).json({ ok: true, uploads: drive.enabled(), requests: out.map((r) => docLinkFor(user, 'INV', r)) });
 }

@@ -414,7 +414,7 @@ function renderNotices() {
   $('pn-list').innerHTML = open.map((n) => {
     const r = D.invoices.find((x) => String(x.ivNo).toUpperCase() === String(n.ivNo).toUpperCase());
     const diff = r ? toNum(n.amount) - r.expected : 0;
-    return `<div class="pn"><div class="pn-top"><div><b>${esc(n.company)}</b> · ${esc(n.ivNo)}<div class="small">แจ้งโดย ${esc(n.salesName)} · ${esc(n.createdAt)}${n.note ? ' · 💬 ' + esc(n.note) : ''}</div></div>
+    return `<div class="pn"><div class="pn-top"><div><b>${esc(n.company)}</b> · ${esc(n.ivNo)}<div class="small">แจ้งโดย ${esc(n.salesName)} · ${esc(n.createdAt)}</div>${/^จ่ายผ่าน WH/.test(n.note || '') ? `<div class="small" style="margin-top:3px"><span class="st warn">จ่ายผ่าน Whitehouse</span> ${esc(n.note.replace(/^จ่ายผ่าน WH · /, ''))}</div>` : n.note ? `<div class="small">💬 ${esc(n.note)}</div>` : ''}</div>
       <div class="pn-amt"><b>${fmt(toNum(n.amount))}</b><div class="small">โอน ${esc(n.paidDate)} · ${esc(METHOD_TH[n.paymentMethod] || n.paymentMethod)}</div>${r && Math.abs(diff) > 1 ? `<div class="small" style="color:var(--bad-ink)">ควรได้รับ ${fmt(r.expected)} (ต่าง ${fmt(diff)})</div>` : ''}</div></div>
       <div class="pn-act">${/^https:\/\//.test(n.slipLink || '') ? `<a class="btn btn-g btn-sm" href="${esc(n.slipLink)}" target="_blank" rel="noopener">ดูสลิป ↗</a>` : ''}${!r ? '<span class="small" style="color:var(--bad-ink)">ไม่พบ INV นี้ในรายการ</span>' : ''}
         <span style="flex:1"></span><button class="btn btn-g btn-sm" type="button" onclick="rejectNotice('${esc(n.noticeId)}')">ยังไม่เห็นเงินเข้า</button><button class="btn btn-p btn-sm" type="button" onclick="confirmNotice('${esc(n.noticeId)}')">✓ ยืนยันเงินเข้า</button></div></div>`;

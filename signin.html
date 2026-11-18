@@ -45,7 +45,9 @@
   if (next && next.charAt(0) === '/' && next.charAt(1) !== '/') {
     // The #tab of the page the person wanted (e.g. a link from Google Chat to /request#mine) never reaches the
     // server; the browser keeps it on this page's address, so add it back.
-    if (next.indexOf('#') < 0 && /^#[\w-]{1,30}$/.test(location.hash)) next += location.hash;
+    // A chat link also names the sub-tab and the document: #mine?t=inv&q=IV-… or #q=IV-… (letters, digits and
+    // the few URL characters those use; nothing that could turn it into another address).
+    if (next.indexOf('#') < 0 && /^#[\w\-=&?%.~+]{1,200}$/.test(location.hash)) next += location.hash;
     document.getElementById('go').href = '/api/auth/google?next=' + encodeURIComponent(next);
   }
 </script>

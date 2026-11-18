@@ -906,6 +906,7 @@ async function arUpdate(req, res, user) {
     if ('paidAmount' in b) { const n = b.paidAmount === '' ? '' : Number(String(b.paidAmount).replace(/,/g, '')); if (n !== '' && !(n > 0)) throw bad('ยอดรับเงินไม่ถูกต้อง'); f.paidAmount = n; }
     if ('paymentMethod' in b) { const m = text(b.paymentMethod, 40); if (m && !ar.PAY_METHODS.includes(m)) throw bad('วิธีชำระเงินไม่ถูกต้อง'); f.paymentMethod = m; }
     if ('rtNo' in b) { f.rtNo = text(b.rtNo, 40).toUpperCase(); if (f.rtNo && f.rtNo !== String(row.rtNo || '').toUpperCase()) await assertDoc('RT', { no: f.rtNo, ref: 'paid:' + row.ivNo, taxId: row.taxId }); }
+    if ('whtRate' in b) { const w = ar.whtIn(b.whtRate); if (w !== null && Number(w) !== ar.whtPct(row)) f.whtRate = String(Number(w) / 100); }
     if ('delayReason' in b) f.delayReason = text(b.delayReason, 200);
     if ('docStatus' in b) { const d = text(b.docStatus, 20); if (!ar.DOC_STATUS.includes(d)) throw bad('สถานะเอกสารไม่ถูกต้อง'); f.docStatus = d; }
     if ('note' in b) f.note = text(b.note, 500);
@@ -984,11 +985,14 @@ async function createPayNotice(req, res, user) {
   const id = shortId('PAY');
   const slip = b.file ? await drive.upload(b.file, { kind: 'payment', docNo: ivNo, company: a.company, ref: id }) : '';
   const whRef = [whOrder && `Order ${whOrder}`, whRt && `ใบเสร็จ WH ${whRt}`].filter(Boolean).join(' · ');
+  // The customer withheld tax at a rate the INV does not carry: Sales says so, accounting confirms it (and only then is the INV changed).
+  const wht = ar.whtIn(b.whtRate);
+  const whtNote = wht !== null && Number(wht) !== ar.whtPct(a) ? (wht === '0' ? 'ลูกค้าไม่หัก ณ ที่จ่าย' : `หัก ณ ที่จ่าย ${wht}%`) : '';
   const at = hub.sheetDateTime();
   await hub.appendRows('PaymentNotices', [{ noticeId: id, createdAt: at, requestedBy: user.email, salesName: user.name, ivRequestId: iv.ivRequestId, ivNo,
     company: a.company, paidDate, amount: round2(amount), paymentMethod: method, slipLink: slip, deliveryChannel: ch, email, deliveryAddress: addr,
-    note: [whRef && `จ่ายผ่าน WH · ${whRef}`, text(b.note, 500)].filter(Boolean).join(' · ').slice(0, 700), status: 'new', source: 'sales', accountNote: '', doneBy: '', updatedAt: at }]);
-  const exp = ar.enrich(a, ar.todayMs()).expected;
+    note: [whRef && `จ่ายผ่าน WH · ${whRef}`, whtNote, text(b.note, 500)].filter(Boolean).join(' · ').slice(0, 700), status: 'new', source: 'sales', accountNote: '', doneBy: '', updatedAt: at }]);
+  const exp = wht !== null ? ar.expectedAt(a, wht) : ar.enrich(a, ar.todayMs()).expected;
   await Promise.all([hub.log('catalog', 'pay_notice', id, `${user.email} · ${ivNo} · ${amount}`),
     notify.chat(`💰 แจ้งลูกค้าจ่าย ${ivNo} · ${notify.co(a.company)} · ${money(amount)} บาท${Math.abs(exp - amount) > 1 ? ' · ⚠️ ยอดไม่ตรง' : ''}${whRef ? ` · จ่ายผ่าน WH: ${whRef.replace(' · ', ', ')}` : ''} · ${user.name || user.email} · ${notify.link('ar', 'ตรวจและยืนยัน', { q: ivNo })}`)]);
   res.status(200).json({ ok: true, noticeId: id, message: 'แจ้งฝ่ายบัญชีแล้ว รอตรวจเงินเข้า' });
@@ -1023,14 +1027,15 @@ async function updatePayNotice(req, res, user) {
   if (ar.parseDate(paidDate) > ar.todayMs()) throw bad('วันที่เงินเข้าเป็นวันในอนาคตไม่ได้');
   const amount = b.amount !== undefined && b.amount !== '' ? Number(String(b.amount).replace(/,/g, '')) : ar.num(row.amount);
   if (!(amount > 0)) throw bad('ยอดรับเงินไม่ถูกต้อง');
-  await hub.updateRow('Invoices', a._row, { paidDate, ...ar.onPaid(a, paidDate), paidAmount: round2(amount), paymentMethod: row.paymentMethod,
+  const wht = ar.whtIn(b.whtRate), whtNew = wht !== null && Number(wht) !== ar.whtPct(a);
+  await hub.updateRow('Invoices', a._row, { paidDate, ...ar.onPaid(a, paidDate), paidAmount: round2(amount), paymentMethod: row.paymentMethod, ...(whtNew ? { whtRate: String(Number(wht) / 100) } : {}),
     note: [a.note, `รับเงินตามที่ ${row.salesName || row.requestedBy} แจ้ง (${row.noticeId}) ยืนยันโดย ${who}`].filter(Boolean).join(' · ').slice(0, 500) });
   await hub.updateRow('PaymentNotices', row._row, { status: 'confirmed', paidDate, amount: round2(amount), accountNote: note, doneBy: who, updatedAt: at });
   if (a.peakIvId && require('../lib/peak').mode() !== 'off') {
     const slipFile = await drive.download(row.slipLink).catch(() => null);
     if (slipFile) await attachToPeak('invoice', a.peakIvId, slipFile, `PAYMENT_${row.ivNo}`);
   }
-  await Promise.all([hub.log('catalog', 'pay_confirm', row.noticeId, `${user.email} · ${row.ivNo} · ${amount}`),
+  await Promise.all([hub.log('catalog', 'pay_confirm', row.noticeId, `${user.email} · ${row.ivNo} · ${amount}${whtNew ? ` · หัก ณ ที่จ่าย ${ar.whtPct(a)}% → ${wht}%` : ''}`),
     notify.chat(`✅ ยืนยันเงินเข้า ${row.ivNo} · ${notify.co(row.company)} · ${await notify.at(row.requestedBy, row.salesName)}`)]);
   res.status(200).json({ ok: true });
 }
@@ -1486,7 +1491,7 @@ async function list(req, res, user) {
       const a = byReq.get(r.ivRequestId) || (r.peakIvNo && byNo.get(String(r.peakIvNo).toUpperCase()));
       if (!a) return r;
       const e = ar.enrich(a, today);
-      return { ...r, ar: { state: e.state, segment: a.segment || '', dueDate: e.dueDate, expected: e.expected, paidDate: a.paidDate, paidAmount: a.paidAmount, paymentMethod: a.paymentMethod, rtNo: a.rtNo, daysOverdue: e.daysOverdue, commitDate: a.commitDate, followStatus: a.followStatus } };
+      return { ...r, ar: { state: e.state, segment: a.segment || '', dueDate: e.dueDate, expected: e.expected, preVat: ar.num(a.preVat), whtPct: ar.whtPct(a), paidDate: a.paidDate, paidAmount: a.paidAmount, paymentMethod: a.paymentMethod, rtNo: a.rtNo, daysOverdue: e.daysOverdue, commitDate: a.commitDate, followStatus: a.followStatus } };
     });
   res.status(200).json({ ok: true, uploads: drive.enabled(), requests: out.map((r) => docLinkFor(user, 'INV', r)) });
 }

@@ -564,5 +564,21 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
     ok((j.entries || []).every((e, i, a) => !i || a[i - 1].ts >= e.ts), 'newest first');
     [s, j] = await call(BENZ, 'GET', '/api/invoice-requests?view=arlog');
     ok(s === 403, 'Sales gets 403: ' + s); }
+  console.log('── 23. customer withheld tax at a rate the INV does not carry');
+  { const old = db().PaymentNotices.find((x) => x.ivRequestId === tw[0] && x.status === 'new');
+    [s, j] = await call(ADMIN, 'PATCH', '/api/invoice-requests', { action: 'pay_reject', noticeId: old.noticeId, note: 'ทดสอบ' }); ok(s === 200, 'open notice sent back first: ' + (j.error || s));
+    const a0 = db().Invoices.find((x) => x.ivRequestId === tw[0]); const cur = Math.round(Number(a0.whtRate) * (Number(a0.whtRate) < 1 ? 100 : 1)), W = cur === 3 ? 5 : 3; const pre = Number(a0.preVat), net3 = Math.round((pre * 1.07 - pre * W / 100) * 100) / 100;
+    const base = { action: 'pay_notice', ivRequestId: tw[0], paidDate: '2026-11-13', amount: net3, paymentMethod: 'Bank Transfer', deliveryChannel: 'sales', whOrderId: 'ORD-1', whReceiptNo: 'WH-2' };
+    [s, j] = await call(BENZ, 'POST', '/api/invoice-requests', { ...base, whtRate: '4' }); ok(s === 400 && /หัก ณ ที่จ่าย/.test(j.error || ''), 'a rate that does not exist is refused: ' + (j.error || s));
+    [s, j] = await call(BENZ, 'POST', '/api/invoice-requests', { ...base, whtRate: String(W) });
+    const pn = db().PaymentNotices.find((x) => x.noticeId === j.noticeId);
+    ok(s === 200 && pn.note.includes(`หัก ณ ที่จ่าย ${W}%`) && db().Invoices.find((x) => x.ivRequestId === tw[0]).whtRate === a0.whtRate, 'Sales says another rate was withheld: kept on the notice, the INV is not changed yet: ' + (j.error || pn.note));
+    ok(!/ยอดไม่ตรง/.test((peak().chat || []).map((x) => x.text).pop() || ''), 'no "amount differs" warning when the amount fits the rate Sales gave');
+    [s, j] = await call(ADMIN, 'PATCH', '/api/invoice-requests', { action: 'pay_confirm', noticeId: pn.noticeId, whtRate: String(W) });
+    const a1 = db().Invoices.find((x) => x.ivRequestId === tw[0]);
+    ok(s === 200 && Number(a1.whtRate) === W / 100 && Number(a1.paidAmount) === net3 && a1.paidDate, 'accounting confirms: INV now carries the new rate and is paid at the net amount: ' + (j.error || a1.whtRate + ' ' + a1.paidAmount));
+    [s, j] = await call(ADMIN, 'GET', '/api/invoice-requests?view=ar');
+    const r = (j.invoices || []).find((x) => x.ivNo === a1.ivNo);
+    ok(r && Math.abs(r.expected - net3) < 0.01, 'expected amount of that INV follows the new rate: ' + (r && r.expected)); }
   done();
 })().catch((e) => { console.error('CRASH', e); ok(false, 'CRASH: the run stopped early: ' + e.message); done(); process.exitCode = 1; });

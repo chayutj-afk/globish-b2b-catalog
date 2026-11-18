@@ -1255,13 +1255,18 @@ function payNoticeLine(v) {
 }
 async function openPayNotice(id) {
   const v = IVS.find((x) => x.ivRequestId === id); if (!v) return;
-  const exp = v.ar && v.ar.expected;
+  let exp = v.ar && v.ar.expected;
+  // Withholding tax: the customer may deduct at another rate than the INV says. Sales picks it, accounting confirms.
+  const pre = v.ar && toNum(v.ar.preVat), w0 = (v.ar && v.ar.whtPct) || 0;
+  const expAt = (p) => Math.round((pre * 1.07 - pre * p / 100) * 100) / 100;
+  window.pnWht = (sel) => { const e = expAt(Number(sel.value)), am = $('pn-am'); if ([0, 1, 2, 3, 5].some((p) => Math.abs(toNum(am.value) - expAt(p)) < 0.005)) am.value = e; exp = e; $('pn-exp').textContent = `ยอดที่ควรได้รับ ${fmt(e)} บาท (รวม VAT หัก ณ ที่จ่าย ${sel.value}%)`; };
   // B2C / B2E customers can pay through Whitehouse, which issues its own receipt.
   const seg = (v.ar && v.ar.segment) || ((REQS.find((x) => x.requestId === v.requestId) || {}).segment) || '';
   const wh = seg !== 'B2B' && seg !== 'B2S';
-  const ok = await ask({ title: `💰 แจ้งบัญชีว่าลูกค้าจ่าย ${v.peakIvNo} แล้ว`, ok: 'ส่งให้ฝ่ายบัญชี', html: `<p><b>${esc(v.company)}</b>${exp ? `<br><span class="small">ยอดที่ควรได้รับ ${fmt(exp)} บาท (รวม VAT หัก ณ ที่จ่ายแล้ว)</span>` : ''}</p>
+  const ok = await ask({ title: `💰 แจ้งบัญชีว่าลูกค้าจ่าย ${v.peakIvNo} แล้ว`, ok: 'ส่งให้ฝ่ายบัญชี', html: `<p><b>${esc(v.company)}</b>${exp ? `<br><span class="small" id="pn-exp">ยอดที่ควรได้รับ ${fmt(exp)} บาท (รวม VAT หัก ณ ที่จ่ายแล้ว)</span>` : ''}</p>
     <div class="row"><div class="fg"><label>วันที่ลูกค้าโอน *</label><input id="pn-dt" type="date"></div><div class="fg"><label>ยอดที่โอน *</label><input id="pn-am" type="number" step="0.01" min="0" value="${exp || ''}"></div></div>
     <div class="row"><div class="fg"><label>วิธีชำระ *</label><select id="pn-mt">${PAY_METHODS.map((m) => `<option value="${m}">${PAY_METHOD_TH[m]}</option>`).join('')}</select></div><div class="fg"><label>สลิป / หลักฐาน <span id="pn-file-req">*</span></label><input id="pn-file" type="file" accept=".pdf,.jpg,.jpeg,.png"></div></div>
+    ${pre ? `<div class="fg"><label for="pn-wht">ลูกค้าหัก ณ ที่จ่าย</label><select id="pn-wht" onchange="pnWht(this)">${[0, 1, 2, 3, 5].map((p) => `<option value="${p}"${p === w0 ? ' selected' : ''}>${p ? p + '%' : 'ไม่หัก'}</option>`).join('')}</select><div class="sub">เปลี่ยนเมื่อลูกค้าหักต่างจากที่ระบุใน INV ยอดที่ควรได้รับจะปรับตาม</div></div>` : ''}
     <div class="row"><div class="fg"><label>ส่งใบเสร็จทาง *</label><select id="pn-ch" onchange="$('pn-em-w').hidden=!/email/.test(this.value);$('pn-ad-w').hidden=!/post/.test(this.value)"><option value="sales">ส่งไฟล์ให้ Sales</option><option value="email">ส่งอีเมลลูกค้า</option><option value="post">ส่งตัวจริงตามที่อยู่</option><option value="email_post">ส่งอีเมลและตัวจริง</option></select></div>
     <div class="fg" id="pn-em-w" hidden><label>อีเมลลูกค้า *</label><input id="pn-em" type="email" maxlength="120" value="${esc(v.financeEmail || '')}"></div></div>
     <div class="fg" id="pn-ad-w" hidden><label>ที่อยู่ส่งตัวจริง *</label><input id="pn-ad" type="text" maxlength="600" value="${esc(v.originalAddress || v.deliveryAddress || '')}"></div>
@@ -1273,7 +1278,7 @@ async function openPayNotice(id) {
   if (!ok) return;
   const g = (k) => (($(k) || {}).value || '').trim();
   const f = $('pn-file').files[0];
-  const body = { action: 'pay_notice', ivRequestId: id, paidDate: g('pn-dt'), amount: g('pn-am'), paymentMethod: g('pn-mt'), deliveryChannel: g('pn-ch'), email: g('pn-em'), deliveryAddress: g('pn-ad'), note: g('pn-nt'), viaWh: !!(($('pn-wh') || {}).checked) };
+  const body = { action: 'pay_notice', ivRequestId: id, paidDate: g('pn-dt'), amount: g('pn-am'), paymentMethod: g('pn-mt'), deliveryChannel: g('pn-ch'), email: g('pn-em'), deliveryAddress: g('pn-ad'), note: g('pn-nt'), viaWh: !!(($('pn-wh') || {}).checked), ...($('pn-wht') ? { whtRate: g('pn-wht') } : {}) };
   const viaWh = body.viaWh;
   if (viaWh) { body.whOrderId = g('pn-who'); body.whReceiptNo = g('pn-whr'); }
   const miss = !body.paidDate ? 'ใส่วันที่ลูกค้าโอน' : !(toNum(body.amount) > 0) ? 'ใส่ยอดที่โอน' : viaWh && !(body.whOrderId && body.whReceiptNo) ? 'จ่ายผ่าน Whitehouse ต้องใส่ทั้ง Order ID และเลขใบเสร็จที่ WH ออก' : !f && !viaWh ? 'แนบสลิป / หลักฐานการโอน' : f && f.size > 3 * 1024 * 1024 ? 'ไฟล์ใหญ่เกิน 3 MB' : '';

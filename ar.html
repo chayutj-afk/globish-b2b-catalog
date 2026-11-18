@@ -446,30 +446,55 @@ function openFollow(iv) {
     } });
 }
 const METHOD_TH = { 'Bank Transfer': 'โอนเงิน', Cheque: 'เช็ค', Cash: 'เงินสด', 'Credit/Debit Card': 'บัตรเครดิต / เดบิต', Others: 'อื่นๆ' };
+// Withholding tax: the INV's own rate (whole percent), what should arrive at a rate, and which rate an amount fits.
+const WHT = [0, 1, 2, 3, 5];
+const whtCur = (r) => { const s = String(r.whtRate ?? '').trim(), n = toNum(s); return Math.round((s.includes('%') || n >= 1 ? n / 100 : n) * 100); };
+const expAt = (r, pct) => { const pre = toNum(r.preVat); return Math.round((pre * 1.07 - pre * pct / 100) * 100) / 100; };
+const whtFit = (r, amount) => { const f = WHT.filter((p) => Math.abs(expAt(r, p) - amount) <= 1); return f.length === 1 ? f[0] : null; };
+const whtSaid = (n) => { const m = /หัก ณ ที่จ่าย (\d)%/.exec(n.note || ''); return m ? Number(m[1]) : /ลูกค้าไม่หัก ณ ที่จ่าย/.test(n.note || '') ? 0 : null; };
+const whtOpts = (sel) => WHT.map((p) => `<option value="${p}"${p === sel ? ' selected' : ''}>${p ? p + '%' : 'ไม่หัก'}</option>`).join('');
 function renderNotices() {
   const open = PN.filter((n) => n.status === 'new');
   $('pn-card').hidden = !open.length; $('pn-n').textContent = open.length ? `(${open.length})` : '';
   $('pn-list').innerHTML = open.map((n) => {
     const r = D.invoices.find((x) => String(x.ivNo).toUpperCase() === String(n.ivNo).toUpperCase());
     const diff = r ? toNum(n.amount) - r.expected : 0;
+    // The amount fits another withholding rate than the INV carries: say so instead of a bare difference.
+    const fit = r && Math.abs(diff) > 1 ? whtFit(r, toNum(n.amount)) : null;
+    const amtNote = !r || Math.abs(diff) <= 1 ? '' : fit !== null
+      ? `<div class="small" style="color:var(--warn-ink)">${fit ? `ลูกค้าหัก ณ ที่จ่าย ${fit}% (${fmt(Math.round(toNum(r.preVat) * fit) / 100)})` : 'ลูกค้าไม่หัก ณ ที่จ่าย'} · ใน INV ระบุ ${whtCur(r) ? whtCur(r) + '%' : 'ไม่หัก'}</div>`
+      : `<div class="small" style="color:var(--bad-ink)">ควรได้รับ ${fmt(r.expected)} (ต่าง ${fmt(diff)})</div>`;
     return `<div class="pn"><div class="pn-top"><div><b>${esc(n.company)}</b> · ${esc(n.ivNo)}<div class="small">แจ้งโดย ${esc(n.salesName)} · ${esc(n.createdAt)}</div>${/^จ่ายผ่าน WH/.test(n.note || '') ? `<div class="small" style="margin-top:3px"><span class="st warn">จ่ายผ่าน Whitehouse</span> ${esc(n.note.replace(/^จ่ายผ่าน WH · /, ''))}</div>` : n.note ? `<div class="small">💬 ${esc(n.note)}</div>` : ''}</div>
-      <div class="pn-amt"><b>${fmt(toNum(n.amount))}</b><div class="small">โอน ${esc(n.paidDate)} · ${esc(METHOD_TH[n.paymentMethod] || n.paymentMethod)}</div>${r && Math.abs(diff) > 1 ? `<div class="small" style="color:var(--bad-ink)">ควรได้รับ ${fmt(r.expected)} (ต่าง ${fmt(diff)})</div>` : ''}</div></div>
+      <div class="pn-amt"><b>${fmt(toNum(n.amount))}</b><div class="small">โอน ${esc(n.paidDate)} · ${esc(METHOD_TH[n.paymentMethod] || n.paymentMethod)}</div>${amtNote}</div></div>
       <div class="pn-act">${/^https:\/\//.test(n.slipLink || '') ? `<a class="btn btn-g btn-sm" href="${esc(n.slipLink)}" target="_blank" rel="noopener">ดูสลิป ↗</a>` : ''}${!r ? '<span class="small" style="color:var(--bad-ink)">ไม่พบ INV นี้ในรายการ</span>' : ''}
         <span style="flex:1"></span><button class="btn btn-g btn-sm" type="button" onclick="rejectNotice('${esc(n.noticeId)}')">ยังไม่เห็นเงินเข้า</button><button class="btn btn-p btn-sm" type="button" onclick="confirmNotice('${esc(n.noticeId)}')">✓ ยืนยันเงินเข้า</button></div></div>`;
   }).join('');
 }
 function confirmNotice(id) {
   const n = PN.find((x) => x.noticeId === id);
+  const r = D.invoices.find((x) => String(x.ivNo).toUpperCase() === String(n.ivNo).toUpperCase());
+  // Start from what Sales said, else the rate the amount fits, else the INV's own rate.
+  const w0 = !r ? 0 : whtSaid(n) ?? whtFit(r, toNum(n.amount)) ?? whtCur(r);
+  window.cnWht = () => { if (!r) return; const p = Number(val('cn-wht')), e = expAt(r, p), d = toNum(val('cn-am')) - e; $('cn-exp').innerHTML = `ที่ควรได้รับ ${fmt(e)}${Math.abs(d) > 1 ? ` <span style="color:var(--bad-ink)">(ต่าง ${fmt(d)})</span>` : ' · ยอดตรง'}${p !== whtCur(r) ? ` · จะแก้อัตราใน INV จาก ${whtCur(r) ? whtCur(r) + '%' : 'ไม่หัก'} เป็น ${p ? p + '%' : 'ไม่หัก'}` : ''}`; };
   formModal({ title: '✓ ยืนยันเงินเข้า', ok: '✓ ยืนยันเงินเข้า', html: `<p style="margin:0 0 12px"><b>${esc(n.company)}</b> · ${esc(n.ivNo)}<br><span class="small">แจ้งโดย ${esc(n.salesName)}</span></p>
     <div class="row"><div class="fg"><label>วันที่เงินเข้า *</label><input type="date" id="cn-dt" value="${iso(n.paidDate)}"></div>
-    <div class="fg"><label>ยอดที่ได้รับ *</label><input type="text" inputmode="decimal" id="cn-am" value="${esc(n.amount)}"></div></div>
+    <div class="fg"><label>ยอดที่ได้รับ *</label><input type="text" inputmode="decimal" id="cn-am" value="${esc(n.amount)}" oninput="cnWht()"></div></div>
+    ${r ? `<div class="fg"><label for="cn-wht">ลูกค้าหัก ณ ที่จ่าย</label><select id="cn-wht" onchange="cnWht()">${whtOpts(w0)}</select><div class="sub" id="cn-exp"></div></div>` : ''}
     <p class="small">แก้วันที่หรือยอดได้ถ้า statement ไม่ตรงกับที่เซลแจ้ง</p>
     <div class="fg"><label>หมายเหตุ</label><input type="text" id="cn-nt" maxlength="500"></div>`,
     save: async (err) => {
       if (!val('cn-dt') || !(toNum(val('cn-am')) > 0)) { err('ใส่วันที่และยอดที่ได้รับ'); return false; }
-      await patch({ action: 'pay_confirm', noticeId: id, paidDate: val('cn-dt'), amount: val('cn-am'), note: val('cn-nt') }); await done(`ยืนยันเงินเข้า ${n.ivNo} แล้ว`);
+      await patch({ action: 'pay_confirm', noticeId: id, paidDate: val('cn-dt'), amount: val('cn-am'), note: val('cn-nt'), ...(r ? { whtRate: val('cn-wht') } : {}) }); await done(`ยืนยันเงินเข้า ${n.ivNo} แล้ว`);
       offerReceipt(n.ivNo, { ch: n.deliveryChannel, email: n.email, addr: n.deliveryAddress, method: n.paymentMethod });
     } });
+  cnWht();
+}
+// Record-payment form: another withholding rate changes what should arrive (and the amount, if it was still the old expected figure).
+function pdWht(sel) {
+  const r = find(sel.dataset.iv); if (!r) return;
+  const e = expAt(r, Number(sel.value)), am = $('pd-am');
+  if (WHT.some((p) => Math.abs(toNum(am.value) - expAt(r, p)) < 0.005)) am.value = e;
+  $('pd-exp').textContent = `ที่ควรได้รับ ${fmt(e)} (รวม VAT หัก ณ ที่จ่าย ${sel.value}%)`;
 }
 function rejectNotice(id) {
   const n = PN.find((x) => x.noticeId === id);
@@ -489,7 +514,8 @@ function openPaid(iv) {
   formModal({ title: paid ? '💰 แก้ไขการรับเงิน' : r.awaitCash ? '💰 ยืนยันเงินเข้า' : '💰 บันทึกรับเงิน', ok: r.awaitCash && !paid ? '✓ ยืนยันเงินเข้า' : '✓ บันทึกรับเงิน', html: head(r) + `
     ${r.awaitCash ? `<p class="small" style="margin:0 0 10px">ใบนี้มีใบเสร็จแล้ว${r.rtNo ? ' (' + esc(r.rtNo) + ')' : ''}${r.rtDate ? ' ลงวันที่ ' + esc(r.rtDate) : ''} ใส่วันที่เงินเข้าบัญชีจริงตาม statement</p>` : ''}
     <div class="row"><div class="fg"><label>วันที่เงินเข้าบัญชีจริง *</label><input type="date" id="pd-dt" max="${todayIso}" value="${iso(r.paidDate)}"><div class="sub">ไม่ใช่วันที่บนใบเสร็จหรือวันรับเช็ค</div></div>
-    <div class="fg"><label>ยอดที่ได้รับ *</label><input type="text" inputmode="decimal" id="pd-am" value="${r.paidAmount ? esc(r.paidAmount) : r.expected}"><div class="sub">ที่ควรได้รับ ${fmt(r.expected)} (รวม VAT หัก ณ ที่จ่ายแล้ว)</div></div></div>
+    <div class="fg"><label>ยอดที่ได้รับ *</label><input type="text" inputmode="decimal" id="pd-am" value="${r.paidAmount ? esc(r.paidAmount) : r.expected}"><div class="sub" id="pd-exp">ที่ควรได้รับ ${fmt(r.expected)} (รวม VAT หัก ณ ที่จ่ายแล้ว)</div></div></div>
+    <div class="fg"><label for="pd-wht">ลูกค้าหัก ณ ที่จ่าย</label><select id="pd-wht" onchange="pdWht(this)" data-iv="${esc(iv)}">${whtOpts(whtCur(r))}</select><div class="sub">เปลี่ยนเมื่อลูกค้าหักต่างจากที่ระบุใน INV ระบบจะแก้อัตราใน INV ให้</div></div>
     <div class="row"><div class="fg"><label>วิธีชำระ *</label><select id="pd-mt">${mOpts}</select></div>
     ${paid ? '' : '<div class="fg"><label>สลิป / หลักฐาน *</label><input type="file" id="pd-file" accept=".pdf,.jpg,.jpeg,.png"></div>'}</div>
     ${paid || hasRt ? '' : `<div class="row"><div class="fg"><label>ส่งใบเสร็จทาง *</label><select id="pd-ch" onchange="$('pd-em-w').hidden=!/email/.test(this.value);$('pd-ad-w').hidden=!/post/.test(this.value)"><option value="sales">ส่งไฟล์ให้ Sales</option><option value="email">ส่งอีเมลลูกค้า</option><option value="post">ส่งตัวจริงตามที่อยู่</option><option value="email_post">ส่งอีเมลและตัวจริง</option></select></div>
@@ -499,7 +525,8 @@ function openPaid(iv) {
     <div class="fg"><label>เหตุผลที่จ่ายช้า (ถ้ามี)</label><select id="pd-dl">${opt(L.delay, r.delayReason, '—')}</select></div>
     <p class="small">วันนัดจ่ายจะถูกปรับให้เท่ากับวันรับเงิน และระบบเก็บวันนัดเดิมไว้ให้ดูว่าจ่ายก่อนหรือหลังนัด<br>ใบเสร็จ (RT) ฝ่ายบัญชีออกจาก INV นี้ได้หลังบันทึกรับเงิน ที่หน้า รออนุมัติ › ใบเสร็จ${PN.some((n) => n.status === 'new' && String(n.ivNo).toUpperCase() === String(iv).toUpperCase()) ? ' · <b>เซลแจ้งจ่าย INV นี้ไว้แล้ว</b> ยืนยันจากรายการด้านบนจะได้ข้อมูลและสลิปที่เซลแนบ' : ''}</p>`,
     save: async (err) => {
-      const body = { action: 'ar_update', ivNo: iv, paidDate: val('pd-dt'), paidAmount: val('pd-am'), paymentMethod: val('pd-mt'), delayReason: val('pd-dl') };
+      const body = { action: 'ar_update', ivNo: iv, paidDate: val('pd-dt'), paidAmount: val('pd-am'), paymentMethod: val('pd-mt'), delayReason: val('pd-dl'), whtRate: val('pd-wht') };
+      const expNow = expAt(r, Number(body.whtRate));
       if (!body.paidDate || !body.paidAmount || !body.paymentMethod) { err('ใส่วันที่เงินเข้า ยอด และวิธีชำระ'); return false; }
       if (body.paidDate > todayIso) { err('วันที่เงินเข้าเป็นวันในอนาคตไม่ได้ ถ้าเงินยังไม่เข้าให้ใช้ปุ่ม "มีใบเสร็จ / เช็คแล้ว รอเงินเข้า"'); return false; }
       if (!paid && !hasRt) {
@@ -507,8 +534,8 @@ function openPaid(iv) {
         if (/email/.test(body.deliveryChannel) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) { err('ใส่อีเมลลูกค้าสำหรับส่งใบเสร็จ'); return false; }
         if (/post/.test(body.deliveryChannel) && !body.deliveryAddress) { err('ใส่ที่อยู่ส่งใบเสร็จตัวจริง'); return false; }
       }
-      const diff = toNum(body.paidAmount) - r.expected;
-      if (Math.abs(diff) > 1 && !confirmDiff) { confirmDiff = true; err(`ยอดต่างจากที่ควรได้รับ ${fmt(r.expected)} อยู่ ${fmt(diff)} บาท กดบันทึกอีกครั้งเพื่อยืนยัน`); return false; }
+      const diff = toNum(body.paidAmount) - expNow;
+      if (Math.abs(diff) > 1 && !confirmDiff) { confirmDiff = true; err(`ยอดต่างจากที่ควรได้รับ ${fmt(expNow)} อยู่ ${fmt(diff)} บาท กดบันทึกอีกครั้งเพื่อยืนยัน`); return false; }
       confirmDiff = false;
       const fl = $('pd-file') && $('pd-file').files[0];
       if (!paid && !fl) { err('แนบสลิป / หลักฐานการรับเงิน'); return false; }

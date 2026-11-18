@@ -163,8 +163,8 @@ code{font-size:11px;background:var(--panel-2);padding:2px 5px;border-radius:4px;
 .role-btn.op.on{color:var(--primary)}
 
 /* Coach-type selection inside calculator */
-.coach-pick{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:4px}
-@media(max-width:560px){.coach-pick{grid-template-columns:1fr}}
+.coach-pick{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:4px}
+@media(max-width:720px){.coach-pick{grid-template-columns:repeat(2,1fr)}}
 .coach-card{border:2px solid var(--gray-200);border-radius:10px;padding:14px;cursor:pointer;text-align:center;transition:all .15s;background:var(--panel)}
 .coach-card:hover{border-color:var(--primary);background:var(--primary-light)}
 .coach-card.on{border-color:var(--primary);background:var(--primary-light);box-shadow:0 0 0 3px rgba(245,102,0,.12)}
@@ -1058,22 +1058,12 @@ function selectType(i) {
     document.getElementById('surcharge-block').style.display = 'none';
     document.getElementById('opts-body').innerHTML = `
       <div class="card-label" style="margin-bottom:10px;font-size:11px">เลือกประเภท Coach</div>
-      <div class="coach-pick">
-        <div class="coach-card" onclick="selectPCCoach('Global')">
-          <div class="coach-icon">🌍</div>
-          <div class="coach-name">Global Coach</div>
-          <div class="coach-desc">Native · European · Asian</div>
-        </div>
-        <div class="coach-card" onclick="selectPCCoach('Non-Native')">
-          <div class="coach-icon">🤝</div>
-          <div class="coach-name">Non-Native Coach</div>
-          <div class="coach-desc">Asian · European</div>
-        </div>
-        <div class="coach-card" onclick="selectPCCoach('Native')">
-          <div class="coach-icon">👑</div>
-          <div class="coach-name">Native Coach</div>
-          <div class="coach-desc">Native English Speaker</div>
-        </div>
+      <div class="coach-pick">${PC_COACH_GROUPS.map((g) => `
+        <div class="coach-card" onclick="selectPCCoach('${g.k}')">
+          <div class="coach-icon">${g.ico}</div>
+          <div class="coach-name">${g.name}</div>
+          <div class="coach-desc">${g.desc}</div>
+        </div>`).join('')}
       </div>`;
     return;
   }
@@ -1101,25 +1091,22 @@ function selectType(i) {
   renderBandBar(sample, defN);
 }
 
-// Coach Region config values that are compatible with each Sales-facing coach-type
-// selection. A package's `coach` field only needs to match ONE of these — not be
-// an exact string match — because narrower Coach Region configs (Thai / Asian /
-// Native) are subsets of the broader "Non-Native" and "Global" groupings.
-const COACH_MATCH = {
-  'Global':     ['Global'],
-  'Non-Native': ['Non-Native', 'Thai', 'Asian', 'Filipino'],
-  'Native':     ['Native']
-};
+// Private Class coach groups (PH / EU+PH / NonNatives / All, from the Product team's package sheet).
+// A package belongs to a group by the coach region in its Key H.S. hero part
+// ("Private Class-18-3-Filipino and European/…" → EU+PH), so the coach field can stay as it is.
+const PC_COACH_GROUPS = [
+  { k: 'All',        region: 'Asian, European and Native', ico: '🌍', name: 'All Coaches', desc: 'Native · European · Asian' },
+  { k: 'NonNatives', region: 'Asian and European',         ico: '🤝', name: 'Non-Native',  desc: 'Asian · European' },
+  { k: 'EU+PH',      region: 'Filipino and European',      ico: '🌐', name: 'EU + PH',     desc: 'European · Filipino' },
+  { k: 'PH',         region: 'Filipino',                   ico: '🏝️', name: 'PH',          desc: 'Filipino' },
+];
+const pcRegion = (p) => { const m = /^[^/]*?-\d+-\d+-([^/]*)\//.exec(p.keyHS || ''); return m ? m[1].trim() : ''; };
 
 function selectPCCoach(coachType) {
   ST.coachType = coachType;
-  const matchList = COACH_MATCH[coachType] || [coachType];
-  const pkgs = PKGS.filter(p => p.hero === 'Private Class' && matchList.includes(p.coach));
-  const label = coachType === 'Global'
-    ? '🌍 Global Coach (Native · European · Asian)'
-    : coachType === 'Native'
-    ? '👑 Native Coach'
-    : '🤝 Non-Native Coach (Asian · European)';
+  const g = PC_COACH_GROUPS.find((x) => x.k === coachType) || PC_COACH_GROUPS[0];
+  const pkgs = PKGS.filter(p => p.hero === 'Private Class' && pcRegion(p) === g.region);
+  const label = `${g.ico} ${g.name} (${g.desc})`;
   document.getElementById('card-qty').style.display = 'block';
   document.getElementById('surcharge-block').style.display = 'none';
   document.getElementById('opts-body').innerHTML = `

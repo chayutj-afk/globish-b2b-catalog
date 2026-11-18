@@ -166,11 +166,19 @@ async function create(req, res, user) {
   const at = hub.sheetDateTime(now);
   const batchId = newBatchId(now);
   // Checks first (sheet reads are quick), so a duplicate or over-QT request never leaves a stray file in Drive.
-  const [requests, existing] = await Promise.all([r.requestId ? hub.readTable('Requests') : [], hub.readTable('InvoiceRequests')]);
+  const [requests, existing] = await Promise.all([r.requestId || r.qtNo ? hub.readTable('Requests') : [], hub.readTable('InvoiceRequests')]);
+  // The QT number was typed as "outside the app" but the app knows that QT (e.g. one accounting brought in
+  // from PEAK): use it, so the balance is checked and accounting does not have to link the request again.
+  let typed = false;
+  if (!r.requestId && r.qtNo) {
+    const hit = requests.find((x) => String(x.peakQtNo || '').trim().toUpperCase() === String(r.qtNo).trim().toUpperCase()
+      && ['qt_approved', 'accepted', 'iv_requested', 'iv_issued'].includes(x.status));
+    if (hit) { r.requestId = hit.requestId; r.offReason = ''; typed = true; }
+  }
   let linked = null;
   if (r.requestId) {
     linked = requests.find((x) => x.requestId === r.requestId);
-    if (!linked || (!can(user, 'approve') && linked.requestedBy !== user.email)) throw bad('ไม่พบคำขอใบเสนอราคาที่เลือก');
+    if (!linked || (!typed && !can(user, 'approve') && linked.requestedBy !== user.email)) throw bad('ไม่พบคำขอใบเสนอราคาที่เลือก');
     // Only a QT accounting has approved in PEAK can be billed.
     if (!['qt_approved', 'accepted', 'iv_requested', 'iv_issued'].includes(linked.status)) throw bad('QT นี้ยังไม่ได้อนุมัติใน PEAK ขอ INV ได้หลังฝ่ายบัญชีอนุมัติ QT แล้ว', 409);
     // PEAK API on: the QT may have been edited in PEAK since; balance checks below use its current totals.

@@ -536,5 +536,12 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
     const pn = db().PaymentNotices.find((x) => x.noticeId === j.noticeId);
     ok(s === 200 && pn && pn.note === 'จ่ายผ่าน WH · Order ORD-778899 · ใบเสร็จ WH WH-RT-0042 · ลูกค้าจ่ายเอง' && !pn.slipLink, 'notice kept with the WH order and receipt, no slip needed: ' + (j.error || (pn && pn.note)));
     { const t = (peak().chat || []).map((x) => x.text).join('\n'); ok(/จ่ายผ่าน WH: Order ORD-778899, ใบเสร็จ WH WH-RT-0042/.test(t), 'chat message says it was paid through WH'); } }
+  console.log('── 20. a QT typed as "outside the app" that the app already knows is linked on its own');
+  { const adq = db().Requests.find((x) => x.peakQtNo === 'QO-20240700200');
+    [s, j] = await call(BENZ, 'POST', '/api/invoice-requests', ivBody({}, { ...ext, qtNo: 'qo-20240700200 ', invoices: [{ amount: 8900, students: 1, wantedIssueDate: '2026-12-01', creditTermDays: 30, originalDoc: 'no' }] }));
+    const nr = db().InvoiceRequests.filter((x) => x.qtNo && /QO-20240700200/i.test(x.qtNo)).pop();
+    ok(s === 200 && nr.requestId === adq.requestId && !/QT นอกระบบ/.test(nr.overReason || ''), 'request linked to the QT in the app, not marked as outside: ' + (j.error || nr.requestId + ' ' + nr.overReason));
+    [s, j] = await call(BENZ, 'POST', '/api/invoice-requests', ivBody({}, { ...ext, qtNo: 'QO-20240700200', invoices: [{ amount: 9000000, students: 1, wantedIssueDate: '2026-12-01', creditTermDays: 30, originalDoc: 'no' }] }));
+    ok(s === 400 && /เกินยอด QT/.test(j.error || ''), 'and the balance of that QT is checked: ' + (j.error || s)); }
   done();
 })().catch((e) => { console.error('CRASH', e); ok(false, 'CRASH: the run stopped early: ' + e.message); done(); process.exitCode = 1; });

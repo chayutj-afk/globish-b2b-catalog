@@ -58,7 +58,8 @@ test('column-layout guard: live headers match, moved column is caught', () => {
   assert.match(hub.layoutProblem('Users', moved), /คอลัมน์ C/);
   assert.match(hub.layoutProblem('Users', live.slice(0, 10)), /คอลัมน์ K/, 'missing last column');
   assert.equal(hub.layoutProblem('Requests', require('../lib/headers').Requests.map((h) => h.replace('WHT %', 'WHT % (หัก ณ ที่จ่าย: 0 = ไม่หัก)'))), '');
-  for (const t of Object.keys(hub.TABLES)) assert.equal(require('../lib/headers')[t].length, hub.TABLES[t].length, t);
+  // DescTemplates is optional and read-only (the app never writes it), so it has no header guard.
+  for (const t of Object.keys(hub.TABLES).filter((x) => x !== 'DescTemplates')) assert.equal(require('../lib/headers')[t].length, hub.TABLES[t].length, t);
 });
 
 test('PEAK number/link checks catch wrong type and reuse', () => {

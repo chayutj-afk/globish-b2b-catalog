@@ -26,7 +26,7 @@ async function inner(req, res) {
     if (sp.get('keyHS')) {
       const k = String(sp.get('keyHS')).slice(0, 400), lang = sp.get('lang') === 'EN' ? 'EN' : 'TH';
       const name = heroName(k, lang);
-      return res.status(200).json({ ok: true, name, heading: name ? describeKeyHS(k, { lang }).split('\n')[0] : '' });
+      return res.status(200).json({ ok: true, name, heading: name ? describeKeyHS(k, { lang, short: true }) : '' });
     }
     // ?type=G012-00003 → the PEAK service groups that customer type picks from (e.g. B2S + Assessment).
     if (sp.get('type')) {

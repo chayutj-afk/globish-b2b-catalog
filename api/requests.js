@@ -142,6 +142,7 @@ async function create(req, res, user) {
     for (const it of items.filter((x) => x.kind === 'service' && x.peakDesc === undefined)) it.wh = wh.get(it.code.replace(/_.*$/, '')) || null;
   }
 
+  await require('../lib/templates').load(); // Product's wording for line descriptions (falls back to the built-in text)
   const priced = items.map((it) => {
     const kind = it.kind || 'catalog';
     const lang = r.docLang;

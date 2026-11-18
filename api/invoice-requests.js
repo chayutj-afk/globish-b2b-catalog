@@ -1450,6 +1450,11 @@ async function importLegacy(req, res, user) {
 async function list(req, res, user) {
   if (req.query && req.query.view === 'ar') return arList(req, res, user);
   if (req.query && req.query.view === 'receipts') return listReceipts(req, res, user);
+  // Approval history (accounting): every action from SyncLog joined to its request. Read only.
+  if (req.query && req.query.view === 'history') {
+    if (!can(user, 'approve') && !isOp(user)) throw bad('ไม่มีสิทธิ์ดูประวัติการอนุมัติ', 403);
+    return res.status(200).json({ ok: true, ...(await require('../lib/history').load()) });
+  }
   if (req.query && req.query.view === 'edits') return listEdits(req, res, user);
   if (req.query && req.query.view === 'payments') return listPayNotices(req, res, user);
   if (req.query && req.query.view === 'pay-methods') {

@@ -543,5 +543,15 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
     ok(s === 200 && nr.requestId === adq.requestId && !/QT นอกระบบ/.test(nr.overReason || ''), 'request linked to the QT in the app, not marked as outside: ' + (j.error || nr.requestId + ' ' + nr.overReason));
     [s, j] = await call(BENZ, 'POST', '/api/invoice-requests', ivBody({}, { ...ext, qtNo: 'QO-20240700200', invoices: [{ amount: 9000000, students: 1, wantedIssueDate: '2026-12-01', creditTermDays: 30, originalDoc: 'no' }] }));
     ok(s === 400 && /เกินยอด QT/.test(j.error || ''), 'and the balance of that QT is checked: ' + (j.error || s)); }
+  console.log('── 21. approval history: accounting sees who did what; Sales cannot open it');
+  { [s, j] = await call(ADMIN, 'GET', '/api/invoice-requests?view=history');
+    const main = (j.entries || []).filter((e) => e.main);
+    ok(s === 200 && main.length > 5 && main.every((e, i) => !i || main[i - 1].ts >= e.ts), 'history lists the actions newest first: ' + (j.error || main.length));
+    const ap = main.find((e) => e.ev === 'qt_approve' && e.thread), rj = main.find((e) => /_reject$/.test(e.ev));
+    ok(ap && ap.by && ap.role && j.threads[ap.thread] && j.threads[ap.thread].company, 'an approval carries who did it and the customer of the request');
+    ok(rj && rj.reason, 'a rejection carries its reason: ' + (rj && rj.reason));
+    ok(!(j.entries || []).some((e) => /@/.test(e.by)), 'people are shown by name, not email');
+    [s, j] = await call(BENZ, 'GET', '/api/invoice-requests?view=history');
+    ok(s === 403, 'Sales gets 403: ' + s); }
   done();
 })().catch((e) => { console.error('CRASH', e); ok(false, 'CRASH: the run stopped early: ' + e.message); done(); process.exitCode = 1; });

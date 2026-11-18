@@ -44,6 +44,38 @@ details.more{margin-top:8px}details.more>summary{cursor:pointer;font-size:12.5px
 .opp-dash{color:var(--muted);padding:0 2px}
 .note-box{margin-top:5px;padding:5px 8px;background:var(--primary-soft);border:1px solid var(--primary-line);border-radius:4px}
 .newc{border:1px dashed var(--accent,#f60);border-radius:10px;padding:10px 12px;margin:6px 0 10px}.newc-h{font-size:13px;margin-bottom:6px;color:var(--accent,#c50)}
+.hbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.hbar input[type=search]{flex:1 1 260px;min-width:200px;padding:8px 11px;border:1px solid var(--line2);border-radius:4px;font-size:13.5px;background:var(--input);color:var(--ink)}
+.hbar .sel{width:auto}
+.hchips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.hchip{border:1px solid var(--line);background:var(--panel);border-radius:9999px;padding:5px 12px;font-size:12.5px;color:var(--ink);cursor:pointer;min-height:32px;font-family:inherit}
+.hchip b{font-weight:500;color:var(--head);margin-left:4px}
+.hchip.on{background:var(--head);border-color:var(--head);color:var(--panel)}.hchip.on b{color:var(--panel)}
+.hday{display:flex;align-items:baseline;gap:8px;margin:18px 0 6px;font-size:13px;color:var(--head);font-weight:500}
+.hday span{font-size:12px;color:var(--muted);font-weight:400}
+.hlist{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.hrow{display:grid;grid-template-columns:52px 170px minmax(0,1fr) 110px 130px 16px;gap:12px;align-items:center;padding:11px 16px;border:0;border-top:1px solid var(--line);cursor:pointer;width:100%;background:none;text-align:left;font:inherit;color:inherit}
+.hlist>.hrow:first-child{border-top:0}.hrow:hover,.hrow.open{background:var(--panel-2)}
+.hrow:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
+.hrow .t{font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.hrow .who{font-size:12.5px;color:var(--ink)}.hrow .who small{display:block;color:var(--muted);font-size:11px}
+.hrow .ti{min-width:0}.hrow .ti b{display:block;font-weight:500;color:var(--head);font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hrow .ti small{display:block;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hrow .am{text-align:right;font-size:13.5px;color:var(--head);font-variant-numeric:tabular-nums}
+.hrow .cv{color:var(--muted);font-size:11px}
+.hrow .st{margin:0;justify-self:start}
+.hdet{padding:14px 16px 16px 80px;background:var(--panel-2);border-top:1px dashed var(--line);display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
+.hdet h4{margin:0 0 8px;font-size:12px;color:var(--muted);font-weight:500}
+.htl{list-style:none;margin:0;padding:0;font-size:12.5px;line-height:1.5}
+.htl li{position:relative;padding:0 0 10px 18px;border-left:2px solid var(--line);margin-left:5px}
+.htl li:last-child{border-left-color:transparent;padding-bottom:0}
+.htl li:before{content:'';position:absolute;left:-6px;top:4px;width:10px;height:10px;border-radius:50%;background:var(--panel);border:2px solid var(--muted)}
+.htl li.me:before{background:var(--primary);border-color:var(--primary)}
+.htl li small{color:var(--muted);display:block}
+.hnote{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:9px 11px;font-size:12.5px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+.hact{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.hmore{text-align:center;margin:14px 0}
+@media(max-width:760px){.hrow{grid-template-columns:auto minmax(0,1fr) auto;gap:4px 10px;padding:12px 14px}.hrow .t{grid-column:1}.hrow .st{grid-column:2}.hrow .cv{grid-column:3;grid-row:1}.hrow .ti{grid-column:1/-1}.hrow .ti b,.hrow .ti small{white-space:normal}.hrow .am{grid-column:1/3;text-align:left}.hrow .am:empty{display:none}.hrow .who{grid-column:1/-1}.hrow .who small{display:inline;margin-left:4px}.hdet{grid-template-columns:1fr;padding:14px}.hbar .sel{flex:1 1 140px}}
 .pcard.hit{outline:2px solid var(--primary);outline-offset:2px;transition:outline-color .3s}
 </style>
 </head>
@@ -255,8 +287,9 @@ details.more{margin-top:8px}details.more>summary{cursor:pointer;font-size:12.5px
       <button onclick="setPend('orig',this)">ส่งตัวจริง <span id="pend-orig-n"></span></button>
       <button onclick="setPend('rt',this)">ใบเสร็จ <span id="pend-rt-n"></span></button>
       <button onclick="setPend('edit',this)">ขอแก้ไข <span id="pend-edit-n"></span></button>
+      <button onclick="setPend('hist',this)">🕘 ประวัติ</button>
     </div>
-    <button class="btn btn-g btn-sm" onclick="loadAll()">↻ รีเฟรช</button>
+    <button class="btn btn-g btn-sm" onclick="loadAll();if(!$('pend-hist').hidden)histLoad()">↻ รีเฟรช</button>
   </div>
   <p class="hint" id="pend-hint-qt">ตรวจคำขอแล้วกด <b>อนุมัติ</b> ระบบจะสร้าง QT Draft ใน PEAK ให้ทุกวัน 10:49 และ 17:49 ถ้าไม่ถูกต้องให้ <b>ตีกลับ</b> พร้อมเหตุผล Sales จะเห็นเหตุผลในหน้าคำขอของตัวเอง</p>
   <p class="hint" id="pend-hint-inv" hidden>ออก INV จาก QT ใน PEAK ก่อน แล้วใส่ <b>เลข INV</b> และ <b>ลิงก์เอกสาร INV ใน PEAK</b> แล้วกดอนุมัติ Sales จะเปิดเอกสารจากเลข INV ได้ทันที</p>
@@ -268,6 +301,15 @@ details.more{margin-top:8px}details.more>summary{cursor:pointer;font-size:12.5px
   <div id="pend-rt" hidden></div>
   <p class="hint" id="pend-hint-edit" hidden>แก้เอกสารใน PEAK (หรือออกใบใหม่) แล้วกด <b>แก้แล้ว</b> ถ้าได้เลขเอกสารใหม่ให้ใส่ด้วย แก้ได้เฉพาะ QT และ INV ใบเสร็จแก้ไม่ได้</p>
   <div id="pend-edit" hidden></div>
+  <p class="hint" id="pend-hint-hist" hidden>ทุกการกดในหน้านี้ถูกบันทึกไว้ ใครทำ เมื่อไร ผลเป็นอย่างไร กดที่แถวเพื่อดูลำดับเหตุการณ์ของเอกสารและหมายเหตุที่เซลเขียนไว้ (มีประวัติตั้งแต่วันเริ่มใช้ระบบ 16/11/2026)</p>
+  <div id="pend-hist" hidden>
+    <div class="hbar"><input type="search" id="h-q" placeholder="ค้นหา ชื่อลูกค้า เลขเอกสาร หรือเลขคำขอ" aria-label="ค้นหาในประวัติ" oninput="histRender(1)">
+      <select class="sel" id="h-days" aria-label="ช่วงเวลา" onchange="histRender(1)"><option value="0">วันนี้</option><option value="6" selected>7 วันล่าสุด</option><option value="29">30 วันล่าสุด</option><option value="-1">ทั้งหมด</option></select>
+      <select class="sel" id="h-kind" aria-label="ประเภทเอกสาร" onchange="histRender(1)"><option value="">ทุกประเภทเอกสาร</option><option value="qt">ใบเสนอราคา</option><option value="inv">ใบแจ้งหนี้</option><option value="rt">ใบเสร็จ</option><option value="edit">ขอแก้ไข</option><option value="pay">แจ้งรับเงิน</option></select>
+      <select class="sel" id="h-who" aria-label="ผู้ทำรายการ" onchange="histRender(1)"><option value="">ทุกคน</option></select></div>
+    <div class="hchips" id="h-chips" role="group" aria-label="กรองตามผล"></div>
+    <div id="h-list" aria-live="polite"><div class="empty">กำลังโหลด...</div></div>
+  </div>
 </section>
 
 <section id="tab-mine" class="tab">
@@ -1635,7 +1677,79 @@ async function editAction(id, action) {
 }
 
 // ─── Accountant / Admin: requests waiting for approval ────
-function setPend(w, btn) { document.querySelectorAll('#pend-seg button').forEach((b) => b.classList.toggle('on', b === btn)); ['qt', 'inv', 'orig', 'rt', 'edit'].forEach((k) => { $('pend-' + k).hidden = w !== k; $('pend-hint-' + k).hidden = w !== k; }); }
+function setPend(w, btn) { document.querySelectorAll('#pend-seg button').forEach((b) => b.classList.toggle('on', b === btn)); ['qt', 'inv', 'orig', 'rt', 'edit', 'hist'].forEach((k) => { $('pend-' + k).hidden = w !== k; $('pend-hint-' + k).hidden = w !== k; }); if (w === 'hist' && !HIST) histLoad(); }
+// ── Approval history (accounting). Data: /api/invoice-requests?view=history (SyncLog joined to the requests).
+let HIST = null, H_RES = '', H_OPEN = '', H_SHOW = 50;
+async function histLoad() {
+  try { HIST = await api('/api/invoice-requests?view=history'); } catch (e) { $('h-list').innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+  const who = [...new Set(HIST.entries.filter((e) => e.main).map((e) => e.by))].sort((a, b) => a.localeCompare(b, 'th'));
+  const cur = $('h-who').value;
+  $('h-who').innerHTML = '<option value="">ทุกคน</option>' + who.map((w) => `<option${w === cur ? ' selected' : ''}>${esc(w)}</option>`).join('');
+  histRender(1);
+}
+// YYYYMMDD (Bangkok) of n days ago.
+const hDay = (n) => { const t = new Date(Date.now() + 7 * 3600e3 - n * 864e5); return t.getUTCFullYear() * 1e4 + (t.getUTCMonth() + 1) * 100 + t.getUTCDate(); };
+const H_KIND = { qt: 'ใบเสนอราคา', inv: 'ใบแจ้งหนี้', rt: 'ใบเสร็จ', edit: 'ขอแก้ไข', pay: 'แจ้งรับเงิน' };
+const hIcon = (e) => (e.cls === 'green' ? '✓ ' : e.cls === 'red' ? (/_reject$/.test(e.ev) ? '↩ ' : '✕ ') : '');
+const hThread = (e) => (HIST.threads[e.thread] || {});
+// One line under the customer name: which document, and why it was sent back.
+function hSub(e) {
+  const t = hThread(e), p = [H_KIND[e.kind]];
+  if (t.doc) p.push(t.doc); if (t.installment) p.push(/งวด/.test(t.installment) ? t.installment : 'งวด ' + t.installment);
+  if (e.n) p.push(`รวม ${e.n} ใบในคำขอเดียวกัน`);
+  if (e.extra && e.extra !== t.doc) p.push(e.extra);
+  p.push(t.id || e.ref);
+  if (e.reason) p.push('เหตุผล: ' + e.reason);
+  return p.filter(Boolean).join(' · ');
+}
+function histSetRes(v) { H_RES = v; histRender(1); }
+function histToggle(k) { H_OPEN = H_OPEN === k ? '' : k; histRender(); }
+function histRender(reset) {
+  if (!HIST) return;
+  if (reset) { H_SHOW = 50; H_OPEN = ''; }
+  const q = $('h-q').value.trim().toLowerCase(), days = Number($('h-days').value), kind = $('h-kind').value, who = $('h-who').value;
+  const from = days < 0 ? 0 : hDay(days);
+  const base = HIST.entries.filter((e) => e.main && Math.floor(e.ts / 1e4) >= from && (!kind || e.kind === kind) && (!who || e.by === who)
+    && (!q || [hThread(e).company, hThread(e).doc, hThread(e).id, hThread(e).qt, e.ref, e.extra, e.reason, e.label].some((x) => String(x || '').toLowerCase().includes(q))));
+  const grp = (e) => (e.cls === 'green' ? 'ok' : e.cls === 'red' ? 'bad' : 'step');
+  const cnt = { ok: 0, bad: 0, step: 0 }; base.forEach((e) => { cnt[grp(e)]++; });
+  $('h-chips').innerHTML = [['', 'ทั้งหมด', base.length], ['ok', '✓ อนุมัติ / ออกเอกสาร', cnt.ok], ['bad', '↩ ตีกลับ / ยกเลิก', cnt.bad], ['step', 'ขั้นตอนอื่น', cnt.step]]
+    .map(([v, t, n]) => `<button type="button" class="hchip${H_RES === v ? ' on' : ''}" aria-pressed="${H_RES === v}" onclick="histSetRes('${v}')">${t}<b>${n}</b></button>`).join('');
+  const rows = base.filter((e) => !H_RES || grp(e) === H_RES);
+  if (!rows.length) { $('h-list').innerHTML = '<div class="empty">ไม่พบรายการตามตัวกรองนี้ ลองขยายช่วงเวลาหรือล้างคำค้นหา</div>'; return; }
+  const today = hDay(0), yest = hDay(1), DOW = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
+  const perDay = {}; rows.forEach((e) => { const d = Math.floor(e.ts / 1e4); perDay[d] = (perDay[d] || 0) + 1; });
+  let html = '', last = 0;
+  rows.slice(0, H_SHOW).forEach((e, i) => {
+    const d = Math.floor(e.ts / 1e4), k = e.ts + '|' + e.ev + '|' + e.ref, t = hThread(e), open = H_OPEN === k;
+    if (d !== last) {
+      const dt = new Date(Date.UTC(Math.floor(d / 1e4), Math.floor(d / 100) % 100 - 1, d % 100));
+      html += `${last ? '</div>' : ''}<div class="hday">${d === today ? 'วันนี้ · ' : d === yest ? 'เมื่อวาน · ' : ''}${DOW[dt.getUTCDay()]} ${esc(e.at.slice(0, 10))} <span>${perDay[d]} รายการ</span></div><div class="hlist">`;
+      last = d;
+    }
+    const amt = e.amount != null ? e.amount : t.amount;
+    html += `<button type="button" class="hrow${open ? ' open' : ''}" aria-expanded="${open}" onclick="histToggle('${esc(k)}')"><span class="t">${esc(e.at.slice(11))}</span><span class="st ${e.cls}">${hIcon(e)}${esc(e.label)}</span><span class="ti"><b>${esc(t.company || e.ref || '-')}</b><small>${esc(hSub(e))}</small></span><span class="am"${amt && t.amountNote && e.amount == null ? ` title="${esc(t.amountNote)}"` : ''}>${amt ? fmt(amt) : ''}</span><span class="who">${esc(e.by)}<small>${esc(e.role)}</small></span><span class="cv" aria-hidden="true">${open ? '▲' : '▼'}</span></button>`;
+    if (open) html += histDetail(e, t);
+  });
+  html += '</div>';
+  if (rows.length > H_SHOW) html += `<div class="hmore"><button class="btn btn-o btn-sm" type="button" onclick="H_SHOW+=50;histRender()">แสดงเพิ่มอีก ${Math.min(50, rows.length - H_SHOW)} รายการ</button> <span class="small">แสดง ${H_SHOW} จาก ${rows.length}</span></div>`;
+  $('h-list').innerHTML = html;
+}
+function histCopy(btn) {
+  const t = (btn.closest('.hdet').querySelector('.nt') || {}).textContent || '';
+  const done = () => { const x = btn.textContent; btn.textContent = 'คัดลอกแล้ว ✓'; setTimeout(() => { btn.textContent = x; }, 1500); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done, () => {});
+}
+function histDetail(e, t) {
+  const tl = e.thread ? HIST.entries.filter((x) => x.thread === e.thread).sort((a, b) => a.ts - b.ts) : [e];
+  const ok = (u) => /^https:\/\//.test(u || '');
+  const iv = t.kind === 'inv' && /^IV-/i.test(t.doc || '') ? t.doc : '';
+  return `<div class="hdet"><div><h4>ลำดับเหตุการณ์ของเอกสารนี้</h4><ol class="htl">${tl.map((x) => `<li${x === e ? ' class="me"' : ''}>${esc(x.label)}<small>${esc(x.at)} · ${esc(x.by)} (${esc(x.role)})</small></li>`).join('')}</ol></div>
+    <div><h4>${t.kind === 'edit' ? 'รายละเอียดที่ขอแก้' : 'หมายเหตุจากเซล'}${t.sales ? ' · ' + esc(t.sales) : ''}</h4>${t.note ? `<div class="hnote nt">${esc(t.note)}</div>` : '<div class="small">ไม่มีหมายเหตุ</div>'}
+    ${e.reason ? `<h4 style="margin-top:12px">เหตุผลที่ตีกลับ</h4><div class="hnote">${esc(e.reason)}</div>` : ''}
+    <div class="hact">${t.note ? '<button class="btn btn-o btn-sm" type="button" onclick="histCopy(this)">📋 คัดลอกหมายเหตุ</button>' : ''}${ok(t.link) ? `<a class="btn btn-o btn-sm" href="${esc(t.link)}" target="_blank" rel="noopener">เปิดเอกสารใน PEAK ↗</a>` : ''}${iv ? `<a class="btn btn-g btn-sm" href="/ar#q=${encodeURIComponent(iv)}">ดูในติดตามหนี้</a>` : ''}</div>
+    ${t.amount && t.amountNote ? `<div class="small" style="margin-top:8px">ยอด ${fmt(t.amount)} (${esc(t.amountNote)})${t.qt ? ' · จาก ' + esc(t.qt) : ''}${t.ref ? ' · อ้างอิง ' + esc(t.ref) : ''}</div>` : ''}</div></div>`;
+}
 function renderPending() {
   const op = canDo('approve');
   $('nav-pend').hidden = !op;

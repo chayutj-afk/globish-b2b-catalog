@@ -1223,16 +1223,18 @@ async function openPayNotice(id) {
     <div class="row"><div class="fg"><label>ส่งใบเสร็จทาง *</label><select id="pn-ch" onchange="$('pn-em-w').hidden=!/email/.test(this.value);$('pn-ad-w').hidden=!/post/.test(this.value)"><option value="sales">ส่งไฟล์ให้ Sales</option><option value="email">ส่งอีเมลลูกค้า</option><option value="post">ส่งตัวจริงตามที่อยู่</option><option value="email_post">ส่งอีเมลและตัวจริง</option></select></div>
     <div class="fg" id="pn-em-w" hidden><label>อีเมลลูกค้า *</label><input id="pn-em" type="email" maxlength="120" value="${esc(v.financeEmail || '')}"></div></div>
     <div class="fg" id="pn-ad-w" hidden><label>ที่อยู่ส่งตัวจริง *</label><input id="pn-ad" type="text" maxlength="600" value="${esc(v.originalAddress || v.deliveryAddress || '')}"></div>
-    ${wh ? `<div class="pc-note" style="margin:6px 0"><b>ลูกค้าจ่ายผ่าน Whitehouse?</b> ใส่ข้อมูลจาก WH ให้ฝ่ายบัญชีกระทบยอด (ใส่อย่างใดอย่างหนึ่งแล้วไม่ต้องแนบสลิป)
-      <div class="row" style="margin-top:6px"><div class="fg"><label for="pn-who">Order ID ใน WH / เอกสารอ้างอิง</label><input id="pn-who" type="text" maxlength="60" autocomplete="off" placeholder="เช่น 123456"></div><div class="fg"><label for="pn-whr">เลขใบเสร็จเดิมจาก WH (ถ้า WH ออกแล้ว)</label><input id="pn-whr" type="text" maxlength="60" autocomplete="off" placeholder="เช่น RT-…"></div></div></div>` : ''}
+    ${wh ? `<div class="pc-note" style="margin:6px 0"><label style="display:flex;gap:8px;align-items:center;cursor:pointer;font-weight:500"><input id="pn-wh" type="checkbox" style="width:auto" onchange="$('pn-wh-w').hidden=!this.checked"> ลูกค้าจ่ายผ่าน Whitehouse (WH รับเงินและออกใบเสร็จไปแล้ว)</label>
+      <div id="pn-wh-w" hidden><div class="small" style="margin:6px 0">ใส่ทั้งสองช่องให้ฝ่ายบัญชีกระทบยอด เมื่อเลือกข้อนี้ไม่ต้องแนบสลิป</div>
+      <div class="row"><div class="fg"><label for="pn-who">Order ID ใน WH *</label><input id="pn-who" type="text" maxlength="60" autocomplete="off" placeholder="เช่น 123456"></div><div class="fg"><label for="pn-whr">เลขใบเสร็จที่ WH ออก *</label><input id="pn-whr" type="text" maxlength="60" autocomplete="off" placeholder="เลขใบเสร็จจาก WH"></div></div></div></div>` : ''}
     <div class="fg"><label>หมายเหตุ</label><input id="pn-nt" type="text" maxlength="500" placeholder="เช่น ลูกค้าโอนรวมค่าธรรมเนียม"></div>
     <div id="pn-msg"></div>` });
   if (!ok) return;
   const g = (k) => (($(k) || {}).value || '').trim();
   const f = $('pn-file').files[0];
-  const body = { action: 'pay_notice', ivRequestId: id, paidDate: g('pn-dt'), amount: g('pn-am'), paymentMethod: g('pn-mt'), deliveryChannel: g('pn-ch'), email: g('pn-em'), deliveryAddress: g('pn-ad'), note: g('pn-nt'), whOrderId: g('pn-who'), whReceiptNo: g('pn-whr') };
-  const viaWh = !!(body.whOrderId || body.whReceiptNo);
-  const miss = !body.paidDate ? 'ใส่วันที่ลูกค้าโอน' : !(toNum(body.amount) > 0) ? 'ใส่ยอดที่โอน' : !f && !viaWh ? 'แนบสลิป / หลักฐานการโอน (หรือใส่ Order ID / เลขใบเสร็จของ WH)' : f && f.size > 3 * 1024 * 1024 ? 'ไฟล์ใหญ่เกิน 3 MB' : '';
+  const body = { action: 'pay_notice', ivRequestId: id, paidDate: g('pn-dt'), amount: g('pn-am'), paymentMethod: g('pn-mt'), deliveryChannel: g('pn-ch'), email: g('pn-em'), deliveryAddress: g('pn-ad'), note: g('pn-nt'), viaWh: !!(($('pn-wh') || {}).checked) };
+  const viaWh = body.viaWh;
+  if (viaWh) { body.whOrderId = g('pn-who'); body.whReceiptNo = g('pn-whr'); }
+  const miss = !body.paidDate ? 'ใส่วันที่ลูกค้าโอน' : !(toNum(body.amount) > 0) ? 'ใส่ยอดที่โอน' : viaWh && !(body.whOrderId && body.whReceiptNo) ? 'จ่ายผ่าน Whitehouse ต้องใส่ทั้ง Order ID และเลขใบเสร็จที่ WH ออก' : !f && !viaWh ? 'แนบสลิป / หลักฐานการโอน' : f && f.size > 3 * 1024 * 1024 ? 'ไฟล์ใหญ่เกิน 3 MB' : '';
   if (miss) return alertMsg(miss);
   if (exp && Math.abs(toNum(body.amount) - exp) > 1 && !(await ask({ kind: 'warn', title: 'ยอดไม่ตรงกับที่ควรได้รับ', ok: 'ยืนยัน แจ้งยอดนี้', html: `<p>ลูกค้าโอน <b>${fmt(toNum(body.amount))}</b> แต่ที่ควรได้รับคือ <b>${fmt(exp)}</b> (ต่าง ${fmt(toNum(body.amount) - exp)})</p><p class="small">ถ้าถูกต้อง เช่น ลูกค้าหักค่าธรรมเนียม ให้ใส่เหตุผลในหมายเหตุ</p>` }))) return;
   try {

@@ -965,7 +965,9 @@ async function createPayNotice(req, res, user) {
   // Paid through Whitehouse (B2C / B2E): the WH order and the receipt WH already issued, so accounting can
   // reconcile. With either of them the slip is optional (the WH record is the evidence).
   const whOrder = text(b.whOrderId, 60), whRt = text(b.whReceiptNo, 60);
-  if (!b.file && !whOrder && !whRt) throw bad('แนบสลิป / หลักฐานการโอน (หรือใส่ Order ID / เลขใบเสร็จของ Whitehouse ถ้าจ่ายผ่าน WH)');
+  // Paid through WH means both are known: the order and the receipt WH issued for it.
+  if (b.viaWh === true || whOrder || whRt) { if (!whOrder || !whRt) throw bad('จ่ายผ่าน Whitehouse ต้องใส่ทั้ง Order ID และเลขใบเสร็จที่ WH ออก'); }
+  else if (!b.file) throw bad('แนบสลิป / หลักฐานการโอน (ถ้าลูกค้าจ่ายผ่าน Whitehouse ให้เลือก "จ่ายผ่าน Whitehouse" แล้วใส่ Order ID และเลขใบเสร็จของ WH)');
   const ch = text(b.deliveryChannel, 20);
   if (!PAY_CHANNELS.includes(ch)) throw bad('เลือกช่องทางส่งใบเสร็จ');
   const email = text(b.email, 120), addr = text(b.deliveryAddress, 600);

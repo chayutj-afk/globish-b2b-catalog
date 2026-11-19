@@ -89,3 +89,14 @@ test('refresh keeps the name the INV was issued under; a later Sales Performance
   assert.deepEqual(await ps.remapSeller('emmy@g.co', 'B2C-S005'), []);
   [peak.findContacts, peak.getClassifications] = keep;
 });
+
+test('refresh: an imported INV takes its customer group from the PEAK classification', async () => {
+  fs.writeFileSync(process.env.HUB_MOCK_FILE, '{}');
+  await hub.appendRows('Invoices', [{ ivNo: 'IV-8', issueDate: '01/10/2026', preVat: 10000, creditTermDays: 30, clientCode: 'C1', segment: 'B2C', docStatus: 'Active', ivRequestId: 'LEGACY-IV-8', classPicks: '{"G013":"G013-00004"}' }]);
+  const keep = peak.getClassifications;
+  peak.getClassifications = async () => ({ G013: 'G013-00001' });
+  const out = await ps.syncInvoice({ id: 'i8', code: 'IV-8', status: 'Approve', preTaxAmount: 10000, issuedDate: '20261001', dueDate: '20261031', contactCode: 'C1' }, { classes: true });
+  assert.equal((await ar()).segment, 'B2B');
+  assert.ok(out.changes.some((x) => x.includes('กลุ่มลูกค้า')));
+  peak.getClassifications = keep;
+});

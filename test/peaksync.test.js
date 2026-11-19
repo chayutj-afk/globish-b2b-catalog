@@ -65,3 +65,27 @@ test('another PEAK document that reuses the number (a voided twin) never touches
   assert.equal(await ps.syncReceipt({ id: 'r-other', code: 'RT-9', status: 'Void', isVoid: 1 }), null);
   assert.equal((await ar()).rtNo, 'RT-9');
 });
+
+test('refresh keeps the name the INV was issued under; a later Sales Performance code moves imported INVs', async () => {
+  fs.writeFileSync(process.env.HUB_MOCK_FILE, '{}');
+  await hub.appendRows('Invoices', [{ ivNo: 'IV-7', issueDate: '01/10/2026', preVat: 10000, creditTermDays: 30, clientCode: 'C1', taxId: '0105542031616', company: 'บริษัท ชื่อเดิม จำกัด', docStatus: 'Active', ivRequestId: 'LEGACY-IV-7', salesEmail: 'old@g.co', salesName: 'Old', classPicks: '{"G014":"B2C-S005"}' }]);
+  await hub.appendRows('InvoiceRequests', [{ ivRequestId: 'LEGACY-IV-7', status: 'iv_issued', peakIvNo: 'IV-7', requestedBy: 'old@g.co', salesName: 'Old' }]);
+  await hub.appendRows('Users', [{ email: 'emmy@g.co', name: 'Emmy', role: 'sales', salesPerf: 'B2C-S005' }]);
+  const keep = [peak.findContacts, peak.getClassifications];
+  peak.findContacts = async () => [{ code: 'C1', name: 'ชื่อใหม่', branchCode: '00000' }];
+  peak.getClassifications = async () => null;
+  const iv = { id: 'i7', code: 'IV-7', status: 'Approve', preTaxAmount: 10000, issuedDate: '20261001', dueDate: '20261031', contactCode: 'C1' };
+  await ps.syncInvoice(iv, { classes: true });
+  assert.equal((await ar()).company, 'บริษัท ชื่อเดิม จำกัด');
+  await ps.syncInvoice({ ...iv, contactCode: 'C2' }, { classes: true });
+  assert.equal((await ar()).clientCode, 'C2');
+  peak.findContacts = async () => [{ code: 'C2', name: 'ลูกค้าอีกราย', branchCode: '00000' }];
+  await hub.updateRow('Invoices', (await ar())._row, { clientCode: 'C1' });
+  await ps.syncInvoice({ ...iv, contactCode: 'C2' });
+  assert.equal((await ar()).company, 'ลูกค้าอีกราย', 'moved to another contact: name follows');
+  assert.deepEqual(await ps.remapSeller('emmy@g.co', 'B2C-S005'), ['IV-7']);
+  assert.equal((await ar()).salesEmail, 'emmy@g.co');
+  assert.equal((await req()).requestedBy, 'emmy@g.co');
+  assert.deepEqual(await ps.remapSeller('emmy@g.co', 'B2C-S005'), []);
+  [peak.findContacts, peak.getClassifications] = keep;
+});

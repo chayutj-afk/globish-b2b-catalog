@@ -33,6 +33,8 @@ async function nameFromPerf(email, items) {
   const g = (await require('../lib/classrules').peakGroups().catch(() => [])).find((x) => x.code === 'G014');
   const it = g && g.items.find((i) => i.code === code);
   if (it) await users.setName(email, it.name);
+  // Imported INVs that PEAK files under this code now belong to this seller.
+  await require('../lib/peaksync').remapSeller(email, code).catch(() => {});
 }
 
 module.exports = (req, res) => require('../lib/hub').scope(req, () => inner(req, res));

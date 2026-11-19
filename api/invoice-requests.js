@@ -581,7 +581,18 @@ async function arSees(user) {
     return (['b2b', 'b2c'].includes(t) ? t : row.segment === 'B2B' ? 'b2b' : 'b2c') === user.team;
   };
 }
-function summarise(all, today) {
+// Money in, one entry per time it came in: an INV paid in several rounds counts each round on its own date
+// (also while the INV is still open); any other paid INV counts once, on its paid date.
+function cashEvents(all, roundsOf) {
+  const out = [];
+  for (const r of all) {
+    const xs = roundsOf ? roundsOf(r) : null;
+    if (xs) { for (const x of xs) { const ms = ar.parseDate(x.paidDate); if (ms !== null) out.push({ r, ms, amount: x.amount, round: true }); } }
+    else if (r.paidMs !== null) out.push({ r, ms: r.paidMs, amount: ar.num(r.paidAmount) || r.expected });
+  }
+  return out;
+}
+function summarise(all, today, events = cashEvents(all)) {
   // Old rows the Debt sheet still showed as unpaid are kept apart until someone checks them in PEAK.
   const check = all.filter((r) => r.legacyCheck);
   // Current receivables = issued from 2026 on. The old book (before 2026) is reported on its own.
@@ -592,14 +603,16 @@ function summarise(all, today) {
   const segs = [...new Set(open.map((r) => r.segment || 'Others'))].sort();
   const aging = segs.map((sg) => ({ segment: sg, ...Object.fromEntries(buckets.map((b) => [b, sum(open.filter((r) => (r.segment || 'Others') === sg && r.aging === b))])), total: sum(open.filter((r) => (r.segment || 'Others') === sg)) }));
   const DAY = 86400e3;
-  const paidAmt = (xs) => Math.round(xs.reduce((t, r) => t + (ar.num(r.paidAmount) || r.expected), 0) * 100) / 100;
+  const paidAmt = (xs) => Math.round(xs.reduce((t, e) => t + e.amount, 0) * 100) / 100;
+  // Cash by week: rounds of a part-paid INV, and INVs that are paid (a closed / replaced INV is left out, as before).
+  const inWeek = (end) => events.filter((e) => (e.round || e.r.paidWeekMs !== null) && ar.weekEnd(e.ms) === end);
   // Weeks run Friday to Thursday and stop at the month end (ar.weekEnd), the same as the Debt sheet.
   const cur = ar.weekEnd(today);
   const weeks = [];
   let end = cur;
   for (let i = 0; i < 10; i++) {
     const xs = open.filter((r) => r.planMs === end);
-    const pd = all.filter((r) => r.paidWeekMs === end);
+    const pd = inWeek(end);
     weeks.push({ weekEnd: ar.fmt(end), expected: sum(xs), count: xs.length, paid: paidAmt(pd), paidCount: pd.length });
     if (i < 9) end = ar.weekEnd(end + DAY);
   }
@@ -608,7 +621,7 @@ function summarise(all, today) {
   const cash = [];
   end = cur;
   for (let i = 0; i < 10; i++) {
-    const xs = all.filter((r) => r.paidWeekMs === end);
+    const xs = inWeek(end);
     cash.push({ weekEnd: ar.fmt(end), paid: paidAmt(xs), count: xs.length, current: i === 0 });
     end = ar.weekStart(end) - DAY;
   }
@@ -621,8 +634,8 @@ function summarise(all, today) {
     const y = t.getUTCFullYear(), m = t.getUTCMonth() - i;
     const start = Date.UTC(y, m, 1), end = Date.UTC(y, m + 1, 1) - 1;
     const iss = all.filter((r) => r.issueMs !== null && r.issueMs >= start && r.issueMs <= end && r.state !== 'Closed');
-    const paid = all.filter((r) => r.paidMs !== null && r.paidMs >= start && r.paidMs <= end);
-    months.push({ month: ar.fmt(start).slice(3), invoiced: sum(iss, 'preVatN'), count: iss.length, cash: Math.round(paid.reduce((s, r) => s + (ar.num(r.paidAmount) || r.expected), 0) * 100) / 100,
+    const paid = events.filter((e) => e.ms >= start && e.ms <= end);
+    months.push({ month: ar.fmt(start).slice(3), invoiced: sum(iss, 'preVatN'), count: iss.length, cash: paidAmt(paid),
       bySegment: Object.fromEntries([...new Set(iss.map((r) => r.segment || 'Others'))].map((sg) => [sg, sum(iss.filter((r) => (r.segment || 'Others') === sg), 'preVatN')])) });
   }
   const recentPaid = all.filter((r) => r.paidMs !== null && r.paidMs >= today - 90 * DAY && r.cycleDays !== '');
@@ -639,7 +652,7 @@ function summarise(all, today) {
 }
 
 // The invoices behind one figure of the summary / dashboard (?drill=key), with the same rules as summarise().
-function drillRows(all, today, key) {
+function drillRows(all, today, key, events = cashEvents(all)) {
   const DAY = 86400e3;
   const open = all.filter((r) => (r.state === 'Outstanding' || r.state === 'Overdue') && !r.legacyCheck && !r.old);
   const [k, a = '', b = ''] = String(key).split('|');
@@ -647,7 +660,7 @@ function drillRows(all, today, key) {
   const month = (ms) => (ms === null ? '' : ar.fmt(ms).slice(3));
   const cur = ar.weekEnd(today);
   let last = cur; for (let i = 0; i < 9; i++) last = ar.weekEnd(last + DAY);
-  let xs = [], paid = false;
+  let xs = [], paid = false, ev = null;
   if (k === 'open') xs = open;
   else if (k === 'overdue') xs = open.filter((r) => r.state === 'Overdue');
   else if (k === 'legacy') xs = all.filter((r) => r.legacyCheck);
@@ -658,14 +671,15 @@ function drillRows(all, today, key) {
   else if (k === 'fc') xs = open.filter((r) => r.planMs !== null && ar.fmt(r.planMs) === a);
   else if (k === 'fc-earlier') xs = open.filter((r) => r.planMs !== null && r.planMs < cur);
   else if (k === 'fc-later') xs = open.filter((r) => r.planMs !== null && r.planMs > last);
-  else if (k === 'paid') { paid = true; xs = all.filter((r) => r.paidWeekMs !== null && ar.fmt(r.paidWeekMs) === a); }
+  else if (k === 'paid') { paid = true; ev = events.filter((e) => (e.round || e.r.paidWeekMs !== null) && ar.fmt(ar.weekEnd(e.ms)) === a); }
   else if (k === 'aging') xs = open.filter((r) => (!a || seg(r) === a) && (!b || r.aging === b));
   else if (k === 'month-inv') xs = all.filter((r) => r.issueMs !== null && month(r.issueMs) === a && r.state !== 'Closed' && (!b || seg(r) === b));
-  else if (k === 'month-cash') { paid = true; xs = all.filter((r) => r.paidMs !== null && month(r.paidMs) === a); }
+  else if (k === 'month-cash') { paid = true; ev = events.filter((e) => month(e.ms) === a); }
   else if (k === 'sales') xs = open.filter((r) => (r.salesName || r.salesEmail || '(ไม่ระบุ)') === a && (!b || r.state === 'Overdue'));
   else if (k === 'vs') { paid = true; xs = all.filter((r) => r.paidMs !== null && r.paidMs >= today - 90 * DAY && r.paidVsCommit !== '' && (a === 'early' ? r.paidVsCommit < 0 : a === 'late' ? r.paidVsCommit > 0 : r.paidVsCommit === 0)); }
   const preVat = k === 'month-inv';
-  const rows = xs.map((r) => ({ ivNo: r.ivNo, company: r.company, segment: r.segment, salesName: r.salesName || r.salesEmail || '', issueDate: r.issueDate, dueDate: r.dueDate,
+  // Cash figures list one line per time money came in (a round of a part-paid INV is its own line).
+  const rows = (ev ? ev.map((e) => ({ ...e.r, paidDate: ar.fmt(e.ms), paidAmount: e.amount, expected: e.amount, round: e.round ? 1 : 0 })) : xs).map((r) => ({ ivNo: r.ivNo, round: r.round || undefined, company: r.company, segment: r.segment, salesName: r.salesName || r.salesEmail || '', issueDate: r.issueDate, dueDate: r.dueDate,
     commitDate: r.state === 'Paid' ? r.promisedDate : r.commitDate, paidDate: r.paidDate, rtNo: r.rtNo || '', state: r.state, daysOverdue: r.daysOverdue, paidVsCommit: r.paidVsCommit, peakDocLink: r.peakDocLink || '',
     amount: preVat ? r.preVatN : paid ? (ar.num(r.paidAmount) || r.expected) : r.expected }))
     .sort((x, y) => y.amount - x.amount);
@@ -678,15 +692,23 @@ async function arList(req, res, user) {
   const lite = req.query.brief || req.query.drill;
   const rd = lite ? { cache: 20e3 } : {};
   const [rows, fus, ivreqs, pns, rts] = await Promise.all([hub.readTable('Invoices', rd), lite ? [] : hub.readTable('FollowUps'), lite ? [] : hub.readTable('InvoiceRequests').catch(() => []),
-    lite ? [] : hub.readTable('PaymentNotices').catch(() => []), lite ? [] : hub.readTable('ReceiptRequests').catch(() => [])]);
+    hub.readTable('PaymentNotices', rd).catch(() => []), lite ? [] : hub.readTable('ReceiptRequests').catch(() => [])]);
   const today = ar.todayMs();
   // Rounds of money confirmed on each INV (an INV can be paid in several), and whether each has its own receipt.
   const rounds = new Map();
   for (const n of pns) {
     if (n.status !== 'confirmed') continue;
     const k = String(n.ivNo).toUpperCase(); if (!rounds.has(k)) rounds.set(k, []);
-    rounds.get(k).push({ noticeId: n.noticeId, paidDate: n.paidDate, amount: ar.num(n.amount), by: n.source === 'sales' ? n.salesName : n.doneBy, note: n.note || '' });
+    const ms = ar.parseDate(n.paidDate);
+    rounds.get(k).push({ noticeId: n.noticeId, paidDate: n.paidDate, week: ms === null ? '' : ar.fmt(ar.weekEnd(ms)), amount: ar.num(n.amount), by: n.source === 'sales' ? n.salesName : n.doneBy, note: n.note || '' });
   }
+  // The rounds of an INV, when they add up to what the INV says was received: still open and part-paid, or paid in more than one round.
+  const roundsOf = (r) => {
+    const xs = rounds.get(String(r.ivNo).toUpperCase()) || []; if (!xs.length) return null;
+    const sum = round2(xs.reduce((t, x) => t + x.amount, 0));
+    if (r.partial) return Math.abs(sum - r.received) <= 0.01 ? xs : null;
+    return r.state === 'Paid' && xs.length > 1 && Math.abs(sum - ar.num(r.paidAmount)) <= 0.01 ? xs : null;
+  };
   for (const [k, xs] of rounds) {
     const live = rts.filter((x) => String(x.refDoc).toUpperCase() === k && !DEAD.has(x.status));
     const whole = live.some((x) => !rtRound(x));
@@ -700,17 +722,18 @@ async function arList(req, res, user) {
   const seg = text(req.query.seg, 20);
   const segments = [...new Set(mine.map((r) => r.segment || 'Others'))].sort();
   const all = seg ? mine.filter((r) => (r.segment || 'Others') === seg) : mine;
-  if (req.query.drill) return res.status(200).json({ ok: true, seg, ...drillRows(all, today, text(req.query.drill, 120)) });
-  if (req.query.brief) return res.status(200).json({ ok: true, summary: summarise(all, today), segments, seg });
+  const events = cashEvents(all, roundsOf);
+  if (req.query.drill) return res.status(200).json({ ok: true, seg, ...drillRows(all, today, text(req.query.drill, 120), events) });
+  if (req.query.brief) return res.status(200).json({ ok: true, summary: summarise(all, today, events), segments, seg });
   const byIv = new Map();
   for (const f of fus) { if (!byIv.has(f.ivNo)) byIv.set(f.ivNo, []); byIv.get(f.ivNo).push(f); }
   const keep = all.filter((r) => r.state === 'Outstanding' || r.state === 'Overdue' || (r.paidMs !== null && r.paidMs >= today - 120 * 86400e3) || (r.issueMs !== null && r.issueMs >= today - 120 * 86400e3));
   const out = keep.map(({ _row, issueMs, dueMs, paidMs, planMs, paidWeekMs, preVatN, ...r }) => ({ ...r, ...(contact.get(r.ivRequestId) || {}), followUps: (byIv.get(r.ivNo) || []).slice(-20).map(({ _row: x, ...f }) => f),
     // Only worth showing when the INV was (or is being) paid in more than one round.
-    rounds: r.partial || (rounds.get(String(r.ivNo).toUpperCase()) || []).length > 1 ? rounds.get(String(r.ivNo).toUpperCase()) || [] : undefined }));
+    rounds: roundsOf(r) || undefined }));
   const canOwner = isOp(user) || can(user, 'team_view');
   const owners = canOwner ? (await users.list()).filter((u) => ['sales', 'lead'].includes(u.role)).map((u) => ({ email: u.email, name: u.name || u.email })) : [];
-  res.status(200).json({ ok: true, peakLive: require('../lib/peak').mode() !== 'off', summary: summarise(all, today), segments, seg, invoices: out, total: all.length, canOwner, owners,
+  res.status(200).json({ ok: true, peakLive: require('../lib/peak').mode() !== 'off', summary: summarise(all, today, events), segments, seg, invoices: out, total: all.length, canOwner, owners,
     lists: { docStatus: ar.DOC_STATUS, payMethods: ar.PAY_METHODS, channels: ar.CHANNELS, follow: ar.FOLLOW, delay: ar.DELAY } });
 }
 

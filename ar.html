@@ -311,15 +311,18 @@ function renderKpi() {
   const w = k.forecast.weeks[0] || {}, wEnd = (D.summary.forecast.weeks[0] || {}).weekEnd || '';
   // "In" = the money has a received date in this week AND its receipt has been issued. Money recorded
   // this week whose receipt is not out yet still counts toward the week's total, shown as waiting for a receipt.
-  const amt = (xs) => xs.reduce((t, r) => t + (Number(String(r.paidAmount ?? '').replace(/,/g, '')) || Number(r.expected) || 0), 0);
-  const paidWk = rowsFor('all', true).filter((r) => r.state === 'Paid' && wEnd && r.paidWeek === wEnd);
-  const got = paidWk.filter((r) => String(r.rtNo || '').trim()), noRt = paidWk.filter((r) => !String(r.rtNo || '').trim());
+  const amt = (xs) => xs.reduce((t, e) => t + e.amount, 0);
+  // One entry per time money came in this week: each round of an INV paid in rounds, else the INV's payment.
+  const paidWk = !wEnd ? [] : rowsFor('all', true).flatMap((r) => (r.rounds
+    ? r.rounds.filter((x) => x.week === wEnd).map((x) => ({ amount: x.amount, rt: !!x.rt }))
+    : r.state === 'Paid' && r.paidWeek === wEnd ? [{ amount: Number(String(r.paidAmount ?? '').replace(/,/g, '')) || Number(r.expected) || 0, rt: !!String(r.rtNo || '').trim() }] : []));
+  const got = paidWk.filter((e) => e.rt), noRt = paidWk.filter((e) => !e.rt);
   const inAmt = amt(got);
   const wait = Number(w.expected) || 0, total = inAmt + amt(noRt) + wait, pct = total > 0 ? Math.round(inAmt / total * 100) : 0;
   $('s-week').textContent = fmt0(total);
   $('s-week-bar').style.width = pct + '%';
   $('s-week-p').innerHTML = `เข้าแล้ว <b>${fmt0(inAmt)}</b> / ${fmt0(total)} (${pct}%)`;
-  $('s-week-n').textContent = `ยังรอ ${w.count || 0} ใบ${noRt.length ? ` · รับเงินแล้วรอใบเสร็จ ${noRt.length} ใบ` : ''} · สัปดาห์ถึง ${w.weekEnd || wEnd}${tag}`;
+  $('s-week-n').textContent = `ยังรอ ${w.count || 0} ใบ${noRt.length ? ` · รับเงินแล้วรอใบเสร็จ ${noRt.length} รายการ` : ''} · สัปดาห์ถึง ${w.weekEnd || wEnd}${tag}`;
   $('s-avg').textContent = k.avgDaysToPay ? k.avgDaysToPay + ' วัน' : '–';
 }
 
@@ -678,7 +681,7 @@ function showDrill(title, sub, rows, total, basis) {
   $('d-sub').textContent = `${rows.length} ใบ · ${what}${sub ? ' · ' + sub : ''}`;
   const paid = basis === 'paid';
   $('d-body').innerHTML = rows.length ? `<table><thead><tr><th>บริษัท</th><th>INV</th><th>เซล</th><th>ครบกำหนด</th><th>${paid ? 'รับเงิน' : 'นัดจ่าย'}</th><th class="num">ยอด</th></tr></thead><tbody>
-    ${rows.map((r) => `<tr class="go" data-iv="${esc(r.ivNo)}" title="เปิดใบนี้ในรายการติดตาม"><td><b>${esc(r.company)}</b><div class="small">${esc(r.segment || '')}</div></td><td class="mono">${esc(r.ivNo)}${r.rtNo ? `<div class="small" title="เลขใบเสร็จ">ใบเสร็จ ${esc(r.rtNo)}</div>` : r.state === 'Paid' ? '<div class="small" style="color:var(--warn-ink)">ยังไม่ออกใบเสร็จ</div>' : ''}</td><td>${esc(r.salesName || '')}</td>
+    ${rows.map((r) => `<tr class="go" data-iv="${esc(r.ivNo)}" title="เปิดใบนี้ในรายการติดตาม"><td><b>${esc(r.company)}</b><div class="small">${esc(r.segment || '')}</div></td><td class="mono">${esc(r.ivNo)}${r.round ? '<div class="small">รอบรับเงิน (จ่ายหลายรอบ)</div>' : ''}${r.rtNo ? `<div class="small" title="เลขใบเสร็จ">ใบเสร็จ ${esc(r.rtNo)}</div>` : r.state === 'Paid' ? '<div class="small" style="color:var(--warn-ink)">ยังไม่ออกใบเสร็จ</div>' : ''}</td><td>${esc(r.salesName || '')}</td>
       <td>${esc(r.dueDate || '')}${r.daysOverdue ? `<div class="small" style="color:var(--bad-ink)">เกิน ${r.daysOverdue} วัน</div>` : ''}</td>
       <td>${esc((paid ? r.paidDate : r.commitDate) || '')}${paid && r.paidVsCommit !== '' && r.paidVsCommit !== undefined ? `<div class="small">${r.paidVsCommit < 0 ? `ก่อนนัด ${-r.paidVsCommit} วัน` : r.paidVsCommit > 0 ? `ช้า ${r.paidVsCommit} วัน` : 'ตรงนัด'}</div>` : ''}</td>
       <td class="num">${fmt(r.amount)}</td></tr>`).join('')}

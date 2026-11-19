@@ -600,6 +600,12 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
       ok(s === 200 && j.partial && Math.abs(j.remaining - r2) < 0.01 && !a.paidDate && Number(a.paidAmount) === r1, 'round 1 confirmed: INV stays open with the rest owed: ' + (j.error || JSON.stringify(j)));
       [s, j] = await call(ACCT, 'GET', '/api/invoice-requests?view=ar'); let r = (j.invoices || []).find((x) => x.ivNo === v.peakIvNo);
       ok(r && r.partial && Math.abs(r.expected - r2) < 0.01 && Math.abs(r.expectedFull - full) < 0.01 && r.rounds.length === 1 && !r.rounds[0].rt && r.state !== 'Paid', 'debt page: still open, owes the rest, one round listed: ' + (r && [r.expected, r.expectedFull, r.state].join(' ')));
+      // Cash-in counts the round on its own date while the INV is still open (week of 10/11 ends Thu 12/11).
+      { const [, sm] = await call(ACCT, 'GET', '/api/invoice-requests?view=ar&drill=' + encodeURIComponent('paid|12/11/2026'));
+        const line = (sm.rows || []).find((x) => x.ivNo === v.peakIvNo);
+        ok(line && line.round && Math.abs(line.amount - r1) < 0.01 && line.paidDate === '10/11/2026', 'the round is in that week\'s cash-in with its own amount and date: ' + JSON.stringify(line || (sm.error || (sm.rows || []).length)));
+        const [, nov] = await call(ACCT, 'GET', '/api/invoice-requests?view=ar&drill=' + encodeURIComponent('month-cash|11/2026'));
+        ok((nov.rows || []).filter((x) => x.ivNo === v.peakIvNo).length === 1, 'and once in the month\'s cash-in'); }
       [s, j] = await call(BENZ, 'GET', '/api/invoice-requests'); const mine = (j.requests || []).find((x) => x.ivRequestId === v.ivRequestId);
       ok(mine && mine.ar.received === r1 && mine.payRounds.length === 2 && mine.payRounds.filter((x) => x.status === 'new').length === 1, 'Sales see what was confirmed and what still waits');
       const rt = { action: 'rt_make', ivNo: v.peakIvNo, paymentMethodCode: 'BNK001', deliveryChannel: 'sales' };
@@ -617,6 +623,9 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
       [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', rt); ok(s === 409, 'nothing left to receipt: ' + s);
       [s, j] = await call(ACCT, 'GET', '/api/invoice-requests?view=ar'); r = (j.invoices || []).find((x) => x.ivNo === v.peakIvNo);
       ok(r && r.state === 'Paid' && !r.partial && r.rounds.length === 2 && r.rounds.every((x) => x.rt), 'debt page: paid, two rounds, each with a receipt: ' + (r && JSON.stringify(r.rounds.map((x) => x.rt))));
+      { const [, sm] = await call(ACCT, 'GET', '/api/invoice-requests?view=ar&drill=' + encodeURIComponent('month-cash|11/2026'));
+        const ls = (sm.rows || []).filter((x) => x.ivNo === v.peakIvNo);
+        ok(ls.length === 2 && Math.abs(ls.reduce((t, x) => t + x.amount, 0) - full) < 0.01 && ls.some((x) => x.paidDate === '10/11/2026') && ls.some((x) => x.paidDate === '12/11/2026'), 'after closing: two cash lines on the two dates, adding up to the INV: ' + JSON.stringify(ls.map((x) => [x.paidDate, x.amount]))); }
     }
     // Accounting records a round itself.
     const b2 = db().Invoices.find((x) => !x.paidDate && !x.rtNo && !x.rtDate && x.docStatus === 'Active' && !Number(x.paidAmount) && Number(x.preVat) > 1000);

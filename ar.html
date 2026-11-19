@@ -378,9 +378,9 @@ function render() {
     return `<tr class="r${open ? ' open' : ''}" data-iv="${esc(r.ivNo)}"><td class="mono">${r.peakDocLink ? `<a class="doc" href="${esc(r.peakDocLink)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(r.ivNo)}</a>` : esc(r.ivNo)}<div class="sub">${esc(r.segment)}${r.dealType ? ' · ' + esc(r.dealType) : ''}</div></td>
       <td><div class="co">${esc(r.company)}</div><div class="sub">${esc(r.packageName || '')}${r.students ? ' · ' + esc(r.students) + ' คน' : ''}</div></td>
       <td>${esc(r.salesName || r.salesEmail || '')}</td>
-      <td>${esc(r.dueDate)}<div class="sub">${st(r.state)}${r.awaitCash ? ' <span class="st blue">ออกใบเสร็จแล้ว รอเงินเข้า</span>' : ''}</div></td>
+      <td>${esc(r.dueDate)}<div class="sub">${st(r.state)}${r.awaitCash ? ' <span class="st blue">ออกใบเสร็จแล้ว รอเงินเข้า</span>' : ''}${r.partial ? ' <span class="st warn">รับบางส่วน</span>' : ''}</div></td>
       <td class="num">${d ? `<span class="days ${d > 90 ? 'd90' : d > 30 ? 'd30' : ''}">${d}</span>` : ''}</td>
-      <td class="num">${fmt(r.state === 'Paid' ? (toNum(r.paidAmount) || r.expected) : r.expected)}</td>
+      <td class="num">${fmt(r.state === 'Paid' ? (toNum(r.paidAmount) || r.expected) : r.expected)}${r.partial ? `<div class="sub" style="white-space:nowrap">รับแล้ว ${fmt(r.received)} จาก ${fmt(r.expectedFull)}</div>` : ''}</td>
       <td>${esc(r.followStatus || '')}${r.commitDate ? `<div class="sub">นัดจ่าย ${esc(r.commitDate)}</div>` : ''}${noCF(r) ? '<div class="sub"><span class="st warn" title="วันนัดจ่ายยังเป็นวันครบกำหนดที่ระบบใส่ให้ และยังไม่มีบันทึกการติดตาม">ยังไม่ยืนยันวันจ่าย</span></div>' : ''}${r.needCommit && !r.legacyCheck ? '<div class="sub late">เลยวันนัด ต้องหาวันใหม่</div>' : ''}</td>
       <td>${esc(r.nextActionDate || '')}</td></tr>${open ? detail(r) : ''}`;
   }).join('') || `<tr><td colspan="8" class="empty">ไม่มีรายการ</td></tr>`;
@@ -407,6 +407,7 @@ function detail(r) {
       </div></details>`}
     </div>
     <div class="kv">${kv('วันที่ออก', esc(r.issueDate))}${kv('เครดิต', esc(r.creditTermDays) + ' วัน')}${kv('ก่อน VAT', fmt(toNum(r.preVat)))}${kv('หัก ณ ที่จ่าย', whtPct(r.whtRate))}${kv('QT', esc(r.qtNo))}${kv('เลขภาษี', esc(r.taxId) + (r.branch ? ' / ' + esc(r.branch) : ''))}${kv('PO', esc(r.poNo))}${kv('งวด', esc(r.installment))}${kv(paid ? 'นัดจ่ายไว้เดิม' : 'ลูกค้านัดจ่าย', esc(paid ? r.promisedDate : r.commitDate))}${kv('จ่ายเทียบวันนัด', r.paidVsCommit === '' || r.paidVsCommit === undefined ? '' : r.paidVsCommit < 0 ? `ก่อนนัด ${-r.paidVsCommit} วัน` : r.paidVsCommit > 0 ? `ช้ากว่านัด ${r.paidVsCommit} วัน` : 'ตรงวันนัด')}${kv('RT', esc(r.rtNo))}${kv('วันที่ใบเสร็จ / วันรับเช็ค', esc(r.rtDate))}${kv('วันที่เงินเข้า', esc(r.paidDate))}${kv('ยอดที่รับ', r.paidAmount ? fmt(toNum(r.paidAmount)) : '')}${kv('วิธีจ่าย', esc(r.paymentMethod))}${kv('เหตุผลจ่ายช้า', esc(r.delayReason))}${kv('หมายเหตุ', esc(r.note))}${kv('ที่มา', esc(r.source))}</div>
+    ${r.rounds && r.rounds.length ? `<div class="box"><h4>รอบรับเงิน ${r.partial ? `· รับแล้ว ${fmt(r.received)} จาก ${fmt(r.expectedFull)} เหลือ ${fmt(r.expected)}` : '· รับครบแล้ว'}</h4><div class="log">${r.rounds.map((x, i) => `<div>รอบ ${i + 1} · ${esc(x.paidDate)} · <b>${fmt(x.amount)}</b> · ${esc(x.by || '')}${x.note ? ' · ' + esc(x.note) : ''} · ${x.rt ? `ใบเสร็จ ${esc(x.rt)}` : CAN_RT && D.peakLive ? `<button class="btn btn-g btn-sm" type="button" onclick="roundRt('${id}','${esc(x.noticeId)}')">🧾 ออกใบเสร็จรอบนี้</button>` : 'ยังไม่ออกใบเสร็จ'}</div>`).join('')}</div></div>` : ''}
     <div class="box"><h4>ประวัติการติดตาม</h4><div class="log">${fu}</div></div>
   </td></tr>`;
 }
@@ -450,7 +451,9 @@ const METHOD_TH = { 'Bank Transfer': 'โอนเงิน', Cheque: 'เช็
 const WHT = [0, 1, 2, 3, 5];
 const whtCur = (r) => { const s = String(r.whtRate ?? '').trim(), n = toNum(s); return Math.round((s.includes('%') || n >= 1 ? n / 100 : n) * 100); };
 const expAt = (r, pct) => { const pre = toNum(r.preVat); return Math.round((pre * 1.07 - pre * pct / 100) * 100) / 100; };
-const whtFit = (r, amount) => { const f = WHT.filter((p) => Math.abs(expAt(r, p) - amount) <= 1); return f.length === 1 ? f[0] : null; };
+const got = (r) => Number(r.received) || 0; // confirmed in earlier rounds, INV still open
+const restAt = (r, pct) => Math.round((expAt(r, pct) - got(r)) * 100) / 100;
+const whtFit = (r, amount) => { const f = WHT.filter((p) => Math.abs(restAt(r, p) - amount) <= 1); return f.length === 1 ? f[0] : null; };
 const whtSaid = (n) => { const m = /หัก ณ ที่จ่าย (\d)%/.exec(n.note || ''); return m ? Number(m[1]) : /ลูกค้าไม่หัก ณ ที่จ่าย/.test(n.note || '') ? 0 : null; };
 const whtOpts = (sel) => WHT.map((p) => `<option value="${p}"${p === sel ? ' selected' : ''}>${p ? p + '%' : 'ไม่หัก'}</option>`).join('');
 function renderNotices() {
@@ -461,7 +464,10 @@ function renderNotices() {
     const diff = r ? toNum(n.amount) - r.expected : 0;
     // The amount fits another withholding rate than the INV carries: say so instead of a bare difference.
     const fit = r && Math.abs(diff) > 1 ? whtFit(r, toNum(n.amount)) : null;
-    const amtNote = !r || Math.abs(diff) <= 1 ? '' : fit !== null
+    const part = r && fit === null && toNum(n.amount) < r.expected - 1;
+    const amtNote = !r || Math.abs(diff) <= 1 ? (r && r.partial ? `<div class="small">รอบสุดท้าย · รับแล้วก่อนหน้า ${fmt(r.received)} จาก ${fmt(r.expectedFull)}</div>` : '') : part
+      ? `<div class="small" style="color:var(--warn-ink)">จ่ายบางส่วน · ${r.partial ? `รับแล้วก่อนหน้า ${fmt(r.received)} · ` : ''}ทั้งใบ ${fmt(r.expectedFull)} · ถ้ายืนยันรอบนี้จะเหลือ ${fmt(Math.round((r.expected - toNum(n.amount)) * 100) / 100)}</div>`
+      : fit !== null
       ? `<div class="small" style="color:var(--warn-ink)">${fit ? `ลูกค้าหัก ณ ที่จ่าย ${fit}% (${fmt(Math.round(toNum(r.preVat) * fit) / 100)})` : 'ลูกค้าไม่หัก ณ ที่จ่าย'} · ใน INV ระบุ ${whtCur(r) ? whtCur(r) + '%' : 'ไม่หัก'}</div>`
       : `<div class="small" style="color:var(--bad-ink)">ควรได้รับ ${fmt(r.expected)} (ต่าง ${fmt(diff)})</div>`;
     return `<div class="pn"><div class="pn-top"><div><b>${esc(n.company)}</b> · ${esc(n.ivNo)}<div class="small">แจ้งโดย ${esc(n.salesName)} · ${esc(n.createdAt)}</div>${/^จ่ายผ่าน WH/.test(n.note || '') ? `<div class="small" style="margin-top:3px"><span class="st warn">จ่ายผ่าน Whitehouse</span> ${esc(n.note.replace(/^จ่ายผ่าน WH · /, ''))}</div>` : n.note ? `<div class="small">💬 ${esc(n.note)}</div>` : ''}</div>
@@ -475,26 +481,42 @@ function confirmNotice(id) {
   const r = D.invoices.find((x) => String(x.ivNo).toUpperCase() === String(n.ivNo).toUpperCase());
   // Start from what Sales said, else the rate the amount fits, else the INV's own rate.
   const w0 = !r ? 0 : whtSaid(n) ?? whtFit(r, toNum(n.amount)) ?? whtCur(r);
-  window.cnWht = () => { if (!r) return; const p = Number(val('cn-wht')), e = expAt(r, p), d = toNum(val('cn-am')) - e; $('cn-exp').innerHTML = `ที่ควรได้รับ ${fmt(e)}${Math.abs(d) > 1 ? ` <span style="color:var(--bad-ink)">(ต่าง ${fmt(d)})</span>` : ' · ยอดตรง'}${p !== whtCur(r) ? ` · จะแก้อัตราใน INV จาก ${whtCur(r) ? whtCur(r) + '%' : 'ไม่หัก'} เป็น ${p ? p + '%' : 'ไม่หัก'}` : ''}`; };
+  // Is this round the one that closes the INV? Follows the amount until accounting picks an answer.
+  let closeTouched = false;
+  window.cnClose = () => { closeTouched = true; cnWht(); };
+  window.cnWht = () => {
+    if (!r) return;
+    const p = Number(val('cn-wht')), rest = restAt(r, p), am = toNum(val('cn-am')), d = Math.round((am - rest) * 100) / 100;
+    if (!closeTouched) $('cn-close').value = am >= rest - 1 ? '1' : '0';
+    const close = val('cn-close') === '1';
+    const head = `${got(r) ? `รับแล้วก่อนหน้า ${fmt(got(r))} · ` : ''}ยังค้าง ${fmt(rest)}`;
+    $('cn-exp').innerHTML = head + (close
+      ? (Math.abs(d) > 1 ? ` · <span style="color:var(--bad-ink)">รอบนี้ต่างจากที่ค้าง ${fmt(d)} แต่จะปิด INV</span>` : ' · ยอดตรง ปิด INV ได้')
+      : ` · หลังรอบนี้จะเหลือ <b>${fmt(Math.max(0, -d))}</b> INV ยังเปิดอยู่`)
+      + (p !== whtCur(r) ? ` · จะแก้อัตราใน INV จาก ${whtCur(r) ? whtCur(r) + '%' : 'ไม่หัก'} เป็น ${p ? p + '%' : 'ไม่หัก'}` : '');
+  };
   formModal({ title: '✓ ยืนยันเงินเข้า', ok: '✓ ยืนยันเงินเข้า', html: `<p style="margin:0 0 12px"><b>${esc(n.company)}</b> · ${esc(n.ivNo)}<br><span class="small">แจ้งโดย ${esc(n.salesName)}</span></p>
     <div class="row"><div class="fg"><label>วันที่เงินเข้า *</label><input type="date" id="cn-dt" value="${iso(n.paidDate)}"></div>
     <div class="fg"><label>ยอดที่ได้รับ *</label><input type="text" inputmode="decimal" id="cn-am" value="${esc(n.amount)}" oninput="cnWht()"></div></div>
-    ${r ? `<div class="fg"><label for="cn-wht">ลูกค้าหัก ณ ที่จ่าย</label><select id="cn-wht" onchange="cnWht()">${whtOpts(w0)}</select><div class="sub" id="cn-exp"></div></div>` : ''}
+    ${r ? `<div class="row"><div class="fg"><label for="cn-close">ยอดรอบนี้คือ</label><select id="cn-close" onchange="cnClose()"><option value="1">รับครบแล้ว ปิด INV</option><option value="0">รับบางส่วน ยังไม่ครบ</option></select></div>
+    <div class="fg"><label for="cn-wht">ลูกค้าหัก ณ ที่จ่าย</label><select id="cn-wht" onchange="cnWht()">${whtOpts(w0)}</select></div></div><div class="sub" id="cn-exp" style="margin:-4px 0 10px;font-size:12px;color:var(--muted)"></div>` : ''}
     <p class="small">แก้วันที่หรือยอดได้ถ้า statement ไม่ตรงกับที่เซลแจ้ง</p>
     <div class="fg"><label>หมายเหตุ</label><input type="text" id="cn-nt" maxlength="500"></div>`,
     save: async (err) => {
       if (!val('cn-dt') || !(toNum(val('cn-am')) > 0)) { err('ใส่วันที่และยอดที่ได้รับ'); return false; }
-      await patch({ action: 'pay_confirm', noticeId: id, paidDate: val('cn-dt'), amount: val('cn-am'), note: val('cn-nt'), ...(r ? { whtRate: val('cn-wht') } : {}) }); await done(`ยืนยันเงินเข้า ${n.ivNo} แล้ว`);
-      offerReceipt(n.ivNo, { ch: n.deliveryChannel, email: n.email, addr: n.deliveryAddress, method: n.paymentMethod });
+      const round = { noticeId: id, amount: toNum(val('cn-am')), paidDate: val('cn-dt').split('-').reverse().join('/') };
+      const d = await patch({ action: 'pay_confirm', noticeId: id, paidDate: val('cn-dt'), amount: val('cn-am'), note: val('cn-nt'), ...(r ? { whtRate: val('cn-wht'), close: val('cn-close') === '1' } : {}) });
+      await done(d.partial ? `ยืนยันเงินเข้า ${n.ivNo} รอบนี้แล้ว · รับแล้ว ${fmt(d.received)} เหลือ ${fmt(d.remaining)}` : `ยืนยันเงินเข้า ${n.ivNo} แล้ว`);
+      offerReceipt(n.ivNo, { ch: n.deliveryChannel, email: n.email, addr: n.deliveryAddress, method: n.paymentMethod }, d.partial ? round : null);
     } });
   cnWht();
 }
 // Record-payment form: another withholding rate changes what should arrive (and the amount, if it was still the old expected figure).
 function pdWht(sel) {
   const r = find(sel.dataset.iv); if (!r) return;
-  const e = expAt(r, Number(sel.value)), am = $('pd-am');
-  if (WHT.some((p) => Math.abs(toNum(am.value) - expAt(r, p)) < 0.005)) am.value = e;
-  $('pd-exp').textContent = `ที่ควรได้รับ ${fmt(e)} (รวม VAT หัก ณ ที่จ่าย ${sel.value}%)`;
+  const e = restAt(r, Number(sel.value)), am = $('pd-am');
+  if (WHT.some((p) => Math.abs(toNum(am.value) - restAt(r, p)) < 0.005)) am.value = e;
+  $('pd-exp').textContent = `${got(r) ? 'ยังค้าง' : 'ที่ควรได้รับ'} ${fmt(e)} (รวม VAT หัก ณ ที่จ่าย ${sel.value}%${got(r) ? ` · รับแล้วก่อนหน้า ${fmt(got(r))}` : ''})`;
 }
 function rejectNotice(id) {
   const n = PN.find((x) => x.noticeId === id);
@@ -514,7 +536,8 @@ function openPaid(iv) {
   formModal({ title: paid ? '💰 แก้ไขการรับเงิน' : r.awaitCash ? '💰 ยืนยันเงินเข้า' : '💰 บันทึกรับเงิน', ok: r.awaitCash && !paid ? '✓ ยืนยันเงินเข้า' : '✓ บันทึกรับเงิน', html: head(r) + `
     ${r.awaitCash ? `<p class="small" style="margin:0 0 10px">ใบนี้มีใบเสร็จแล้ว${r.rtNo ? ' (' + esc(r.rtNo) + ')' : ''}${r.rtDate ? ' ลงวันที่ ' + esc(r.rtDate) : ''} ใส่วันที่เงินเข้าบัญชีจริงตาม statement</p>` : ''}
     <div class="row"><div class="fg"><label>วันที่เงินเข้าบัญชีจริง *</label><input type="date" id="pd-dt" max="${todayIso}" value="${iso(r.paidDate)}"><div class="sub">ไม่ใช่วันที่บนใบเสร็จหรือวันรับเช็ค</div></div>
-    <div class="fg"><label>ยอดที่ได้รับ *</label><input type="text" inputmode="decimal" id="pd-am" value="${r.paidAmount ? esc(r.paidAmount) : r.expected}"><div class="sub" id="pd-exp">ที่ควรได้รับ ${fmt(r.expected)} (รวม VAT หัก ณ ที่จ่ายแล้ว)</div></div></div>
+    <div class="fg"><label>ยอดที่ได้รับ *</label><input type="text" inputmode="decimal" id="pd-am" value="${paid && r.paidAmount ? esc(r.paidAmount) : r.expected}"><div class="sub" id="pd-exp">${r.partial ? `ยังค้าง ${fmt(r.expected)} · รับแล้วก่อนหน้า ${fmt(r.received)} จาก ${fmt(r.expectedFull)}` : `ที่ควรได้รับ ${fmt(r.expected)} (รวม VAT หัก ณ ที่จ่ายแล้ว)`}</div></div></div>
+    ${paid ? '' : `<div class="fg"><label for="pd-part">ยอดนี้คือ</label><select id="pd-part"><option value="1">รับครบแล้ว ปิด INV</option><option value="0">รับบางส่วน ยังไม่ครบ (INV ยังเปิดอยู่)</option></select><div class="sub">ลูกค้าจ่ายหลายรอบได้ บันทึกทีละรอบ ระบบจะรวมยอดและปิด INV เมื่อรับครบ</div></div>`}
     <div class="fg"><label for="pd-wht">ลูกค้าหัก ณ ที่จ่าย</label><select id="pd-wht" onchange="pdWht(this)" data-iv="${esc(iv)}">${whtOpts(whtCur(r))}</select><div class="sub">เปลี่ยนเมื่อลูกค้าหักต่างจากที่ระบุใน INV ระบบจะแก้อัตราใน INV ให้</div></div>
     <div class="row"><div class="fg"><label>วิธีชำระ *</label><select id="pd-mt">${mOpts}</select></div>
     ${paid ? '' : '<div class="fg"><label>สลิป / หลักฐาน *</label><input type="file" id="pd-file" accept=".pdf,.jpg,.jpeg,.png"></div>'}</div>
@@ -526,9 +549,22 @@ function openPaid(iv) {
     <p class="small">วันนัดจ่ายจะถูกปรับให้เท่ากับวันรับเงิน และระบบเก็บวันนัดเดิมไว้ให้ดูว่าจ่ายก่อนหรือหลังนัด<br>ใบเสร็จ (RT) ฝ่ายบัญชีออกจาก INV นี้ได้หลังบันทึกรับเงิน ที่หน้า รออนุมัติ › ใบเสร็จ${PN.some((n) => n.status === 'new' && String(n.ivNo).toUpperCase() === String(iv).toUpperCase()) ? ' · <b>เซลแจ้งจ่าย INV นี้ไว้แล้ว</b> ยืนยันจากรายการด้านบนจะได้ข้อมูลและสลิปที่เซลแนบ' : ''}</p>`,
     save: async (err) => {
       const body = { action: 'ar_update', ivNo: iv, paidDate: val('pd-dt'), paidAmount: val('pd-am'), paymentMethod: val('pd-mt'), delayReason: val('pd-dl'), whtRate: val('pd-wht') };
-      const expNow = expAt(r, Number(body.whtRate));
+      const expNow = restAt(r, Number(body.whtRate));
+      const part = !paid && val('pd-part') === '0';
       if (!body.paidDate || !body.paidAmount || !body.paymentMethod) { err('ใส่วันที่เงินเข้า ยอด และวิธีชำระ'); return false; }
       if (body.paidDate > todayIso) { err('วันที่เงินเข้าเป็นวันในอนาคตไม่ได้ ถ้าเงินยังไม่เข้าให้ใช้ปุ่ม "มีใบเสร็จ / เช็คแล้ว รอเงินเข้า"'); return false; }
+      if (part) {
+        if (toNum(body.paidAmount) >= expNow - 1) { err(`ยอดนี้ครบที่ค้างแล้ว (${fmt(expNow)}) เลือก "รับครบแล้ว ปิด INV"`); return false; }
+        const fl0 = $('pd-file') && $('pd-file').files[0];
+        if (!fl0) { err('แนบสลิป / หลักฐานการรับเงิน'); return false; }
+        if (fl0.size > 3 * 1024 * 1024) { err('ไฟล์ใหญ่เกิน 3 MB'); return false; }
+        const round = { amount: toNum(body.paidAmount), paidDate: body.paidDate.split('-').reverse().join('/') };
+        const d = await patch({ action: 'ar_update', ivNo: iv, partial: true, paidDate: body.paidDate, paidAmount: body.paidAmount, paymentMethod: body.paymentMethod, whtRate: body.whtRate, payNote: (($('pd-nt') || {}).value || '').trim(), file: { name: fl0.name, type: fl0.type, data: await readB64(fl0) } });
+        OPEN = null; await done(`บันทึกรับเงินบางส่วน ${iv} แล้ว · รับแล้ว ${fmt(d.received)} เหลือ ${fmt(d.remaining)}`);
+        const gv = (k) => (($(k) || {}).value || '').trim();
+        offerReceipt(iv, { ch: gv('pd-ch') || 'sales', email: gv('pd-em'), addr: gv('pd-ad'), method: body.paymentMethod }, { ...round, noticeId: d.noticeId });
+        return;
+      }
       if (!paid && !hasRt) {
         Object.assign(body, { deliveryChannel: val('pd-ch'), email: val('pd-em'), deliveryAddress: val('pd-ad'), payNote: val('pd-nt') });
         if (/email/.test(body.deliveryChannel) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) { err('ใส่อีเมลลูกค้าสำหรับส่งใบเสร็จ'); return false; }
@@ -541,7 +577,7 @@ function openPaid(iv) {
       if (!paid && !fl) { err('แนบสลิป / หลักฐานการรับเงิน'); return false; }
       if (fl) { if (fl.size > 3 * 1024 * 1024) { err('ไฟล์ใหญ่เกิน 3 MB'); return false; } body.file = { name: fl.name, type: fl.type, data: await readB64(fl) }; }
       await patch(body); OPEN = null; await done(`บันทึกรับเงิน ${iv} แล้ว`);
-      if (!paid && !hasRt) offerReceipt(iv, { ch: body.deliveryChannel, email: body.email, addr: body.deliveryAddress, method: body.paymentMethod });
+      if (!paid && (!hasRt || r.partial)) offerReceipt(iv, { ch: body.deliveryChannel, email: body.email, addr: body.deliveryAddress, method: body.paymentMethod });
     } });
   confirmDiff = false;
 }
@@ -566,9 +602,13 @@ function openAwait(iv) {
 let PAYM = null, CAN_RT = false;
 const PM_TY = { 1: 'เงินสด', 2: 'บัญชีธนาคาร', 4: 'e-Wallet' };
 const CH_TH = { sales: 'ส่งไฟล์ให้ Sales', email: 'ส่งอีเมลลูกค้า', post: 'ส่งตัวจริงตามที่อยู่', email_post: 'ส่งอีเมลและตัวจริง' };
-function offerReceipt(ivNo, { ch, email, addr, method }) {
+function offerReceipt(ivNo, { ch, email, addr, method }, round) {
   const r = find(ivNo);
-  if (!CAN_RT || !D.peakLive || !r || r.rtNo || !r.paidDate) return;
+  if (!CAN_RT || !D.peakLive || !r) return;
+  // Earlier rounds already have their own receipts: this one is for what is left.
+  const done0 = (r.rounds || []).filter((x) => x.rt && x.rt !== 'รวม');
+  const rest = !round && done0.length ? Math.round((toNum(r.paidAmount) - done0.reduce((t, x) => t + x.amount, 0)) * 100) / 100 : 0;
+  if (!round && (!r.paidDate || (done0.length ? rest <= 0.01 : !!r.rtNo))) return;
   setTimeout(async () => {
     try { if (!PAYM) { PAYM = (await api('/api/invoice-requests?view=pay-methods')).methods || []; try { localStorage.setItem('paym:list', JSON.stringify(PAYM)); } catch {} } }
     catch (e) {
@@ -577,16 +617,22 @@ function offerReceipt(ivNo, { ch, email, addr, method }) {
     }
     let last = ''; try { last = localStorage.getItem('paym:' + (method || '')) || ''; } catch {}
     const chan = ch || 'sales';
-    formModal({ title: '🧾 ออกใบเสร็จต่อเลยไหม?', ok: '🧾 สร้างใบเสร็จ Draft ใน PEAK', html: `<p style="margin:0 0 12px"><b>${esc(r.company)}</b> · ${esc(ivNo)}<br>รับเงิน <b>${fmt(toNum(r.paidAmount))}</b> เมื่อ ${esc(r.paidDate)}</p>
+    formModal({ title: round ? '🧾 ออกใบเสร็จของรอบนี้เลยไหม?' : rest ? '🧾 ออกใบเสร็จส่วนที่เหลือเลยไหม?' : '🧾 ออกใบเสร็จต่อเลยไหม?', ok: '🧾 สร้างใบเสร็จ Draft ใน PEAK', html: `<p style="margin:0 0 12px"><b>${esc(r.company)}</b> · ${esc(ivNo)}<br>รับเงิน <b>${fmt(round ? round.amount : rest || toNum(r.paidAmount))}</b> เมื่อ ${esc(round ? round.paidDate : r.paidDate)}${round ? ' <span class="small">(รอบนี้)</span>' : rest ? ' <span class="small">(ส่วนที่ยังไม่มีใบเสร็จ)</span>' : ''}</p>
+      ${round ? '<p class="small" style="margin:0 0 10px">INV นี้ยังรับเงินไม่ครบ เลือกได้สองแบบ: <b>ออกใบเสร็จของรอบนี้เลย</b> หรือกด <b>ยกเลิก</b> เพื่อรอออกใบเดียวรวมยอดเมื่อรับครบ (ออกของรอบนี้ทีหลังได้จากรายละเอียดของ INV ในรายการติดตาม)</p>' : ''}
       <div class="fg"><label>เงินเข้าบัญชี (PEAK) *</label><select id="or-acc"><option value="">— เลือกบัญชีที่รับเงิน —</option>${PAYM.map((m) => `<option value="${esc(m.code)}"${m.code === last ? ' selected' : ''}>${esc(m.code)} · ${esc(m.name)} (${PM_TY[m.type] || ''})</option>`).join('')}</select></div>
-      <p class="small">ส่งใบเสร็จ: ${esc(CH_TH[chan] || chan)}${email ? ' · ' + esc(email) : ''}<br>ระบบสร้างใบเสร็จ/ใบกำกับภาษี สถานะ Draft จาก INV นี้ใน PEAK (หัก ณ ที่จ่ายคิดจากยอด INV − ยอดที่รับ) แนบสลิป แล้วอนุมัติใน PEAK · กดยกเลิกถ้าจะออกทีหลังที่หน้า รออนุมัติ › ใบเสร็จ</p>`,
+      <p class="small">ส่งใบเสร็จ: ${esc(CH_TH[chan] || chan)}${email ? ' · ' + esc(email) : ''}<br>ระบบสร้างใบเสร็จ/ใบกำกับภาษี สถานะ Draft จาก INV นี้ใน PEAK ${round ? '(ใบเสร็จของรอบนี้ไม่ใส่หัก ณ ที่จ่าย ส่วนที่ลูกค้าหักจะอยู่ในใบเสร็จใบสุดท้าย)' : '(หัก ณ ที่จ่ายคิดจากยอด INV − ยอดที่รับทั้งหมด)'} แนบสลิป แล้วอนุมัติใน PEAK · กดยกเลิกถ้าจะออกทีหลังที่หน้า รออนุมัติ › ใบเสร็จ</p>`,
       save: async (err) => {
         const code = val('or-acc'); if (!code) { err('เลือกบัญชีที่รับเงินใน PEAK'); return false; }
         try { localStorage.setItem('paym:' + (method || ''), code); } catch {}
-        const d = await patch({ action: 'rt_make', ivNo, paymentMethodCode: code, deliveryChannel: chan, email: email || '', deliveryAddress: addr || '' });
+        const d = await patch({ action: 'rt_make', ivNo, paymentMethodCode: code, deliveryChannel: chan, email: email || '', deliveryAddress: addr || '', ...(round ? { noticeId: round.noticeId } : {}) });
         await done(`สร้างใบเสร็จ ${d.peakRtNo || ''} (Draft) ใน PEAK แล้ว ตรวจและอนุมัติใน PEAK แล้วกด "เช็กสถานะจาก PEAK" ที่หน้า รออนุมัติ › ใบเสร็จ`);
       } });
   }, 50);
+}
+// Receipt for one confirmed round, from the INV's detail.
+function roundRt(iv, noticeId) {
+  const r = find(iv), x = r && (r.rounds || []).find((y) => y.noticeId === noticeId);
+  if (x) offerReceipt(iv, { ch: 'sales', email: r.financeEmail || '', addr: r.deliveryAddress || '', method: r.paymentMethod }, { noticeId, amount: x.amount, paidDate: x.paidDate });
 }
 function openOwner(iv) {
   const r = find(iv);

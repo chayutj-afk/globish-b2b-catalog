@@ -580,5 +580,51 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
     [s, j] = await call(ADMIN, 'GET', '/api/invoice-requests?view=ar');
     const r = (j.invoices || []).find((x) => x.ivNo === a1.ivNo);
     ok(r && Math.abs(r.expected - net3) < 0.01, 'expected amount of that INV follows the new rate: ' + (r && r.expected)); }
+  console.log('── 24. one INV paid in several rounds');
+  { const busy = new Set(db().PaymentNotices.filter((x) => x.status === 'new').map((x) => x.ivRequestId));
+    const liveRt = new Set(db().ReceiptRequests.filter((x) => !['rejected', 'rt_void'].includes(x.status)).map((x) => x.refDoc));
+    const v = db().InvoiceRequests.find((x) => x.status === 'iv_issued' && x.peakIvId && x.requestedBy === BENZ && !busy.has(x.ivRequestId) && !liveRt.has(x.peakIvNo)
+      && (() => { const a = arRow(x.peakIvNo); return a && !a.paidDate && !a.rtNo && a.docStatus === 'Active' && !Number(a.paidAmount); })());
+    ok(!!v, 'an open INV to pay in rounds exists');
+    if (v) {
+      const a0 = arRow(v.peakIvNo), pre = Number(a0.preVat), rate = Number(a0.whtRate) < 1 ? Number(a0.whtRate) : Number(a0.whtRate) / 100;
+      const full = Math.round((pre * 1.07 - pre * rate) * 100) / 100, r1 = Math.round(full * 0.4 * 100) / 100, r2 = Math.round((full - r1) * 100) / 100;
+      const base = { action: 'pay_notice', ivRequestId: v.ivRequestId, paymentMethod: 'Bank Transfer', deliveryChannel: 'sales', file };
+      [s, j] = await call(BENZ, 'POST', '/api/invoice-requests', { ...base, paidDate: '2026-11-10', amount: r1 }); const n1 = j.noticeId;
+      ok(s === 200 && /จ่ายบางส่วน/.test((peak().chat || []).map((x) => x.text).pop() || ''), 'round 1 reported, chat says it is a part payment: ' + (j.error || ''));
+      [s, j] = await call(BENZ, 'POST', '/api/invoice-requests', { ...base, paidDate: '2026-11-10', amount: r1 }); ok(s === 409, 'the same round twice is refused: ' + s);
+      [s, j] = await call(BENZ, 'POST', '/api/invoice-requests', { ...base, paidDate: '2026-11-12', amount: r2 }); const n2 = j.noticeId;
+      ok(s === 200 && !/จ่ายบางส่วน|ยอดเกิน/.test((peak().chat || []).map((x) => x.text).pop() || ''), 'round 2 reported while round 1 still waits, and it completes the INV: ' + (j.error || ''));
+      [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { action: 'pay_confirm', noticeId: n1 });
+      let a = arRow(v.peakIvNo);
+      ok(s === 200 && j.partial && Math.abs(j.remaining - r2) < 0.01 && !a.paidDate && Number(a.paidAmount) === r1, 'round 1 confirmed: INV stays open with the rest owed: ' + (j.error || JSON.stringify(j)));
+      [s, j] = await call(ACCT, 'GET', '/api/invoice-requests?view=ar'); let r = (j.invoices || []).find((x) => x.ivNo === v.peakIvNo);
+      ok(r && r.partial && Math.abs(r.expected - r2) < 0.01 && Math.abs(r.expectedFull - full) < 0.01 && r.rounds.length === 1 && !r.rounds[0].rt && r.state !== 'Paid', 'debt page: still open, owes the rest, one round listed: ' + (r && [r.expected, r.expectedFull, r.state].join(' ')));
+      [s, j] = await call(BENZ, 'GET', '/api/invoice-requests'); const mine = (j.requests || []).find((x) => x.ivRequestId === v.ivRequestId);
+      ok(mine && mine.ar.received === r1 && mine.payRounds.length === 2 && mine.payRounds.filter((x) => x.status === 'new').length === 1, 'Sales see what was confirmed and what still waits');
+      const rt = { action: 'rt_make', ivNo: v.peakIvNo, paymentMethodCode: 'BNK001', deliveryChannel: 'sales' };
+      [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', rt); ok(s === 409 && /ยังรับเงินไม่ครบ/.test(j.error || ''), 'no combined receipt while the INV is not fully paid: ' + (j.error || s));
+      [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { ...rt, noticeId: n1 });
+      const p1 = peak().lastRtBody.receipts.paidPayments;
+      ok(s === 200 && Number(p1.payments[0].amount) === r1 && !p1.withHoldingTaxAmount && p1.paymentDate === '20261110', 'receipt for round 1 only: its amount and date, no withholding: ' + (j.error || JSON.stringify(p1)));
+      [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { ...rt, noticeId: n1 }); ok(s === 409, 'a second receipt for the same round is refused: ' + s);
+      [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { action: 'pay_confirm', noticeId: n2 });
+      a = arRow(v.peakIvNo);
+      ok(s === 200 && !j.partial && a.paidDate === '12/11/2026' && Math.abs(Number(a.paidAmount) - full) < 0.01, 'round 2 confirmed: INV closed on the last date with the total: ' + (j.error || a.paidDate + ' ' + a.paidAmount));
+      [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', rt);
+      const p2 = peak().lastRtBody.receipts.paidPayments;
+      ok(s === 200 && Math.abs(Number(p2.payments[0].amount) - r2) < 0.01, 'the receipt after closing covers only what has no receipt yet: ' + (j.error || JSON.stringify(p2)));
+      [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', rt); ok(s === 409, 'nothing left to receipt: ' + s);
+      [s, j] = await call(ACCT, 'GET', '/api/invoice-requests?view=ar'); r = (j.invoices || []).find((x) => x.ivNo === v.peakIvNo);
+      ok(r && r.state === 'Paid' && !r.partial && r.rounds.length === 2 && r.rounds.every((x) => x.rt), 'debt page: paid, two rounds, each with a receipt: ' + (r && JSON.stringify(r.rounds.map((x) => x.rt))));
+    }
+    // Accounting records a round itself.
+    const b2 = db().Invoices.find((x) => !x.paidDate && !x.rtNo && !x.rtDate && x.docStatus === 'Active' && !Number(x.paidAmount) && Number(x.preVat) > 1000);
+    if (b2) { const part = 500;
+      [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { action: 'ar_update', ivNo: b2.ivNo, partial: true, paidDate: '2026-11-11', paidAmount: part, paymentMethod: 'Bank Transfer', file });
+      const a = arRow(b2.ivNo), pn = db().PaymentNotices.find((x) => x.noticeId === j.noticeId);
+      ok(s === 200 && j.partial && !a.paidDate && Number(a.paidAmount) === part && pn && pn.status === 'confirmed' && pn.source === 'accounting', 'accounting records a part payment: INV open, round kept: ' + (j.error || ''));
+      [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { action: 'ar_update', ivNo: b2.ivNo, paidDate: '2026-11-13', paidAmount: 100, paymentMethod: 'Bank Transfer', deliveryChannel: 'sales', file });
+      ok(s === 200 && Number(arRow(b2.ivNo).paidAmount) === part + 100 && arRow(b2.ivNo).paidDate === '13/11/2026', 'closing later adds the last amount to what was received: ' + (j.error || arRow(b2.ivNo).paidAmount)); } }
   done();
 })().catch((e) => { console.error('CRASH', e); ok(false, 'CRASH: the run stopped early: ' + e.message); done(); process.exitCode = 1; });

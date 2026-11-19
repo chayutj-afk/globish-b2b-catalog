@@ -1245,25 +1245,32 @@ async function loadAll() {
 // ─── payment notice (Sales: customer paid an INV) ──────────
 const PAY_METHODS = ['Bank Transfer', 'Cheque', 'Cash', 'Credit/Debit Card', 'Others'];
 const PAY_METHOD_TH = { 'Bank Transfer': 'โอนเงิน', Cheque: 'เช็ค', Cash: 'เงินสด', 'Credit/Debit Card': 'บัตรเครดิต / เดบิต', Others: 'อื่นๆ' };
-const canPayNotice = (v) => v.status === 'iv_issued' && v.peakIvNo && v.ar && !v.ar.paidDate && v.ar.state !== 'Closed'
-  && !(v.payNotice && v.payNotice.status === 'new') && canDo('request');
+// An INV can be paid in several rounds: Sales report each one, also while an earlier one waits for accounting.
+const canPayNotice = (v) => v.status === 'iv_issued' && v.peakIvNo && v.ar && !v.ar.paidDate && v.ar.state !== 'Closed' && canDo('request');
+const payWaiting = (v) => (v.payRounds || []).filter((x) => x.status === 'new');
 function payNoticeLine(v) {
-  const n = v.payNotice; if (!n || n.source !== 'sales') return '';
-  if (n.status === 'new') return `<br><span class="st blue">แจ้งจ่ายแล้ว · รอบัญชีตรวจเงินเข้า</span> <span class="small">${fmt(toNum(n.amount))} บาท เมื่อ ${esc(n.paidDate)}</span>`;
+  const n = v.payNotice, a = v.ar || {}, w = payWaiting(v);
+  // Paid in part: what accounting has confirmed so far, then the rounds still waiting.
+  const part = a.received > 0 && !a.paidDate ? `<br><span class="st warn">รับบางส่วน</span> <span class="small">บัญชียืนยันแล้ว ${fmt(a.received)} จาก ${fmt(a.expectedFull)} · เหลือ ${fmt(a.expected)}</span>` : '';
+  if (w.length) return part + `<br><span class="st blue">แจ้งจ่ายแล้ว · รอบัญชีตรวจเงินเข้า</span> <span class="small">${w.map((x) => `${fmt(toNum(x.amount))} บาท เมื่อ ${esc(x.paidDate)}`).join(' · ')}</span>`;
+  if (part) return part;
+  if (!n || n.source !== 'sales') return '';
   if (n.status === 'rejected') return `<br><span class="st red">บัญชียังไม่ยืนยันเงินเข้า</span> <span class="small">${esc(n.accountNote)} · แจ้งใหม่ได้</span>`;
   return '';
 }
 async function openPayNotice(id) {
   const v = IVS.find((x) => x.ivRequestId === id); if (!v) return;
-  let exp = v.ar && v.ar.expected;
+  const waitAmt = payWaiting(v).reduce((t, x) => t + toNum(x.amount), 0), gotAmt = (v.ar && v.ar.received) || 0;
+  let exp = v.ar && Math.max(0, Math.round((v.ar.expected - waitAmt) * 100) / 100);
   // Withholding tax: the customer may deduct at another rate than the INV says. Sales picks it, accounting confirms.
   const pre = v.ar && toNum(v.ar.preVat), w0 = (v.ar && v.ar.whtPct) || 0;
-  const expAt = (p) => Math.round((pre * 1.07 - pre * p / 100) * 100) / 100;
-  window.pnWht = (sel) => { const e = expAt(Number(sel.value)), am = $('pn-am'); if ([0, 1, 2, 3, 5].some((p) => Math.abs(toNum(am.value) - expAt(p)) < 0.005)) am.value = e; exp = e; $('pn-exp').textContent = `ยอดที่ควรได้รับ ${fmt(e)} บาท (รวม VAT หัก ณ ที่จ่าย ${sel.value}%)`; };
+  const expAt = (p) => Math.max(0, Math.round((pre * 1.07 - pre * p / 100 - gotAmt - waitAmt) * 100) / 100);
+  window.pnWht = (sel) => { const e = expAt(Number(sel.value)), am = $('pn-am'); if ([0, 1, 2, 3, 5].some((p) => Math.abs(toNum(am.value) - expAt(p)) < 0.005)) am.value = e; exp = e; $('pn-exp').textContent = `${gotAmt || waitAmt ? 'ยอดที่ยังค้าง' : 'ยอดที่ควรได้รับ'} ${fmt(e)} บาท (รวม VAT หัก ณ ที่จ่าย ${sel.value}%)`; };
   // B2C / B2E customers can pay through Whitehouse, which issues its own receipt.
   const seg = (v.ar && v.ar.segment) || ((REQS.find((x) => x.requestId === v.requestId) || {}).segment) || '';
   const wh = seg !== 'B2B' && seg !== 'B2S';
-  const ok = await ask({ title: `💰 แจ้งบัญชีว่าลูกค้าจ่าย ${v.peakIvNo} แล้ว`, ok: 'ส่งให้ฝ่ายบัญชี', html: `<p><b>${esc(v.company)}</b>${exp ? `<br><span class="small" id="pn-exp">ยอดที่ควรได้รับ ${fmt(exp)} บาท (รวม VAT หัก ณ ที่จ่ายแล้ว)</span>` : ''}</p>
+  const ok = await ask({ title: `💰 แจ้งบัญชีว่าลูกค้าจ่าย ${v.peakIvNo} แล้ว`, ok: 'ส่งให้ฝ่ายบัญชี', html: `<p><b>${esc(v.company)}</b>${exp ? `<br><span class="small" id="pn-exp">${gotAmt || waitAmt ? 'ยอดที่ยังค้าง' : 'ยอดที่ควรได้รับ'} ${fmt(exp)} บาท (รวม VAT หัก ณ ที่จ่ายแล้ว)</span>` : ''}${gotAmt || waitAmt ? `<br><span class="small">${gotAmt ? `บัญชียืนยันแล้ว ${fmt(gotAmt)}` : ''}${gotAmt && waitAmt ? ' · ' : ''}${waitAmt ? `แจ้งไว้รอตรวจ ${fmt(waitAmt)}` : ''}</span>` : ''}</p>
+    <p class="small" style="margin-top:-4px">ลูกค้าจ่ายหลายรอบได้ แจ้งทีละรอบตามยอดที่โอนจริงของรอบนั้น</p>
     <div class="row"><div class="fg"><label>วันที่ลูกค้าโอน *</label><input id="pn-dt" type="date"></div><div class="fg"><label>ยอดที่โอน *</label><input id="pn-am" type="number" step="0.01" min="0" value="${exp || ''}"></div></div>
     <div class="row"><div class="fg"><label>วิธีชำระ *</label><select id="pn-mt">${PAY_METHODS.map((m) => `<option value="${m}">${PAY_METHOD_TH[m]}</option>`).join('')}</select></div><div class="fg"><label>สลิป / หลักฐาน <span id="pn-file-req">*</span></label><input id="pn-file" type="file" accept=".pdf,.jpg,.jpeg,.png"></div></div>
     ${pre ? `<div class="fg"><label for="pn-wht">ลูกค้าหัก ณ ที่จ่าย</label><select id="pn-wht" onchange="pnWht(this)">${[0, 1, 2, 3, 5].map((p) => `<option value="${p}"${p === w0 ? ' selected' : ''}>${p ? p + '%' : 'ไม่หัก'}</option>`).join('')}</select><div class="sub">เปลี่ยนเมื่อลูกค้าหักต่างจากที่ระบุใน INV ยอดที่ควรได้รับจะปรับตาม</div></div>` : ''}
@@ -1283,7 +1290,10 @@ async function openPayNotice(id) {
   if (viaWh) { body.whOrderId = g('pn-who'); body.whReceiptNo = g('pn-whr'); }
   const miss = !body.paidDate ? 'ใส่วันที่ลูกค้าโอน' : !(toNum(body.amount) > 0) ? 'ใส่ยอดที่โอน' : viaWh && !(body.whOrderId && body.whReceiptNo) ? 'จ่ายผ่าน Whitehouse ต้องใส่ทั้ง Order ID และเลขใบเสร็จที่ WH ออก' : !f && !viaWh ? 'แนบสลิป / หลักฐานการโอน' : f && f.size > 3 * 1024 * 1024 ? 'ไฟล์ใหญ่เกิน 3 MB' : '';
   if (miss) return alertMsg(miss);
-  if (exp && Math.abs(toNum(body.amount) - exp) > 1 && !(await ask({ kind: 'warn', title: 'ยอดไม่ตรงกับที่ควรได้รับ', ok: 'ยืนยัน แจ้งยอดนี้', html: `<p>ลูกค้าโอน <b>${fmt(toNum(body.amount))}</b> แต่ที่ควรได้รับคือ <b>${fmt(exp)}</b> (ต่าง ${fmt(toNum(body.amount) - exp)})</p><p class="small">ถ้าถูกต้อง เช่น ลูกค้าหักค่าธรรมเนียม ให้ใส่เหตุผลในหมายเหตุ</p>` }))) return;
+  // Less than what is owed = one round of several (the INV stays open); more = worth a second look.
+  const dAmt = exp ? Math.round((toNum(body.amount) - exp) * 100) / 100 : 0;
+  if (dAmt < -1 && !(await ask({ title: 'แจ้งเป็นการจ่ายบางส่วน?', ok: 'ใช่ แจ้งรอบนี้', html: `<p>รอบนี้ลูกค้าโอน <b>${fmt(toNum(body.amount))}</b> จากที่ค้าง <b>${fmt(exp)}</b><br>จะยังเหลืออีก <b>${fmt(-dAmt)}</b></p><p class="small">INV จะยังเปิดอยู่ เมื่อลูกค้าโอนรอบถัดไปให้กดแจ้งอีกครั้ง ถ้าส่วนต่างเป็นการหัก ณ ที่จ่าย ให้กลับไปเลือกอัตราที่ลูกค้าหัก</p>` }))) return;
+  if (dAmt > 1 && !(await ask({ kind: 'warn', title: 'ยอดเกินที่ค้างอยู่', ok: 'ยืนยัน แจ้งยอดนี้', html: `<p>ลูกค้าโอน <b>${fmt(toNum(body.amount))}</b> แต่ที่ค้างอยู่คือ <b>${fmt(exp)}</b> (เกิน ${fmt(dAmt)})</p><p class="small">ถ้าถูกต้อง ให้ใส่เหตุผลในหมายเหตุ</p>` }))) return;
   try {
     if (f) body.file = { name: f.name, type: f.type, data: await readFileB64(f) };
     const d = await withLoading('กำลังแจ้งฝ่ายบัญชี…', () => api('/api/invoice-requests', { method: 'POST', body: JSON.stringify(body) }));
@@ -1522,7 +1532,8 @@ function nextIv(v) {
   if (v.peakIvNo && pendEdit('INV', v.peakIvNo)) return W('ฝ่ายบัญชีแก้ INV ตามที่ขอ');
   if (a.state === 'Closed') return W('INV นี้ปิดแล้ว (ยกเลิก / ออกใบใหม่แทน)');
   if (a.paidDate) return a.rtNo ? W(`เสร็จแล้ว · ลูกค้าจ่าย ${esc(a.paidDate)} · ใบเสร็จ ${esc(a.rtNo)}`) : W('ฝ่ายบัญชีออกใบเสร็จ');
-  if (n && n.source === 'sales' && n.status === 'new') return W('ฝ่ายบัญชีตรวจเงินเข้าตามที่คุณแจ้ง');
+  if (payWaiting(v).length) return W(`ฝ่ายบัญชีตรวจเงินเข้าตามที่คุณแจ้ง${a.expected - payWaiting(v).reduce((t, x) => t + toNum(x.amount), 0) > 1 ? ' · ลูกค้าจ่ายรอบถัดไปแล้วกด "แจ้งบัญชีว่าลูกค้าจ่ายแล้ว" อีกครั้ง' : ''}`);
+  if (a.received > 0) return Y(`รับแล้ว ${fmt(a.received)} ยังเหลือ ${fmt(a.expected)} ลูกค้าจ่ายรอบถัดไปแล้วกด "แจ้งบัญชีว่าลูกค้าจ่ายแล้ว"`);
   if (n && n.source === 'sales' && n.status === 'rejected') return Y('บัญชียังไม่เห็นเงินเข้า เช็กกับลูกค้าแล้วแจ้งใหม่');
   if (v.originalStatus === 'pending_decision') return Y('บอกฝ่ายบัญชีว่าลูกค้าต้องการเอกสารตัวจริงไหม');
   if (a.state === 'Overdue') return Y(`เกินกำหนด ${a.daysOverdue} วัน ติดตามลูกค้า จ่ายแล้วกด "แจ้งบัญชีว่าลูกค้าจ่ายแล้ว"`);

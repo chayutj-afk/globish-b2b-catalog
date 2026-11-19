@@ -13,6 +13,29 @@ const { requireUser, can, visibility, docLinkFor } = require('../lib/users');
 const users = require('../lib/users');
 // Requests that no longer count (turned down, or their INV / receipt voided in PEAK).
 const DEAD = new Set(['rejected', 'iv_void', 'rt_void']);
+// Receipts of an INV paid in rounds. A receipt made for one round carries "รอบ <notice> · รับเงิน <amount>" in its note;
+// a receipt without it covers everything received that has no receipt yet (the whole INV when there were no round receipts).
+const rtRound = (x) => { const m = /รอบ (PAY-[A-Z0-9-]+) · รับเงิน ([\d,.]+)/.exec(String(x.note || '')); return m ? { id: m[1], amount: Number(m[2].replace(/,/g, '')) || 0 } : null; };
+function rtPlan(a, rts, notices, noticeId) {
+  const ivNo = String(a.ivNo).toUpperCase();
+  const live = rts.filter((x) => String(x.refDoc).toUpperCase() === ivNo && !DEAD.has(x.status));
+  const whole = live.find((x) => !rtRound(x));
+  if (whole || (a.rtNo && !live.length)) throw bad(`INV นี้มีใบเสร็จแล้ว (${whole ? whole.peakRtNo || whole.rtRequestId : a.rtNo}) รีเฟรชหน้า`, 409);
+  const done = live.map(rtRound);
+  if (noticeId) {
+    const n = notices.find((x) => x.noticeId === noticeId && String(x.ivNo).toUpperCase() === ivNo && x.status === 'confirmed');
+    if (!n) throw bad('ไม่พบรอบรับเงินนี้ หรือยังไม่ได้ยืนยันเงินเข้า', 404);
+    if (done.some((c) => c.id === n.noticeId)) throw bad('รอบนี้ออกใบเสร็จแล้ว รีเฟรชหน้า', 409);
+    const amount = round2(Number(String(n.amount).replace(/,/g, '')));
+    return { amount, paidDate: n.paidDate, tag: ` · รอบ ${n.noticeId} · รับเงิน ${amount.toFixed(2)}`, round: true, slip: n.slipLink };
+  }
+  if (!a.paidDate) throw bad('ยังรับเงินไม่ครบ ออกใบเสร็จรวมได้เมื่อรับครบ หรือออกใบเสร็จของรอบที่รับแล้ว', 409);
+  const total = round2(Number(String(a.paidAmount).replace(/,/g, '')) || 0);
+  const rest = round2(total - done.reduce((t, c) => t + c.amount, 0));
+  if (done.length && rest <= 0.01) throw bad('ออกใบเสร็จครบทุกรอบแล้ว', 409);
+  return { amount: done.length ? rest : total, paidDate: a.paidDate, tag: done.length ? ` · รับเงิน ${rest.toFixed(2)} (ส่วนที่เหลือ)` : '', round: false, rest: done.length > 0, total };
+}
+const rtNoAdd = (cur, no) => { const xs = String(cur || '').split(/\s*,\s*/).filter(Boolean); return xs.map((x) => x.toUpperCase()).includes(String(no).toUpperCase()) ? xs.join(', ') : [...xs, no].join(', '); };
 const hub = require('../lib/hub');
 const drive = require('../lib/drive');
 const notify = require('../lib/notify');
@@ -654,8 +677,21 @@ async function arList(req, res, user) {
   // The home dashboard (?brief=1) may share a read for a few seconds; the work page always reads fresh.
   const lite = req.query.brief || req.query.drill;
   const rd = lite ? { cache: 20e3 } : {};
-  const [rows, fus, ivreqs] = await Promise.all([hub.readTable('Invoices', rd), lite ? [] : hub.readTable('FollowUps'), lite ? [] : hub.readTable('InvoiceRequests').catch(() => [])]);
+  const [rows, fus, ivreqs, pns, rts] = await Promise.all([hub.readTable('Invoices', rd), lite ? [] : hub.readTable('FollowUps'), lite ? [] : hub.readTable('InvoiceRequests').catch(() => []),
+    lite ? [] : hub.readTable('PaymentNotices').catch(() => []), lite ? [] : hub.readTable('ReceiptRequests').catch(() => [])]);
   const today = ar.todayMs();
+  // Rounds of money confirmed on each INV (an INV can be paid in several), and whether each has its own receipt.
+  const rounds = new Map();
+  for (const n of pns) {
+    if (n.status !== 'confirmed') continue;
+    const k = String(n.ivNo).toUpperCase(); if (!rounds.has(k)) rounds.set(k, []);
+    rounds.get(k).push({ noticeId: n.noticeId, paidDate: n.paidDate, amount: ar.num(n.amount), by: n.source === 'sales' ? n.salesName : n.doneBy, note: n.note || '' });
+  }
+  for (const [k, xs] of rounds) {
+    const live = rts.filter((x) => String(x.refDoc).toUpperCase() === k && !DEAD.has(x.status));
+    const whole = live.some((x) => !rtRound(x));
+    for (const x of xs) { const r = live.find((y) => (rtRound(y) || {}).id === x.noticeId); x.rt = r ? r.peakRtNo || 'Draft' : whole ? 'รวม' : ''; }
+  }
   // Customer contact from the INV request, to prefill where the receipt goes.
   const contact = new Map(ivreqs.map((v) => [v.ivRequestId, { financeEmail: v.financeEmail || '', deliveryAddress: v.originalAddress || v.deliveryAddress || '' }]));
   const sees = await arSees(user);
@@ -669,7 +705,9 @@ async function arList(req, res, user) {
   const byIv = new Map();
   for (const f of fus) { if (!byIv.has(f.ivNo)) byIv.set(f.ivNo, []); byIv.get(f.ivNo).push(f); }
   const keep = all.filter((r) => r.state === 'Outstanding' || r.state === 'Overdue' || (r.paidMs !== null && r.paidMs >= today - 120 * 86400e3) || (r.issueMs !== null && r.issueMs >= today - 120 * 86400e3));
-  const out = keep.map(({ _row, issueMs, dueMs, paidMs, planMs, paidWeekMs, preVatN, ...r }) => ({ ...r, ...(contact.get(r.ivRequestId) || {}), followUps: (byIv.get(r.ivNo) || []).slice(-20).map(({ _row: x, ...f }) => f) }));
+  const out = keep.map(({ _row, issueMs, dueMs, paidMs, planMs, paidWeekMs, preVatN, ...r }) => ({ ...r, ...(contact.get(r.ivRequestId) || {}), followUps: (byIv.get(r.ivNo) || []).slice(-20).map(({ _row: x, ...f }) => f),
+    // Only worth showing when the INV was (or is being) paid in more than one round.
+    rounds: r.partial || (rounds.get(String(r.ivNo).toUpperCase()) || []).length > 1 ? rounds.get(String(r.ivNo).toUpperCase()) || [] : undefined }));
   const canOwner = isOp(user) || can(user, 'team_view');
   const owners = canOwner ? (await users.list()).filter((u) => ['sales', 'lead'].includes(u.role)).map((u) => ({ email: u.email, name: u.name || u.email })) : [];
   res.status(200).json({ ok: true, peakLive: require('../lib/peak').mode() !== 'off', summary: summarise(all, today), segments, seg, invoices: out, total: all.length, canOwner, owners,
@@ -910,6 +948,29 @@ async function arUpdate(req, res, user) {
     if ('delayReason' in b) f.delayReason = text(b.delayReason, 200);
     if ('docStatus' in b) { const d = text(b.docStatus, 20); if (!ar.DOC_STATUS.includes(d)) throw bad('สถานะเอกสารไม่ถูกต้อง'); f.docStatus = d; }
     if ('note' in b) f.note = text(b.note, 500);
+    const got = ar.enrich(row, ar.todayMs()).received, thisRound = typeof f.paidAmount === 'number' ? f.paidAmount : 0;
+    if (b.partial === true) {
+      // One round of several: the INV stays open, the amount is added to what was received, and the round is kept in PaymentNotices.
+      if (row.paidDate) throw bad('INV นี้บันทึกรับเงินครบแล้ว', 409);
+      if (!f.paidDate || !(thisRound > 0)) throw bad('ใส่วันที่เงินเข้าและยอดที่ได้รับของรอบนี้');
+      const method = f.paymentMethod || row.paymentMethod; if (!method) throw bad('เลือกวิธีชำระเงิน');
+      if (!b.file) throw bad('แนบสลิป / หลักฐานการรับเงิน');
+      const full = ar.expectedAt(row, f.whtRate ? Number(f.whtRate) * 100 : ar.whtPct(row)), total = round2(got + thisRound);
+      if (total >= full - 1) throw bad('ยอดรับครบแล้ว เลือก "รับครบแล้ว ปิด INV"');
+      const slip = await drive.upload(b.file, { kind: 'payment', docNo: row.ivNo, company: row.company, ref: row.ivNo });
+      await hub.updateRow('Invoices', row._row, { paidAmount: total, paymentMethod: method, ...(f.whtRate ? { whtRate: f.whtRate } : {}),
+        note: [row.note, `รับเงินบางส่วน ${money(thisRound)} (${f.paidDate}) บันทึกโดย ${user.name || user.email}`].filter(Boolean).join(' · ').slice(-500) });
+      const at = hub.sheetDateTime(), who = user.name || user.email, nid = shortId('PAY');
+      await hub.appendRows('PaymentNotices', [{ noticeId: nid, createdAt: at, requestedBy: user.email, salesName: who, ivRequestId: row.ivRequestId || '', ivNo: String(row.ivNo).toUpperCase(),
+        company: row.company, paidDate: f.paidDate, amount: thisRound, paymentMethod: method, slipLink: slip, deliveryChannel: '', email: '', deliveryAddress: '', note: text(b.payNote, 500),
+        status: 'confirmed', source: 'accounting', accountNote: 'ลูกค้าแจ้งฝ่ายบัญชีโดยตรง (รับบางส่วน)', doneBy: who, updatedAt: at }]);
+      await Promise.all([hub.log('catalog', 'ar_partial', ivNo, `${user.email} · ${thisRound} · เหลือ ${round2(full - total)}`),
+        attachToPeak('invoice', row.peakIvId, b.file, `PAYMENT_${row.ivNo}`),
+        notify.chat(`💰 บัญชีบันทึกรับเงินบางส่วน ${ivNo} · ${notify.co(row.company)} · รับแล้ว ${money(total)} จาก ${money(full)} (เหลือ ${money(round2(full - total))})${row.salesEmail ? ' · ' + await notify.at(row.salesEmail, row.salesName) : ''}`)]);
+      return res.status(200).json({ ok: true, partial: true, received: total, remaining: round2(full - total), noticeId: nid });
+    }
+    // Closing an INV that was paid in part before: the amount typed is this round; the INV keeps the total.
+    if (f.paidDate && !row.paidDate && got > 0 && thisRound > 0) f.paidAmount = round2(got + thisRound);
     if (f.paidDate && !(f.paidAmount || ar.num(row.paidAmount))) throw bad('ใส่ยอดเงินที่ได้รับ');
     if (f.paidDate && !(f.paymentMethod || row.paymentMethod)) throw bad('เลือกวิธีชำระเงิน');
     if (!Object.keys(f).length) throw bad('ไม่มีข้อมูลที่จะบันทึก');
@@ -932,7 +993,7 @@ async function arUpdate(req, res, user) {
     await hub.updateRow('Invoices', row._row, f);
     await hub.log('catalog', 'ar_update', ivNo, `${user.email} · ${Object.keys(f).join(',')}`);
     if (newlyPaid) {
-      await paidDirectly(row, f, slip, user, delivery);
+      await paidDirectly(row, { ...f, paidAmount: thisRound || f.paidAmount }, slip, user, delivery);
       await attachToPeak('invoice', row.peakIvId, b.file, `PAYMENT_${row.ivNo}`);
     }
     return res.status(200).json({ ok: true });
@@ -962,13 +1023,14 @@ async function createPayNotice(req, res, user) {
   if (!a) throw bad('INV นี้ยังไม่อยู่ในหน้าติดตามหนี้ รอระบบอัปเดตแล้วลองใหม่ หรือแจ้งฝ่ายบัญชี', 409);
   if (a.docStatus === 'Cancelled' || a.docStatus === 'Replaced') throw bad('INV นี้ถูกยกเลิก / เปลี่ยนเอกสารแล้ว', 409);
   if (a.paidDate) throw bad(`ฝ่ายบัญชีบันทึกรับเงิน INV นี้แล้ว (${a.paidDate})`, 409);
-  const open = notices.find((x) => String(x.ivNo).toUpperCase() === ivNo && x.status === 'new');
-  if (open) throw bad(`แจ้งจ่าย INV นี้ไปแล้ว รอฝ่ายบัญชีตรวจ (${open.noticeId})`, 409);
   const paidDate = dmy(text(b.paidDate, 10));
   if (!paidDate || !ar.parseDate(paidDate)) throw bad('ใส่วันที่ลูกค้าโอน');
   if (ar.parseDate(paidDate) > ar.todayMs() + 86400e3) throw bad('วันที่โอนอยู่ในอนาคต');
   const amount = Number(String(b.amount ?? '').replace(/,/g, ''));
   if (!(amount > 0 && amount < 1e9)) throw bad('ใส่ยอดที่ลูกค้าโอน');
+  // An INV can be paid in several rounds, each reported on its own. The same round reported twice is refused.
+  const same = notices.find((x) => String(x.ivNo).toUpperCase() === ivNo && x.status === 'new' && x.paidDate === paidDate && Math.abs(ar.num(x.amount) - amount) < 0.01);
+  if (same) throw bad(`แจ้งจ่ายรอบนี้ไปแล้ว (${money(amount)} บาท วันที่ ${paidDate}) รอฝ่ายบัญชีตรวจ (${same.noticeId})`, 409);
   const method = text(b.paymentMethod, 40);
   if (!ar.PAY_METHODS.includes(method)) throw bad('เลือกวิธีชำระเงิน');
   // Paid through Whitehouse (B2C / B2E): the WH order and the receipt WH already issued, so accounting can
@@ -992,9 +1054,12 @@ async function createPayNotice(req, res, user) {
   await hub.appendRows('PaymentNotices', [{ noticeId: id, createdAt: at, requestedBy: user.email, salesName: user.name, ivRequestId: iv.ivRequestId, ivNo,
     company: a.company, paidDate, amount: round2(amount), paymentMethod: method, slipLink: slip, deliveryChannel: ch, email, deliveryAddress: addr,
     note: [whRef && `จ่ายผ่าน WH · ${whRef}`, whtNote, text(b.note, 500)].filter(Boolean).join(' · ').slice(0, 700), status: 'new', source: 'sales', accountNote: '', doneBy: '', updatedAt: at }]);
-  const exp = wht !== null ? ar.expectedAt(a, wht) : ar.enrich(a, ar.todayMs()).expected;
+  // What is still owed on the INV (less the rounds confirmed so far, and the other rounds waiting for accounting).
+  const en = ar.enrich(a, ar.todayMs());
+  const waiting = notices.filter((x) => String(x.ivNo).toUpperCase() === ivNo && x.status === 'new').reduce((t, x) => t + ar.num(x.amount), 0);
+  const exp = round2((wht !== null ? ar.expectedAt(a, wht) : en.expectedFull) - en.received - waiting);
   await Promise.all([hub.log('catalog', 'pay_notice', id, `${user.email} · ${ivNo} · ${amount}`),
-    notify.chat(`💰 แจ้งลูกค้าจ่าย ${ivNo} · ${notify.co(a.company)} · ${money(amount)} บาท${Math.abs(exp - amount) > 1 ? ' · ⚠️ ยอดไม่ตรง' : ''}${whRef ? ` · จ่ายผ่าน WH: ${whRef.replace(' · ', ', ')}` : ''} · ${user.name || user.email} · ${notify.link('ar', 'ตรวจและยืนยัน', { q: ivNo })}`)]);
+    notify.chat(`💰 แจ้งลูกค้าจ่าย ${ivNo} · ${notify.co(a.company)} · ${money(amount)} บาท${amount < exp - 1 ? ` · จ่ายบางส่วน (ยังเหลือ ${money(round2(exp - amount))})` : amount > exp + 1 ? ' · ⚠️ ยอดเกินที่ค้าง' : ''}${whRef ? ` · จ่ายผ่าน WH: ${whRef.replace(' · ', ', ')}` : ''} · ${user.name || user.email} · ${notify.link('ar', 'ตรวจและยืนยัน', { q: ivNo })}`)]);
   res.status(200).json({ ok: true, noticeId: id, message: 'แจ้งฝ่ายบัญชีแล้ว รอตรวจเงินเข้า' });
 }
 
@@ -1028,16 +1093,23 @@ async function updatePayNotice(req, res, user) {
   const amount = b.amount !== undefined && b.amount !== '' ? Number(String(b.amount).replace(/,/g, '')) : ar.num(row.amount);
   if (!(amount > 0)) throw bad('ยอดรับเงินไม่ถูกต้อง');
   const wht = ar.whtIn(b.whtRate), whtNew = wht !== null && Number(wht) !== ar.whtPct(a);
-  await hub.updateRow('Invoices', a._row, { paidDate, ...ar.onPaid(a, paidDate), paidAmount: round2(amount), paymentMethod: row.paymentMethod, ...(whtNew ? { whtRate: String(Number(wht) / 100) } : {}),
-    note: [a.note, `รับเงินตามที่ ${row.salesName || row.requestedBy} แจ้ง (${row.noticeId}) ยืนยันโดย ${who}`].filter(Boolean).join(' · ').slice(0, 500) });
+  // Rounds: what was confirmed before plus this one. The INV closes when the whole amount is in (or accounting says
+  // this round closes it); until then it stays open with the rest still owed.
+  const got = ar.enrich(a, ar.todayMs()).received, total = round2(got + amount);
+  const full = ar.expectedAt(a, wht !== null ? wht : ar.whtPct(a));
+  const close = b.close === undefined ? total >= full - 1 : b.close === true;
+  const rest = close ? 0 : round2(full - total);
+  if (!close && rest <= 0) throw bad('ยอดรับครบแล้ว เลือก "รับครบแล้ว ปิด INV"');
+  await hub.updateRow('Invoices', a._row, { ...(close ? { paidDate, ...ar.onPaid(a, paidDate) } : {}), paidAmount: total, paymentMethod: row.paymentMethod, ...(whtNew ? { whtRate: String(Number(wht) / 100) } : {}),
+    note: [a.note, `${close ? 'รับเงิน' : 'รับเงินบางส่วน'}ตามที่ ${row.salesName || row.requestedBy} แจ้ง (${row.noticeId} · ${money(amount)}) ยืนยันโดย ${who}`].filter(Boolean).join(' · ').slice(-500) });
   await hub.updateRow('PaymentNotices', row._row, { status: 'confirmed', paidDate, amount: round2(amount), accountNote: note, doneBy: who, updatedAt: at });
   if (a.peakIvId && require('../lib/peak').mode() !== 'off') {
     const slipFile = await drive.download(row.slipLink).catch(() => null);
     if (slipFile) await attachToPeak('invoice', a.peakIvId, slipFile, `PAYMENT_${row.ivNo}`);
   }
-  await Promise.all([hub.log('catalog', 'pay_confirm', row.noticeId, `${user.email} · ${row.ivNo} · ${amount}${whtNew ? ` · หัก ณ ที่จ่าย ${ar.whtPct(a)}% → ${wht}%` : ''}`),
-    notify.chat(`✅ ยืนยันเงินเข้า ${row.ivNo} · ${notify.co(row.company)} · ${await notify.at(row.requestedBy, row.salesName)}`)]);
-  res.status(200).json({ ok: true });
+  await Promise.all([hub.log('catalog', 'pay_confirm', row.noticeId, `${user.email} · ${row.ivNo} · ${amount}${close ? '' : ` · บางส่วน เหลือ ${rest}`}${whtNew ? ` · หัก ณ ที่จ่าย ${ar.whtPct(a)}% → ${wht}%` : ''}`),
+    notify.chat(`✅ ยืนยันเงินเข้า ${row.ivNo} · ${notify.co(row.company)}${close ? '' : ` · รับแล้ว ${money(total)} จาก ${money(full)} (เหลือ ${money(rest)})`} · ${await notify.at(row.requestedBy, row.salesName)}`)]);
+  res.status(200).json({ ok: true, partial: !close, received: total, remaining: rest, noticeId: row.noticeId });
 }
 
 // Accounting recorded the payment on /ar (customer told them directly): close any Sales notice for
@@ -1139,11 +1211,10 @@ async function listReceipts(req, res, user) {
 async function rtFromInv(req, res, user) {
   const b = req.body || {};
   const ivNo = text(b.ivNo, 40).toUpperCase();
-  const [invs, ivreqs, rts] = await Promise.all([hub.readTable('Invoices'), hub.readTable('InvoiceRequests'), hub.readTable('ReceiptRequests')]);
+  const [invs, ivreqs, rts, pns] = await Promise.all([hub.readTable('Invoices'), hub.readTable('InvoiceRequests'), hub.readTable('ReceiptRequests'), hub.readTable('PaymentNotices').catch(() => [])]);
   const a = invs.find((x) => String(x.ivNo).toUpperCase() === ivNo);
   if (!a) throw bad('ไม่พบ INV นี้ในหน้าติดตามหนี้', 404);
-  if (!a.paidDate) throw bad('ยังไม่ได้บันทึกรับเงินของ INV นี้ (บันทึกที่หน้าติดตามหนี้ก่อน)', 409);
-  if (a.rtNo || rts.some((x) => x.refDoc === ivNo && !DEAD.has(x.status))) throw bad(`INV นี้ออกใบเสร็จแล้ว${a.rtNo ? ' (' + a.rtNo + ')' : ''}`, 409);
+  const plan = rtPlan(a, rts, pns, text(b.noticeId, 40));
   const no = text(b.peakRtNo, 40).toUpperCase();
   if (!/^[A-Z0-9-]{6,40}$/.test(no)) throw bad('ใส่เลขใบเสร็จจาก PEAK เช่น RT-20261100001');
   const link = text(b.peakDocLink, 500);
@@ -1160,9 +1231,9 @@ async function rtFromInv(req, res, user) {
   await hub.appendRows('ReceiptRequests', [{ rtRequestId: id, createdAt: at, requestedBy: iv.requestedBy || a.salesEmail || user.email, salesName: a.salesName || iv.salesName || '',
     segment: a.segment || 'B2B', docKind: RT_KIND.company, refDoc: ivNo, whStudent: '', billName: a.company, taxId: a.taxId, branch: a.branch || '00000', address: '', deliveryAddress: addr, email,
     whtRate: String(Math.round(ar.num(a.whtRate) < 1 ? ar.num(a.whtRate) * 100 : ar.num(a.whtRate))), packages: a.keyHS || '', description: a.packageName || '', price: ar.num(a.preVat), discount: 0,
-    paidDate: a.paidDate, paymentProof: '', deliveryChannel: RT_CHANNEL[ch], docLang: 'TH', note: `ออกจาก INV ${ivNo}`, status: 'issued', peakRtNo: no, peakDocLink: link,
+    paidDate: plan.paidDate, paymentProof: plan.slip || '', deliveryChannel: RT_CHANNEL[ch], docLang: 'TH', note: `ออกจาก INV ${ivNo}${plan.tag}`, status: 'issued', peakRtNo: no, peakDocLink: link,
     sentStatus: sent ? 'sent' : 'waiting', sentAt: sent ? at : '', trackingNo: '', accountNote: `ออกใบเสร็จจาก INV — ${user.name || user.email}`, updatedAt: at }]);
-  await hub.updateRow('Invoices', a._row, { rtNo: no });
+  await hub.updateRow('Invoices', a._row, { rtNo: rtNoAdd(a.rtNo, no) });
   await Promise.all([hub.log('catalog', 'rt_from_inv', ivNo, `${user.email} · ${no}`), notify.chat(`🧾 ใบเสร็จ ${no} ออกแล้ว · ${ivNo} · ${notify.co(a.company)}${a.salesEmail ? ' · ' + await notify.at(a.salesEmail, a.salesName) : ''} · ${notify.link('mine', undefined, { t: 'rt', q: no })}`)]);
   res.status(200).json({ ok: true, rtRequestId: id });
 }
@@ -1175,11 +1246,11 @@ async function rtMake(req, res, user) {
   if (peak.mode() === 'off') throw bad('ยังไม่ได้เปิดการเชื่อมต่อ PEAK API', 409);
   const b = req.body || {};
   const ivNo = text(b.ivNo, 40).toUpperCase();
-  const [invs, ivreqs, rts, users] = await Promise.all([hub.readTable('Invoices'), hub.readTable('InvoiceRequests'), hub.readTable('ReceiptRequests'), hub.readTable('Users')]);
+  const [invs, ivreqs, rts, users, pns] = await Promise.all([hub.readTable('Invoices'), hub.readTable('InvoiceRequests'), hub.readTable('ReceiptRequests'), hub.readTable('Users'), hub.readTable('PaymentNotices').catch(() => [])]);
   const a = invs.find((x) => String(x.ivNo).toUpperCase() === ivNo);
   if (!a) throw bad('ไม่พบ INV นี้ในหน้าติดตามหนี้', 404);
-  if (!a.paidDate) throw bad('ยังไม่ได้บันทึกรับเงินของ INV นี้', 409);
-  if (a.rtNo || rts.some((x) => x.refDoc === ivNo && !DEAD.has(x.status))) throw bad(`INV นี้มีใบเสร็จแล้ว${a.rtNo ? ' (' + a.rtNo + ')' : ''} รีเฟรชหน้า`, 409);
+  // The whole payment, one round of several, or what is left after round receipts.
+  const plan = rtPlan(a, rts, pns, text(b.noticeId, 40));
   const iv = ivreqs.find((x) => x.ivRequestId === a.ivRequestId) || {};
   let ivId = a.peakIvId || iv.peakIvId;
   // An INV issued before the app (imported row) has no PEAK id yet: find it in PEAK by its number, and keep the id.
@@ -1201,11 +1272,12 @@ async function rtMake(req, res, user) {
   const d = await peak.getInvoice(ivId);
   if (!d) throw bad('ไม่พบ INV นี้ใน PEAK', 404);
   if (/draft/i.test(d.status || '') || Number(d.isVoid) === 1) throw bad(`INV ${d.code} ใน PEAK ${Number(d.isVoid) === 1 ? 'ถูกยกเลิกแล้ว' : 'ยังเป็น Draft'}`, 409);
-  const net = ar.num(d.netAmount), paid = round2(ar.num(a.paidAmount));
-  const wht = round2(net - paid);
-  if (wht < -0.01 || wht > net * 0.06) throw bad(`ยอดรับเงิน ${money(paid)} ไม่ตรงกับ INV ${d.code} (${money(net)}${wht > 0 ? ` ส่วนต่าง ${money(wht)} เกินหัก ณ ที่จ่ายปกติ` : ''}) ตรวจยอดที่บันทึกรับเงิน`, 409);
+  const net = ar.num(d.netAmount), paid = plan.amount;
+  // Withholding tax is the gap between the INV and all the money received; it goes on the receipt that closes the INV.
+  const wht = plan.round ? 0 : round2(net - (plan.rest ? plan.total : paid));
+  if (plan.round ? paid > net + 0.01 : wht < -0.01 || wht > net * 0.06) throw bad(`ยอดรับเงิน ${money(paid)} ไม่ตรงกับ INV ${d.code} (${money(net)}${wht > 0 ? ` ส่วนต่าง ${money(wht)} เกินหัก ณ ที่จ่ายปกติ` : ''}) ตรวจยอดที่บันทึกรับเงิน`, 409);
   const ymd = (dmy) => { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(String(dmy || '')); return m ? `${m[3]}${m[2].padStart(2, '0')}${m[1].padStart(2, '0')}` : ''; };
-  const payDate = ymd(a.paidDate);
+  const payDate = ymd(plan.paidDate);
   const qt = a.requestId ? (await hub.readTable('Requests')).find((x) => x.requestId === a.requestId) : null;
   const body = { PeakReceipts: { invoiceId: ivId, receipts: {
     issuedDate: payDate, status: 'Draft', isTaxInvoice: 1, reference: ivNo.slice(0, 32),
@@ -1216,7 +1288,7 @@ async function rtMake(req, res, user) {
   const notes = [`RT Draft ${made.code} รอฝ่ายบัญชีอนุมัติใน PEAK`, `รับเงินเข้า ${pm.name}`];
   if (qt) notes.push(...await require('../lib/qtdraft').classifyDoc(made.id, 103, qt, users));
   // The payment slip goes on the receipt too.
-  const notice = (await hub.readTable('PaymentNotices').catch(() => [])).filter((n) => String(n.ivNo).toUpperCase() === ivNo && n.slipLink && ['confirmed', 'matched'].includes(n.status)).pop();
+  const notice = plan.round ? (plan.slip ? { slipLink: plan.slip } : null) : pns.filter((n) => String(n.ivNo).toUpperCase() === ivNo && n.slipLink && ['confirmed', 'matched'].includes(n.status)).pop();
   const slip = notice ? await drive.download(notice.slipLink).catch(() => null) : null;
   if (slip) await attachToPeak('receipt', made.id, slip, `PAYMENT_${ivNo}`);
 
@@ -1224,7 +1296,7 @@ async function rtMake(req, res, user) {
   await hub.appendRows('ReceiptRequests', [{ rtRequestId: id, createdAt: at, requestedBy: iv.requestedBy || a.salesEmail || user.email, salesName: a.salesName || iv.salesName || '',
     segment: a.segment || 'B2B', docKind: RT_KIND.company, refDoc: ivNo, whStudent: '', billName: a.company, taxId: a.taxId, branch: a.branch || '00000', address: '', deliveryAddress: addr, email,
     whtRate: String(Math.round(ar.num(a.whtRate) < 1 ? ar.num(a.whtRate) * 100 : ar.num(a.whtRate))), packages: a.keyHS || '', description: a.packageName || '', price: ar.num(a.preVat), discount: 0,
-    paidDate: a.paidDate, paymentProof: notice ? notice.slipLink : '', deliveryChannel: RT_CHANNEL[ch], docLang: 'TH', note: `ออกจาก INV ${ivNo}`, status: 'rt_draft', peakRtNo: made.code || '', peakDocLink: made.documentLink || '',
+    paidDate: plan.paidDate, paymentProof: notice ? notice.slipLink : '', deliveryChannel: RT_CHANNEL[ch], docLang: 'TH', note: `ออกจาก INV ${ivNo}${plan.tag}`, status: 'rt_draft', peakRtNo: made.code || '', peakDocLink: made.documentLink || '',
     sentStatus: '', sentAt: '', trackingNo: '', accountNote: `${notes.join(' · ')} — ${user.name || user.email}`.slice(0, 500), updatedAt: at, peakRtId: made.id || '' }]);
   await hub.log('peak', 'rt_live_draft', ivNo, `${user.email} · ${made.code}`);
   res.status(200).json({ ok: true, rtRequestId: id, peakRtNo: made.code, message: notes.join(' · ') });
@@ -1239,7 +1311,9 @@ async function finishRt(row, d, who, opts = {}) {
   if (opts.checked) await hub.writeChecked('ReceiptRequests', 'rtRequestId', row, f); else await hub.updateRow('ReceiptRequests', row._row, f);
   const invs = await hub.readTable('Invoices');
   const a = invs.find((x) => String(x.ivNo).toUpperCase() === String(row.refDoc).toUpperCase());
+  // One receipt per INV keeps the first number; receipts per round are all listed.
   if (a && !a.rtNo) await hub.updateRow('Invoices', a._row, { rtNo: f.peakRtNo });
+  else if (a && /รับเงิน /.test(row.note || '')) await hub.updateRow('Invoices', a._row, { rtNo: rtNoAdd(a.rtNo, f.peakRtNo) });
   await notify.chat(`🧾 ใบเสร็จ ${f.peakRtNo} ออกแล้ว · ${row.refDoc} · ${notify.co(row.billName)} · ${await notify.at(row.requestedBy, row.salesName)} · ${notify.link('mine', undefined, { t: 'rt', q: f.peakRtNo })}`);
 }
 
@@ -1307,6 +1381,7 @@ async function assertEditable(r) {
   if (r.docType === 'INV') {
     const [ars, rts] = await Promise.all([hub.readTable('Invoices'), hub.readTable('ReceiptRequests')]);
     const a = ars.find((x) => n(x.ivNo) === r.docNo && x.docStatus !== 'Cancelled');
+    if (a && !a.rtNo && !a.paidDate && ar.num(a.paidAmount) > 0) throw bad(`INV ${r.docNo} รับเงินบางส่วนแล้ว แก้ไม่ได้ แจ้งฝ่ายบัญชี`, 409);
     if (a && (a.rtNo || a.paidDate)) throw bad(`INV ${r.docNo} ${a.rtNo ? `ออกใบเสร็จแล้ว (${a.rtNo})` : 'บันทึกรับเงินแล้ว'} แก้ INV ไม่ได้`, 409);
     if (rts.some((x) => n(x.refDoc) === r.docNo && !DEAD.has(x.status))) throw bad(`INV ${r.docNo} มีคำขอใบเสร็จแล้ว แก้ INV ไม่ได้`, 409);
   }
@@ -1474,8 +1549,8 @@ async function list(req, res, user) {
     return res.status(200).json({ ok: true, methods: await peak.listPaymentMethods() });
   }
   const [rows, invs, notices] = await Promise.all([hub.readTable('InvoiceRequests'), hub.readTable('Invoices').catch(() => []), hub.readTable('PaymentNotices').catch(() => [])]);
-  const lastNotice = new Map();
-  for (const n of notices) if (n.ivRequestId) lastNotice.set(n.ivRequestId, n);
+  const lastNotice = new Map(), rounds = new Map();
+  for (const n of notices) if (n.ivRequestId) { lastNotice.set(n.ivRequestId, n); if (!rounds.has(n.ivRequestId)) rounds.set(n.ivRequestId, []); rounds.get(n.ivRequestId).push({ noticeId: n.noticeId, status: n.status, source: n.source, paidDate: n.paidDate, amount: n.amount, accountNote: n.accountNote }); }
   // Payment status from AR, so sales see whether their customer has paid.
   const byReq = new Map(), byNo = new Map();
   for (const x of invs) { if (x.ivRequestId) byReq.set(x.ivRequestId, x); if (x.ivNo) byNo.set(String(x.ivNo).toUpperCase(), x); }
@@ -1487,11 +1562,11 @@ async function list(req, res, user) {
     .slice(0, can(user, 'approve') || can(user, 'team_view') ? 1000 : 300)
     .map(({ _row, ...r0 }) => {
       const n = lastNotice.get(r0.ivRequestId);
-      const r = n ? { ...r0, payNotice: { noticeId: n.noticeId, status: n.status, source: n.source, paidDate: n.paidDate, amount: n.amount, paymentMethod: n.paymentMethod, slipLink: n.slipLink, deliveryChannel: n.deliveryChannel, email: n.email, deliveryAddress: n.deliveryAddress, accountNote: n.accountNote, salesName: n.salesName, updatedAt: n.updatedAt } } : r0;
+      const r = n ? { ...r0, payNotice: { noticeId: n.noticeId, status: n.status, source: n.source, paidDate: n.paidDate, amount: n.amount, paymentMethod: n.paymentMethod, slipLink: n.slipLink, deliveryChannel: n.deliveryChannel, email: n.email, deliveryAddress: n.deliveryAddress, accountNote: n.accountNote, salesName: n.salesName, updatedAt: n.updatedAt }, payRounds: rounds.get(r0.ivRequestId) } : r0;
       const a = byReq.get(r.ivRequestId) || (r.peakIvNo && byNo.get(String(r.peakIvNo).toUpperCase()));
       if (!a) return r;
       const e = ar.enrich(a, today);
-      return { ...r, ar: { state: e.state, segment: a.segment || '', dueDate: e.dueDate, expected: e.expected, preVat: ar.num(a.preVat), whtPct: ar.whtPct(a), paidDate: a.paidDate, paidAmount: a.paidAmount, paymentMethod: a.paymentMethod, rtNo: a.rtNo, daysOverdue: e.daysOverdue, commitDate: a.commitDate, followStatus: a.followStatus } };
+      return { ...r, ar: { state: e.state, segment: a.segment || '', dueDate: e.dueDate, expected: e.expected, expectedFull: e.expectedFull, received: e.received, preVat: ar.num(a.preVat), whtPct: ar.whtPct(a), paidDate: a.paidDate, paidAmount: a.paidAmount, paymentMethod: a.paymentMethod, rtNo: a.rtNo, daysOverdue: e.daysOverdue, commitDate: a.commitDate, followStatus: a.followStatus } };
     });
   res.status(200).json({ ok: true, uploads: drive.enabled(), requests: out.map((r) => docLinkFor(user, 'INV', r)) });
 }

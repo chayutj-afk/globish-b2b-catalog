@@ -135,9 +135,9 @@ table.sum tr.now td{background:var(--primary-soft)}
     <div class="stat go" role="button" tabindex="0" data-kpi="week" title="ดูรายชื่อบริษัท"><div class="k">คาดว่าจะเข้าสัปดาห์นี้</div><div class="v" id="s-week">–</div><div class="bar" aria-hidden="true"><i id="s-week-bar"></i></div><div class="s" id="s-week-p"></div><div class="s" id="s-week-n"></div></div>
     <div class="stat"><div class="k">เฉลี่ยวันรับเงิน (จ่ายใน 90 วัน)</div><div class="v" id="s-avg">–</div><div class="s">นับจากวันออก INV</div></div>
   </div>
-  <div class="seg" id="tabs"><button class="on" data-t="work" type="button">รายการติดตาม</button><button data-t="log" type="button" id="t-log" hidden>🕘 ประวัติการทำงาน</button><button data-t="sum" type="button">สรุป</button></div>
+  <div class="seg" id="tabs"><button class="on" data-t="sum" type="button">สรุป</button><button data-t="work" type="button">รายการติดตาม<span id="t-work-n"></span></button><button data-t="log" type="button" id="t-log" hidden>🕘 ประวัติการทำงาน</button></div>
 
-  <section class="tab on" id="tab-work">
+  <section class="tab" id="tab-work">
     <div class="card" id="pn-card" hidden>
       <h2>เซลแจ้งว่าลูกค้าจ่ายแล้ว รอตรวจเงินเข้า <span class="small" id="pn-n"></span></h2>
       <p class="hint">เช็คกับ statement ธนาคาร ถ้าเงินเข้าแล้วกด <b>ยืนยันเงินเข้า</b> ระบบบันทึกรับเงินให้ แล้วถามต่อว่าจะสร้างใบเสร็จ Draft ใน PEAK เลยไหม (ออกทีหลังได้ที่หน้ารออนุมัติ › ใบเสร็จ)</p>
@@ -181,7 +181,7 @@ table.sum tr.now td{background:var(--primary-soft)}
     <div id="lg-list" aria-live="polite"></div>
   </section>
 
-  <section class="tab" id="tab-sum">
+  <section class="tab on" id="tab-sum">
     <div class="sumbar"><span class="small">สรุปนี้ใช้ตัวกรอง<b>กลุ่มลูกค้า</b>ด้านบน · สัปดาห์นับ ศุกร์–พฤหัส และตัดที่สิ้นเดือน (เหมือน Week Mapping ของชีท Debt)</span></div>
     <div id="checks"></div>
     <div class="two">
@@ -245,6 +245,8 @@ document.querySelectorAll('#tabs button').forEach((b) => b.onclick = () => {
   $('f-sales').hidden = $('f-q').hidden = sum;
   if (D) render();
 });
+// The page opens on the summary; the list filters that do not apply there start hidden.
+document.querySelector('#tabs button[data-t="sum"]').click();
 document.querySelectorAll('#f-state button').forEach((b) => b.onclick = () => { document.querySelectorAll('#f-state button').forEach((x) => x.classList.toggle('on', x === b)); SHOW = 100; render(); });
 // The group filter and the group select of the summary tab move together.
 const hasOpt = (el, v) => [...el.options].some((o) => o.value === v);
@@ -461,7 +463,7 @@ const whtSaid = (n) => { const m = /หัก ณ ที่จ่าย (\d)%/.e
 const whtOpts = (sel) => WHT.map((p) => `<option value="${p}"${p === sel ? ' selected' : ''}>${p ? p + '%' : 'ไม่หัก'}</option>`).join('');
 function renderNotices() {
   const open = PN.filter((n) => n.status === 'new');
-  $('pn-card').hidden = !open.length; $('pn-n').textContent = open.length ? `(${open.length})` : '';
+  $('pn-card').hidden = !open.length; $('pn-n').textContent = open.length ? `(${open.length})` : ''; $('t-work-n').textContent = open.length ? ` · รอยืนยันเงิน ${open.length}` : '';
   $('pn-list').innerHTML = open.map((n) => {
     const r = D.invoices.find((x) => String(x.ivNo).toUpperCase() === String(n.ivNo).toUpperCase());
     const diff = r ? toNum(n.amount) - r.expected : 0;

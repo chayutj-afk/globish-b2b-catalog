@@ -580,6 +580,26 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
     [s, j] = await call(ADMIN, 'GET', '/api/invoice-requests?view=ar');
     const r = (j.invoices || []).find((x) => x.ivNo === a1.ivNo);
     ok(r && Math.abs(r.expected - net3) < 0.01, 'expected amount of that INV follows the new rate: ' + (r && r.expected)); }
+  console.log('── 27. paid through Whitehouse: no new receipt from the app, the WH receipt is replaced under its own number');
+  { const busy = new Set(db().PaymentNotices.map((x) => x.ivRequestId));
+    const liveRt = new Set(db().ReceiptRequests.filter((x) => !['rejected', 'rt_void'].includes(x.status)).map((x) => x.refDoc));
+    const v = db().InvoiceRequests.find((x) => x.status === 'iv_issued' && x.peakIvId && !busy.has(x.ivRequestId) && !liveRt.has(x.peakIvNo) && (() => { const a = arRow(x.peakIvNo); return a && !a.paidDate && !a.rtNo && a.docStatus === 'Active' && !Number(a.paidAmount); })());
+    ok(!!v, 'an open INV exists for the WH case');
+    if (v) {
+      const a0 = arRow(v.peakIvNo), pre = Number(a0.preVat), rate = Number(a0.whtRate) < 1 ? Number(a0.whtRate) : Number(a0.whtRate) / 100, full = Math.round((pre * 1.07 - pre * rate) * 100) / 100;
+      [s, j] = await call(v.requestedBy, 'POST', '/api/invoice-requests', { action: 'pay_notice', ivRequestId: v.ivRequestId, paidDate: '2026-11-10', amount: full, paymentMethod: 'Bank Transfer', deliveryChannel: 'sales', whOrderId: '75801', whReceiptNo: '202609A00117' }); const n1 = j.noticeId;
+      [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { action: 'pay_confirm', noticeId: n1 }); ok(s === 200 && !j.partial, 'WH payment confirmed: ' + (j.error || ''));
+      const before = (peak().receipts || []).length;
+      [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { action: 'rt_make', ivNo: v.peakIvNo, paymentMethodCode: 'BNK001', deliveryChannel: 'sales' });
+      ok(s === 409 && /Whitehouse/.test(j.error || '') && /202609A00117/.test(j.error || '') && (peak().receipts || []).length === before, 'the app refuses to create a receipt in PEAK and names the WH receipt: ' + (j.error || s));
+      [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { action: 'rt_make', ivNo: v.peakIvNo, noticeId: n1, paymentMethodCode: 'BNK001', deliveryChannel: 'sales' }); ok(s === 409 && (peak().receipts || []).length === before, 'also for the round on its own: ' + s);
+      [s, j] = await call(ACCT, 'GET', '/api/invoice-requests?view=ar'); const r = (j.invoices || []).find((x) => x.ivNo === v.peakIvNo);
+      ok(r && r.wh && r.wh[0].receipt === '202609A00117' && r.wh[0].order === '75801' && !r.wh[0].rt, 'debt page knows the WH receipt to replace: ' + JSON.stringify(r && r.wh));
+      [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { action: 'rt_from_inv', ivNo: v.peakIvNo, noticeId: n1, peakRtNo: '202609A00117', peakDocLink: 'https://doc.peakaccount.com/receipt?emi=wh117', deliveryChannel: 'sales' });
+      const rt = db().ReceiptRequests.filter((x) => x.refDoc === v.peakIvNo).pop();
+      ok(s === 200 && rt && rt.peakRtNo === '202609A00117' && rt.status === 'issued' && rt.note.includes('รอบ ' + n1) && arRow(v.peakIvNo).rtNo === '202609A00117' && (peak().receipts || []).length === before, 'accounting record the re-made receipt under the WH number; nothing is created in PEAK: ' + (j.error || ''));
+      [s, j] = await call(ACCT, 'GET', '/api/invoice-requests?view=ar'); const r2 = (j.invoices || []).find((x) => x.ivNo === v.peakIvNo);
+      ok(r2 && r2.wh[0].rt === '202609A00117', 'and the round shows its receipt: ' + JSON.stringify(r2 && r2.wh)); } }
   console.log('── 24. one INV paid in several rounds');
   { const busy = new Set(db().PaymentNotices.filter((x) => x.status === 'new').map((x) => x.ivRequestId));
     const liveRt = new Set(db().ReceiptRequests.filter((x) => !['rejected', 'rt_void'].includes(x.status)).map((x) => x.refDoc));

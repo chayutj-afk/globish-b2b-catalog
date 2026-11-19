@@ -608,6 +608,17 @@ const CH_TH = { sales: 'ส่งไฟล์ให้ Sales', email: 'ส่ง
 function offerReceipt(ivNo, { ch, email, addr, method }, round) {
   const r = find(ivNo);
   if (!CAN_RT || !D.peakLive || !r) return;
+  // Paid through Whitehouse: WH's receipt is already in PEAK with the money. No new receipt from here; accounting
+  // void it and make it again under the same number, then record the number.
+  const whs = (r.wh || []).filter((x) => !x.rt && (!round || x.noticeId === round.noticeId));
+  if (whs.length) {
+    formModal({ title: '🧾 ใบนี้จ่ายผ่าน Whitehouse', ok: 'ไปที่ รออนุมัติ › ใบเสร็จ', html: `<p style="margin:0 0 10px"><b>${esc(r.company)}</b> · ${esc(ivNo)}</p>
+      <div class="msg err" style="margin:0 0 10px"><b>อย่าสร้างใบเสร็จใหม่</b> WH ออกใบเสร็จและลงรับเงินใน PEAK ไปแล้ว ถ้าสร้างเพิ่มเงินจะซ้ำ</div>
+      <table class="lgsum"><thead><tr><th>ใบเสร็จ WH</th><th>Order</th><th>วันที่</th><th class="num">ยอด</th></tr></thead><tbody>${whs.map((x) => `<tr><td><b>${esc(x.receipt)}</b></td><td>${esc(x.order)}</td><td>${esc(x.paidDate)}</td><td class="num">${fmt(x.amount)}</td></tr>`).join('')}</tbody></table>
+      <ol class="small" style="margin:10px 0 0;padding-left:18px;line-height:1.7"><li>Void ใบเสร็จเดิมของ WH ใน PEAK</li><li>สร้างใบเสร็จใหม่ <b>เลขเดิม วันที่เดิม</b> ในนามบริษัท</li><li>ใส่เลขและลิงก์ของใบใหม่ที่ รออนุมัติ › ใบเสร็จ (กดปุ่มด้านล่าง หรือทำทีหลังได้)</li></ol>`,
+      save: async () => { location.href = '/request#pend?t=rt&q=' + encodeURIComponent(ivNo); } });
+    return;
+  }
   // Earlier rounds already have their own receipts: this one is for what is left.
   const done0 = (r.rounds || []).filter((x) => x.rt && x.rt !== 'รวม');
   const rest = !round && done0.length ? Math.round((toNum(r.paidAmount) - done0.reduce((t, x) => t + x.amount, 0)) * 100) / 100 : 0;

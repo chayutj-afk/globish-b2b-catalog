@@ -35,6 +35,10 @@ function rtPlan(a, rts, notices, noticeId) {
   if (done.length && rest <= 0.01) throw bad('ออกใบเสร็จครบทุกรอบแล้ว', 409);
   return { amount: done.length ? rest : total, paidDate: a.paidDate, tag: done.length ? ` · รับเงิน ${rest.toFixed(2)} (ส่วนที่เหลือ)` : '', round: false, rest: done.length > 0, total };
 }
+// Paid through Whitehouse: WH took the money and already issued its own receipt (in the learner's name), which is in
+// PEAK. Accounting void that receipt and make it again under the SAME number and date in the company's name, so
+// the app must never create another receipt for that money.
+const whOf = (n) => { const m = /^จ่ายผ่าน WH · Order (.+?) · ใบเสร็จ WH ([^·]+?)(?: ·|$)/.exec(String((n && n.note) || '')); return m ? { order: m[1].trim(), receipt: m[2].trim() } : null; };
 const rtNoAdd = (cur, no) => { const xs = String(cur || '').split(/\s*,\s*/).filter(Boolean); return xs.map((x) => x.toUpperCase()).includes(String(no).toUpperCase()) ? xs.join(', ') : [...xs, no].join(', '); };
 const hub = require('../lib/hub');
 const drive = require('../lib/drive');
@@ -700,7 +704,7 @@ async function arList(req, res, user) {
     if (n.status !== 'confirmed') continue;
     const k = String(n.ivNo).toUpperCase(); if (!rounds.has(k)) rounds.set(k, []);
     const ms = ar.parseDate(n.paidDate);
-    rounds.get(k).push({ noticeId: n.noticeId, paidDate: n.paidDate, week: ms === null ? '' : ar.fmt(ar.weekEnd(ms)), amount: ar.num(n.amount), by: n.source === 'sales' ? n.salesName : n.doneBy, note: n.note || '' });
+    rounds.get(k).push({ noticeId: n.noticeId, paidDate: n.paidDate, week: ms === null ? '' : ar.fmt(ar.weekEnd(ms)), amount: ar.num(n.amount), by: n.source === 'sales' ? n.salesName : n.doneBy, note: n.note || '', wh: whOf(n) || undefined });
   }
   // The rounds of an INV, when they add up to what the INV says was received: still open and part-paid, or paid in more than one round.
   const roundsOf = (r) => {
@@ -730,7 +734,9 @@ async function arList(req, res, user) {
   const keep = all.filter((r) => r.state === 'Outstanding' || r.state === 'Overdue' || (r.paidMs !== null && r.paidMs >= today - 120 * 86400e3) || (r.issueMs !== null && r.issueMs >= today - 120 * 86400e3));
   const out = keep.map(({ _row, issueMs, dueMs, paidMs, planMs, paidWeekMs, preVatN, ...r }) => ({ ...r, ...(contact.get(r.ivRequestId) || {}), followUps: (byIv.get(r.ivNo) || []).slice(-20).map(({ _row: x, ...f }) => f),
     // Only worth showing when the INV was (or is being) paid in more than one round.
-    rounds: roundsOf(r) || undefined }));
+    rounds: roundsOf(r) || undefined,
+    // Rounds paid through Whitehouse (any INV): their WH receipt has to be replaced, never added to.
+    wh: (() => { const xs = (rounds.get(String(r.ivNo).toUpperCase()) || []).filter((x) => x.wh).map((x) => ({ noticeId: x.noticeId, paidDate: x.paidDate, amount: x.amount, order: x.wh.order, receipt: x.wh.receipt, rt: x.rt || '' })); return xs.length ? xs : undefined; })() }));
   const canOwner = isOp(user) || can(user, 'team_view');
   const owners = canOwner ? (await users.list()).filter((u) => ['sales', 'lead'].includes(u.role)).map((u) => ({ email: u.email, name: u.name || u.email })) : [];
   res.status(200).json({ ok: true, peakLive: require('../lib/peak').mode() !== 'off', summary: summarise(all, today, events), segments, seg, invoices: out, total: all.length, canOwner, owners,
@@ -1306,6 +1312,9 @@ async function rtMake(req, res, user) {
   if (!a) throw bad('ไม่พบ INV นี้ในหน้าติดตามหนี้', 404);
   // The whole payment, one round of several, or what is left after round receipts.
   const plan = rtPlan(a, rts, pns, text(b.noticeId, 40));
+  { const nid = text(b.noticeId, 40);
+    const wh = pns.filter((n) => String(n.ivNo).toUpperCase() === ivNo && n.status === 'confirmed' && (!nid || n.noticeId === nid)).map(whOf).filter(Boolean);
+    if (wh.length) throw bad(`INV นี้จ่ายผ่าน Whitehouse ซึ่งออกใบเสร็จ ${wh.map((w) => w.receipt).join(', ')} และลงรับเงินใน PEAK ไปแล้ว ระบบจะไม่สร้างใบเสร็จใหม่ (เงินจะซ้ำ) ให้ void ใบเดิมใน PEAK สร้างใหม่เลขเดิมวันที่เดิมในนามบริษัท แล้วใส่เลขและลิงก์ที่ รออนุมัติ › ใบเสร็จ`, 409); }
   const iv = ivreqs.find((x) => x.ivRequestId === a.ivRequestId) || {};
   let ivId = a.peakIvId || iv.peakIvId;
   // An INV issued before the app (imported row) has no PEAK id yet: find it in PEAK by its number, and keep the id.
@@ -1629,7 +1638,7 @@ async function list(req, res, user) {
   }
   const [rows, invs, notices] = await Promise.all([hub.readTable('InvoiceRequests'), hub.readTable('Invoices').catch(() => []), hub.readTable('PaymentNotices').catch(() => [])]);
   const lastNotice = new Map(), rounds = new Map();
-  for (const n of notices) if (n.ivRequestId) { lastNotice.set(n.ivRequestId, n); if (!rounds.has(n.ivRequestId)) rounds.set(n.ivRequestId, []); rounds.get(n.ivRequestId).push({ noticeId: n.noticeId, status: n.status, source: n.source, paidDate: n.paidDate, amount: n.amount, accountNote: n.accountNote }); }
+  for (const n of notices) if (n.ivRequestId) { lastNotice.set(n.ivRequestId, n); if (!rounds.has(n.ivRequestId)) rounds.set(n.ivRequestId, []); rounds.get(n.ivRequestId).push({ noticeId: n.noticeId, status: n.status, source: n.source, paidDate: n.paidDate, amount: n.amount, accountNote: n.accountNote, wh: whOf(n) || undefined }); }
   // Payment status from AR, so sales see whether their customer has paid.
   const byReq = new Map(), byNo = new Map();
   for (const x of invs) { if (x.ivRequestId) byReq.set(x.ivRequestId, x); if (x.ivNo) byNo.set(String(x.ivNo).toUpperCase(), x); }

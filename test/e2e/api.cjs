@@ -635,5 +635,21 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
       ok(s === 200 && j.partial && !a.paidDate && Number(a.paidAmount) === part && pn && pn.status === 'confirmed' && pn.source === 'accounting', 'accounting records a part payment: INV open, round kept: ' + (j.error || ''));
       [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { action: 'ar_update', ivNo: b2.ivNo, paidDate: '2026-11-13', paidAmount: 100, paymentMethod: 'Bank Transfer', deliveryChannel: 'sales', file });
       ok(s === 200 && Number(arRow(b2.ivNo).paidAmount) === part + 100 && arRow(b2.ivNo).paidDate === '13/11/2026', 'closing later adds the last amount to what was received: ' + (j.error || arRow(b2.ivNo).paidAmount)); } }
+  console.log('── 25. receipt request for money that already has a receipt');
+  { const a = db().Invoices.find((x) => x.rtNo && x.paidDate && /^\d{13}$/.test(String(x.taxId)) && Number(x.preVat) > 0 && x.docStatus === 'Active');
+    ok(!!a, 'a paid INV with a receipt exists');
+    if (a) {
+      const iso = a.paidDate.split('/').reverse().join('-');
+      const body = { action: 'receipt', customerType: 'G012-00001', docKind: 'company', billName: a.company, taxId: a.taxId, branch: '00000', address: 'กทม', whStudent: 'S9', packages: '5136', price: Number(a.preVat), discount: 0, whtRate: '3', paidDate: iso, deliveryChannel: 'sales', docLang: 'TH', file };
+      [s, j] = await call(BENZ, 'POST', '/api/invoice-requests', body);
+      ok(s === 409 && j.duplicate && (j.issued || []).some((x) => a.rtNo.includes(x.rtNo) && x.ivNo === a.ivNo), 'Sales are told which receipt and INV it is: ' + (j.error || s) + ' ' + JSON.stringify(j.issued || ''));
+      [s, j] = await call(BENZ, 'POST', '/api/invoice-requests', { ...body, paidDate: '2026-01-02' });
+      ok(!(j.issued || []).length, 'another payment date is not called a duplicate of that receipt: ' + s);
+      [s, j] = await call(BENZ, 'POST', '/api/invoice-requests', { ...body, confirmDuplicate: true }); const id = j.rtRequestId;
+      ok(s === 200 && id, 'Sales can still send it on purpose: ' + (j.error || ''));
+      [s, j] = await call(ACCT, 'GET', '/api/invoice-requests?view=receipts'); const c = (j.requests || []).find((x) => x.rtRequestId === id);
+      ok(c && (c.twins || []).some((x) => x.ivNo === a.ivNo), 'accounting see the warning on the waiting card: ' + JSON.stringify(c && c.twins));
+      [s, j] = await call(BENZ, 'GET', '/api/invoice-requests?view=receipts');
+      ok(!((j.requests || []).find((x) => x.rtRequestId === id) || {}).twins, 'the flag is for accounting only'); } }
   done();
 })().catch((e) => { console.error('CRASH', e); ok(false, 'CRASH: the run stopped early: ' + e.message); done(); process.exitCode = 1; });

@@ -1164,6 +1164,25 @@ const needsPost = (c) => c === 'post' || c === 'email_post';
 const needsEmail = (c) => c === 'email' || c === 'email_post';
 const shortId = (p) => { const t = new Date(Date.now() + 7 * 3600e3); const z = (x) => String(x).padStart(2, '0'); return `${p}-${String(t.getUTCFullYear()).slice(2)}${z(t.getUTCMonth() + 1)}${z(t.getUTCDate())}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`; };
 
+// Receipts already issued for the same customer, the same amount and the same payment date as a receipt request:
+// most likely the same money (e.g. Sales ask for a receipt that accounting already issued from the INV).
+// r: { taxId, price, discount, paidDate (dd/mm/yyyy), rtRequestId? }
+function rtTwins(r, rows, invs) {
+  const tax = String(r.taxId || '').replace(/\D/g, ''), net = round2(ar.num(r.price) - ar.num(r.discount)), day = ar.parseDate(r.paidDate);
+  if (!tax || !(net > 0) || day === null) return [];
+  const out = [], seen = new Set();
+  const add = (rtNo, ivNo, src) => { const k = String(rtNo).toUpperCase(); if (rtNo && !seen.has(k)) { seen.add(k); out.push({ rtNo, ivNo: /^IV-/i.test(ivNo || '') ? ivNo : '', paidDate: r.paidDate, amount: net, src }); } };
+  for (const x of rows) {
+    if (x.rtRequestId === r.rtRequestId || x.status !== 'issued' || !x.peakRtNo) continue;
+    if (String(x.taxId || '').replace(/\D/g, '') === tax && Math.abs(round2(ar.num(x.price) - ar.num(x.discount)) - net) < 0.01 && ar.parseDate(x.paidDate) === day) add(x.peakRtNo, x.refDoc, 'rt');
+  }
+  for (const a of invs) {
+    if (!a.rtNo || a.docStatus === 'Cancelled' || a.docStatus === 'Replaced') continue;
+    if (String(a.taxId || '').replace(/\D/g, '') === tax && Math.abs(ar.num(a.preVat) - net) < 0.01 && ar.parseDate(a.paidDate) === day) String(a.rtNo).split(/\s*,\s*/).forEach((no) => add(no, a.ivNo, 'inv'));
+  }
+  return out.slice(0, 5);
+}
+
 async function createReceipt(req, res, user) {
   checkOrigin(req);
   if (!can(user, 'request')) throw bad('ไม่มีสิทธิ์ขอเอกสาร', 403);
@@ -1202,6 +1221,13 @@ async function createReceipt(req, res, user) {
   if (!['TH', 'EN'].includes(r.docLang)) throw bad('เลือกภาษาเอกสาร');
   const rows = await hub.readTable('ReceiptRequests');
   if (b.confirmDuplicate !== true) {
+    // A receipt for this customer, amount and payment date is already out: say which one before anything else.
+    const twins = rtTwins({ ...r, paidDate: dmy(r.paidDate) }, rows, await hub.readTable('Invoices', { cache: 30e3 }).catch(() => []));
+    if (twins.length) {
+      const e = bad(`ใบเสร็จของ ${r.billName} ยอด ${money(r.price - r.discount)} ชำระ ${dmy(r.paidDate)} ออกไปแล้ว`, 409);
+      e.extra = { duplicate: true, issued: twins, matches: [] };
+      throw e;
+    }
     const since = Date.now() - 14 * 86400e3;
     const same = rows.filter((x) => x.taxId === r.taxId && Math.abs(ar.num(x.price) - r.price) < 0.01 && !DEAD.has(x.status)
       && (ar.parseDate(x.createdAt) || 0) > since - 86400e3);
@@ -1225,7 +1251,13 @@ async function createReceipt(req, res, user) {
 async function listReceipts(req, res, user) {
   const rows = await hub.readTable('ReceiptRequests');
   const sees = await visibility(user);
-  const out = rows.filter((r) => sees(r.requestedBy)).reverse().slice(0, 150).map(({ _row, ...r }) => docLinkFor(user, 'RT', r));
+  const waiting = rows.some((r) => r.status === 'new');
+  const invs = waiting && can(user, 'approve') ? await hub.readTable('Invoices', { cache: 30e3 }).catch(() => []) : null;
+  const out = rows.filter((r) => sees(r.requestedBy)).reverse().slice(0, 150).map(({ _row, ...r }) => {
+    // For accounting: a waiting request that looks like money already receipted.
+    const twins = invs && r.status === 'new' ? rtTwins(r, rows, invs) : [];
+    return docLinkFor(user, 'RT', twins.length ? { ...r, twins } : r);
+  });
   res.status(200).json({ ok: true, requests: out });
 }
 

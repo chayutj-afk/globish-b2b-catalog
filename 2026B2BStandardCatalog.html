@@ -116,6 +116,13 @@ code{font-size:11px;background:var(--panel-2);padding:2px 5px;border-radius:4px;
 
 /* ── Manage ── */
 .manage-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.vis-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}
+.vis-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--gray-200);border-radius:10px;cursor:pointer;background:var(--panel);user-select:none}
+.vis-item.off{opacity:.55;background:var(--gray-50)}
+.vis-item input{width:16px;height:16px;accent-color:var(--primary);flex-shrink:0;margin:0}
+.vis-item .vis-name{font-size:13px;font-weight:600;color:var(--gray-800)}
+.vis-item .vis-sub{font-size:11px;color:var(--gray-500)}
+.vis-item .vis-sub.vis-warn{color:#d97706}
 .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
 .stat-box{border-radius:8px;padding:12px}
 .stat-box.blue{background:var(--info-bg)}
@@ -546,6 +553,16 @@ code{font-size:11px;background:var(--panel-2);padding:2px 5px;border-radius:4px;
 <!-- ══════════════════ MANAGE (Operation Only) ══════════════════ -->
 <div id="tab-manage" class="tab">
 
+  <!-- Which product types Sales see in the calculator -->
+  <div class="card" style="margin-bottom:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:6px">
+      <div class="card-label" style="font-size:13px;text-transform:none;font-weight:700;color:var(--gray-800);margin-bottom:0">👁️ ประเภทสินค้าที่แสดงในหน้าเซล</div>
+      <button class="btn" id="vis-save-btn" onclick="saveVisibility()" style="background:#16a34a;color:#fff">💾 บันทึกการแสดงผล</button>
+    </div>
+    <div style="font-size:12px;color:var(--gray-500);margin-bottom:12px">ติ๊กออกเพื่อซ่อนการ์ดนั้นจากหน้า 🧮 คำนวณราคา และตาราง 📋 Catalog ของเซล (แพ็กเกจยังอยู่ครบ เปิดกลับได้ทุกเมื่อ) · บันทึกแล้วหน้าเซลอัปเดตในประมาณ 1 นาที</div>
+    <div class="vis-grid" id="vis-grid"></div>
+  </div>
+
   <!-- Package List -->
   <div class="card" style="margin-bottom:14px">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px">
@@ -881,6 +898,31 @@ let INITIAL_PACKAGES = PKGS;
     .catch(e => console.warn('packages.json not available, using built-in DEFAULT_PACKAGES', e));
 })();
 
+// Product types Operation hid from the Sales calculator / catalog table (catalog-config.json,
+// committed to GitHub by "💾 บันทึกการแสดงผล" in the Manage tab, same route as packages.json).
+let HIDDEN_TYPES = new Set();
+let HIDDEN_SAVED = new Set();
+(function loadCatalogConfig() {
+  fetch('catalog-config.json', { cache: 'no-store' })
+    .then(r => (r.ok ? r.json() : null))
+    .then(cfg => {
+      if (!cfg || !Array.isArray(cfg.hiddenTypes)) return;
+      HIDDEN_TYPES = new Set(cfg.hiddenTypes); HIDDEN_SAVED = new Set(cfg.hiddenTypes);
+      if (ST.type && HIDDEN_TYPES.has(ST.type)) resetCalc();
+      if (typeof renderProdGrid === 'function') renderProdGrid();
+      if (typeof renderCatalog === 'function') renderCatalog();
+      if (typeof renderVisibility === 'function') renderVisibility();
+    })
+    .catch(e => console.warn('catalog-config.json not available, showing every product type', e));
+})();
+const isShownToSales = (hero) => !HIDDEN_TYPES.has(hero);
+// Back to "pick a product" (the picked type was just hidden).
+function resetCalc() {
+  ST = { type: null, pkgId: null, coachType: null };
+  ['card-opts', 'card-qty', 'surcharge-block'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+  if (typeof renderResult === 'function') renderResult(null);
+}
+
 // ─────────────────────────────────────────────
 // SURCHARGE CONFIG (editable in Operation mode)
 // ─────────────────────────────────────────────
@@ -964,7 +1006,7 @@ function switchTab(id, btn) {
   document.getElementById('tab-' + id).classList.add('on');
   if (btn) btn.classList.add('on');
   if (id === 'catalog') renderCatalog();
-  if (id === 'manage')  { renderStats(); renderPkgList(); }
+  if (id === 'manage')  { renderStats(); renderPkgList(); renderVisibility(); }
 }
 
 // ─────────────────────────────────────────────
@@ -1036,7 +1078,7 @@ function applyRole(r) {
 // ─────────────────────────────────────────────
 function renderProdGrid() {
   document.getElementById('prod-grid').innerHTML =
-    PROD_TYPES.map((pt, i) =>
+    PROD_TYPES.map((pt, i) => !isShownToSales(pt.k) ? '' :
       `<div class="prod-card ${ST.type===pt.k?'on':''}" onclick="selectType(${i})">
         <div class="prod-icon">${pt.ico}</div>
         <div class="prod-name">${pt.lbl}</div>
@@ -1388,7 +1430,9 @@ let catTypesList = [];
 
 function renderCatalog() {
   // chips
-  const types = ['All', ...new Set(PKGS.map(p => p.hero))];
+  const visible = ROLE === 'op' ? PKGS : PKGS.filter(p => isShownToSales(p.hero));
+  const types = ['All', ...new Set(visible.map(p => p.hero))];
+  if (!types.includes(catFilter)) catFilter = 'All';
   catTypesList = types;
   document.getElementById('cat-chips').innerHTML =
     types.map((t, i) =>
@@ -1396,7 +1440,7 @@ function renderCatalog() {
     ).join('');
 
   const q = (document.getElementById('cat-search')?.value || '').toLowerCase();
-  let list = PKGS;
+  let list = visible;
   if (catFilter !== 'All') list = list.filter(p => p.hero === catFilter);
   if (q) list = list.filter(p =>
     p.id.toLowerCase().includes(q) || p.hero.toLowerCase().includes(q) || p.supp.toLowerCase().includes(q)
@@ -1413,7 +1457,7 @@ function renderCatalog() {
       : `<span class="badge b-gray">per person</span>`;
     return `<tr>
       <td><code>${p.id}</code></td>
-      <td><span class="badge ${BADGE[p.hero]||'b-gray'}">${p.hero}</span></td>
+      <td><span class="badge ${BADGE[p.hero]||'b-gray'}">${p.hero}</span>${isShownToSales(p.hero) ? '' : ' <span class="badge b-gray" title="ซ่อนจากหน้าเซล">ซ่อนจากเซล</span>'}</td>
       <td><span class="tag">${p.coach}</span></td>
       <td>${p.qty>1?`<span class="tag">${p.qty} cls</span>`:''}${p.dur?`<span class="tag">${p.dur}mo</span>`:''}</td>
       <td style="color:var(--gray-600)">${p.supp}</td>
@@ -1422,7 +1466,7 @@ function renderCatalog() {
       <td class="price-val">${fmt(p30)}</td>
       <td style="color:var(--gray-500)">${fmt(pMax)}</td>
     </tr>`;
-  }).join('') || `<tr><td colspan="8" style="text-align:center;padding:28px;color:var(--gray-500)">ไม่พบข้อมูล</td></tr>`;
+  }).join('') || `<tr><td colspan="9" style="text-align:center;padding:28px;color:var(--gray-500)">ไม่พบข้อมูล</td></tr>`;
 }
 
 function setCatFilter(i) { catFilter = catTypesList[i]; renderCatalog(); }
@@ -1430,6 +1474,46 @@ function setCatFilter(i) { catFilter = catTypesList[i]; renderCatalog(); }
 // ─────────────────────────────────────────────
 // MANAGE
 // ─────────────────────────────────────────────
+function renderVisibility() {
+  const el = document.getElementById('vis-grid'); if (!el) return;
+  el.innerHTML = PROD_TYPES.map((pt, i) => {
+    const n = PKGS.filter(p => p.hero === pt.k).length;
+    const on = isShownToSales(pt.k);
+    const sub = n ? `${n} แพ็กเกจ` : 'ยังไม่มีแพ็กเกจ';
+    return `<label class="vis-item ${on ? '' : 'off'}">
+      <input type="checkbox" ${on ? 'checked' : ''} onchange="toggleVisibility(${i}, this.checked)">
+      <span style="font-size:18px">${pt.ico}</span>
+      <span><div class="vis-name">${pt.lbl}</div><div class="vis-sub ${n ? '' : 'vis-warn'}">${sub}${on ? '' : ' · ซ่อนอยู่'}</div></span>
+    </label>`;
+  }).join('');
+  const dirty = HIDDEN_TYPES.size !== HIDDEN_SAVED.size || [...HIDDEN_TYPES].some(k => !HIDDEN_SAVED.has(k));
+  const btn = document.getElementById('vis-save-btn');
+  if (btn) { btn.disabled = !dirty; btn.style.opacity = dirty ? '' : '.5'; btn.textContent = dirty ? '💾 บันทึกการแสดงผล' : '✓ บันทึกแล้ว'; }
+}
+
+function toggleVisibility(i, on) {
+  const k = PROD_TYPES[i].k;
+  if (on) HIDDEN_TYPES.delete(k); else HIDDEN_TYPES.add(k);
+  if (ST.type && HIDDEN_TYPES.has(ST.type)) resetCalc();
+  renderVisibility(); renderProdGrid(); renderCatalog();
+}
+
+async function saveVisibility() {
+  const btn = document.getElementById('vis-save-btn');
+  const hiddenTypes = PROD_TYPES.map(pt => pt.k).filter(k => HIDDEN_TYPES.has(k));
+  btn.disabled = true; btn.textContent = '⏳ กำลังบันทึก…';
+  try {
+    const r = await fetch('/api/save-packages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ catalogConfig: { hiddenTypes } }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    HIDDEN_SAVED = new Set(hiddenTypes);
+    toast('✅ บันทึกแล้ว หน้าเซลจะอัปเดตในประมาณ 1 นาที');
+  } catch (e) {
+    toast('❌ บันทึกไม่สำเร็จ: ' + e.message);
+  }
+  renderVisibility();
+}
+
 function renderPkgList() {
   const q = (document.getElementById('pkg-list-search')?.value || '').toLowerCase();
   const filtered = PKGS.filter(p =>

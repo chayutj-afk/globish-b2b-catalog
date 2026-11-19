@@ -163,9 +163,11 @@ table.sum tr.now td{background:var(--primary-soft)}
       <details class="help" id="f-help"><summary>แต่ละแท็บคืออะไร</summary><div class="small" id="f-hint"></div></details>
       <div class="wrap"><table class="wl"><thead><tr><th>INV</th><th>บริษัท</th><th>เซล</th><th>ครบกำหนด</th><th class="num">เกิน (วัน)</th><th class="num">ยอดที่ต้องได้รับ</th><th>สถานะติดตาม</th><th>ติดตามครั้งถัดไป</th></tr></thead><tbody id="wl"></tbody></table></div>
       <div class="more" id="more"></div>
-      <details class="help" id="pc-bar" hidden><summary>เครื่องมือบัญชี: ตรวจใบค้างกับ PEAK</summary>
+      <details class="help" id="pc-bar" hidden><summary>เครื่องมือบัญชี: ตรวจและอัปเดตจาก PEAK</summary>
         <p class="small" style="margin:8px 0">หาใบที่จ่ายแล้วใน PEAK แต่ที่นี่ยังค้าง ระบบอ่านอย่างเดียวก่อน แล้วให้ยืนยันก่อนบันทึก ตัวกรองกลุ่ม เซล และคำค้นด้านบนมีผลกับรายการที่ตรวจ</p>
         <div class="acts" style="padding:0" id="pc-btns"></div>
+        <p class="small" style="margin:12px 0 8px">อัปเดตข้อมูลของ INV จาก PEAK ทีละหลายใบ (ยอด วันที่ เครดิต หัก ณ ที่จ่าย เซล กลุ่มลูกค้า) เหมือนกดปุ่ม ↻ อัปเดตจาก PEAK ในแต่ละใบ เลือกได้ว่าจะทำกลุ่มไหน ใบไหน จากรายการที่แสดงอยู่ตามแท็บและตัวกรองด้านบน</p>
+        <div class="acts" style="padding:0"><button class="btn btn-o btn-sm" type="button" id="bulk-open">↻ อัปเดตจาก PEAK หลายใบ…</button></div>
       </details>
     </div>
   </section>
@@ -375,7 +377,7 @@ function render() {
   $('f-due').hidden = tabV !== 'open';
   // Accounting tool, in one place: check open INVs against PEAK (paid there but still open here).
   const sets = !(D.peakLive && (CAN_EDIT || CAN_RT)) ? [] : [['open', 'ใบค้างปี 2026 เป็นต้นไป'], ['old', 'ค้างเก่าก่อนปี 2026'], ['check', 'ข้อมูลเก่ารอตรวจ']].map(([m, t]) => [m, t, rowsFor(m).filter(isOpenRow).length]).filter((x) => x[2]);
-  $('pc-bar').hidden = !sets.length;
+  $('pc-bar').hidden = !(D.peakLive && (CAN_EDIT || CAN_RT));
   $('pc-btns').innerHTML = sets.map(([m, t, n]) => `<button class="btn btn-o btn-sm" type="button" onclick="peakCheckSet('${m}')">🔎 ตรวจ${t} (${n} ใบ)</button>`).join('');
   $('wl').innerHTML = xs.slice(0, SHOW).map((r) => {
     const d = r.daysOverdue;
@@ -832,6 +834,57 @@ function peakCheckShow(rs, done) {
   const ap = $('pc-apply');
   if (ap) ap.onclick = async () => { closeDrill(); const rs2 = await peakCheckRun(can.map((r) => r.ivNo), true); await load(); peakCheckShow(rs2, true); };
 }
+// Refresh many INVs from PEAK: pick by customer group and / or one by one from the list on screen, then the
+// same refresh as the per-INV button runs for each (one at a time: every INV is its own PEAK read and sheet write).
+const BULK_MAX = 100;
+function bulkOpen() {
+  const xs = rowsFor().filter((r) => r.docStatus !== 'Cancelled');
+  const segs = [...new Set(xs.map((r) => r.segment || 'Others'))].sort();
+  const tabName = document.querySelector('#f-state button.on').dataset.label || document.querySelector('#f-state button.on').textContent;
+  $('d-title').textContent = '↻ อัปเดตจาก PEAK หลายใบ';
+  $('d-sub').textContent = `จากรายการที่แสดงอยู่: ${tabName} · ${xs.length} ใบ`;
+  $('d-body').innerHTML = !xs.length ? '<p class="small">ไม่มี INV ในรายการที่แสดงอยู่ เปลี่ยนแท็บหรือตัวกรองแล้วเปิดใหม่</p>' : `
+    <div class="acts" style="padding:0 0 10px;flex-wrap:wrap;gap:6px"><span class="small">เลือกทั้งกลุ่ม:</span>
+      ${segs.map((g) => `<button class="btn btn-o btn-sm" type="button" data-bg="${esc(g)}">${esc(g)} (${xs.filter((r) => (r.segment || 'Others') === g).length})</button>`).join('')}
+      <button class="btn btn-g btn-sm" type="button" data-bg="*">ทั้งหมด</button><button class="btn btn-g btn-sm" type="button" data-bg="">ล้าง</button></div>
+    <table><thead><tr><th style="width:36px"><span class="small">เลือก</span></th><th>INV</th><th>บริษัท</th><th>กลุ่ม</th><th>เซล</th><th>วันที่ออก</th></tr></thead><tbody>
+    ${xs.map((r) => `<tr><td><input type="checkbox" class="bk" value="${esc(r.ivNo)}" data-g="${esc(r.segment || 'Others')}" aria-label="เลือก ${esc(r.ivNo)}" style="width:18px;height:18px"></td><td class="mono">${esc(r.ivNo)}</td><td>${esc(r.company || '')}</td><td>${esc(r.segment || 'Others')}</td><td>${esc(r.salesName || '')}</td><td>${esc(r.issueDate || '')}</td></tr>`).join('')}</tbody></table>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap"><span class="small" id="bk-n"></span><button class="btn btn-p" type="button" id="bk-go" disabled>อัปเดตจาก PEAK</button></div>`;
+  $('ov-drill').hidden = false;
+  if (!xs.length) return;
+  const boxes = () => [...document.querySelectorAll('#d-body .bk')];
+  const count = () => {
+    const n = boxes().filter((b) => b.checked).length;
+    $('bk-n').innerHTML = !n ? 'ยังไม่ได้เลือก' : n > BULK_MAX ? `<span style="color:var(--bad-ink)">เลือก ${n} ใบ เกิน ${BULK_MAX} ใบต่อรอบ ลดจำนวนหรือแบ่งทำหลายรอบ</span>` : `เลือก ${n} ใบ · ใช้การอ่าน PEAK ประมาณ ${n * 2} ครั้ง · ใช้เวลาราว ${Math.max(1, Math.round(n * 4 / 60))} นาที`;
+    $('bk-go').disabled = !n || n > BULK_MAX; $('bk-go').textContent = n ? `อัปเดตจาก PEAK (${n} ใบ)` : 'อัปเดตจาก PEAK';
+  };
+  document.querySelectorAll('#d-body [data-bg]').forEach((b) => b.onclick = () => { const g = b.dataset.bg; boxes().forEach((x) => { if (g === '') x.checked = false; else if (g === '*' || x.dataset.g === g) x.checked = true; }); count(); });
+  boxes().forEach((b) => b.onchange = count);
+  count();
+  $('bk-go').onclick = () => bulkRun(boxes().filter((b) => b.checked).map((b) => b.value));
+}
+async function bulkRun(nos) {
+  closeDrill();
+  const rs = [];
+  $('ov-load').hidden = false;
+  try {
+    for (let i = 0; i < nos.length; i++) {
+      $('ld-text').textContent = `กำลังอัปเดตจาก PEAK ${i + 1} / ${nos.length}`;
+      const company = (find(nos[i]) || {}).company || '';
+      try { const d = await api('/api/invoice-requests', { method: 'PATCH', body: JSON.stringify({ action: 'ar_refresh', ivNo: nos[i] }) }); rs.push({ ivNo: nos[i], company, changes: d.changes || [] }); }
+      catch (e) { rs.push({ ivNo: nos[i], company, error: e.message }); }
+    }
+  } finally { $('ov-load').hidden = true; }
+  await load();
+  const ch = rs.filter((r) => r.changes && r.changes.length), er = rs.filter((r) => r.error);
+  $('d-title').textContent = 'อัปเดตจาก PEAK แล้ว';
+  $('d-sub').textContent = `${rs.length} ใบ · มีการเปลี่ยนแปลง ${ch.length} · ตรงกับ PEAK อยู่แล้ว ${rs.length - ch.length - er.length} · ทำไม่สำเร็จ ${er.length}`;
+  const rank = (r) => (r.error ? 0 : r.changes.length ? 1 : 2);
+  $('d-body').innerHTML = `<table><thead><tr><th>INV</th><th>บริษัท</th><th>ผล</th></tr></thead><tbody>
+    ${rs.slice().sort((a, b) => rank(a) - rank(b)).map((r) => `<tr><td class="mono" style="white-space:nowrap">${esc(r.ivNo)}</td><td>${esc(r.company)}</td><td>${r.error ? `<span style="color:var(--bad-ink)">ทำไม่สำเร็จ: ${esc(r.error)}</span>` : r.changes.length ? esc(r.changes.join(' · ')) : '<span class="small">ตรงกับ PEAK อยู่แล้ว</span>'}</td></tr>`).join('')}</tbody></table>`;
+  $('ov-drill').hidden = false;
+}
+$('bulk-open').onclick = bulkOpen;
 async function peakCheckSet(mode) { const nos = rowsFor(mode).filter(isOpenRow).map((r) => r.ivNo); if (nos.length) peakCheckShow(await peakCheckRun(nos, false), false); }
 
 let S = null;

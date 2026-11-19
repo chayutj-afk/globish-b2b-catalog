@@ -1372,10 +1372,34 @@ async function finishRt(row, d, who, opts = {}) {
   await notify.chat(`🧾 ใบเสร็จ ${f.peakRtNo} ออกแล้ว · ${row.refDoc} · ${notify.co(row.billName)} · ${await notify.at(row.requestedBy, row.salesName)} · ${notify.link('mine', undefined, { t: 'rt', q: f.peakRtNo })}`);
 }
 
+// The receipt is out (sent as a file / by email) and the customer now wants the paper original: the request's
+// owner asks, and it joins accounting's "รอส่งตัวจริง" queue. Asking again before it is sent updates the address.
+async function rtOriginal(req, res, user) {
+  const b = req.body || {};
+  const rows = await hub.readTable('ReceiptRequests');
+  const row = rows.find((x) => x.rtRequestId === text(b.rtRequestId, 40));
+  const sees = await visibility(user);
+  if (!row || (!can(user, 'approve') && !sees(row.requestedBy))) throw bad('ไม่พบใบเสร็จนี้', 404);
+  if (row.status !== 'issued') throw bad('ขอส่งตัวจริงได้หลังใบเสร็จออกแล้ว', 409);
+  const recipient = text(b.recipient, 120), address = text(b.address, 500);
+  if (!recipient || !address) throw bad('ใส่ผู้รับและที่อยู่สำหรับส่งใบเสร็จตัวจริง');
+  const at = hub.sheetDateTime(), again = row.sentStatus === 'waiting';
+  const was = String(row.deliveryChannel || '');
+  await hub.updateRow('ReceiptRequests', row._row, {
+    deliveryAddress: `${recipient} · ${address}`.slice(0, 600), deliveryChannel: /ตัวจริง/.test(was) ? was : /อีเมล/.test(was) ? RT_CHANNEL.email_post : RT_CHANNEL.post,
+    sentStatus: 'waiting', sentAt: '', trackingNo: '', updatedAt: at,
+    accountNote: [row.accountNote, `${user.name || user.email} ขอส่งตัวจริง${row.trackingNo ? ' อีกครั้ง (ครั้งก่อนเลขพัสดุ ' + row.trackingNo + ')' : ''} ${at}`].filter(Boolean).join(' · ').slice(-500),
+  });
+  await Promise.all([hub.log('catalog', 'rt_original_requested', row.rtRequestId, `${user.email} · ${row.peakRtNo}`),
+    again ? null : notify.chat(`📮 ขอใบเสร็จตัวจริง ${row.peakRtNo} · ${notify.co(row.billName)} · ${user.name || user.email} · ${notify.link('pend', undefined, { t: 'rt', q: row.peakRtNo })}`)]);
+  res.status(200).json({ ok: true });
+}
+
 async function updateReceipt(req, res, user) {
   checkOrigin(req);
-  if (!can(user, 'approve')) throw bad('ไม่มีสิทธิ์อนุมัติเอกสาร', 403);
   const b = req.body || {};
+  if (b.action === 'rt_original') return rtOriginal(req, res, user);
+  if (!can(user, 'approve')) throw bad('ไม่มีสิทธิ์อนุมัติเอกสาร', 403);
   if (b.action === 'rt_from_inv') return rtFromInv(req, res, user);
   if (b.action === 'rt_make') return rtMake(req, res, user);
   const rows = await hub.readTable('ReceiptRequests');

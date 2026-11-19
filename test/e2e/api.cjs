@@ -651,5 +651,19 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
       ok(c && (c.twins || []).some((x) => x.ivNo === a.ivNo), 'accounting see the warning on the waiting card: ' + JSON.stringify(c && c.twins));
       [s, j] = await call(BENZ, 'GET', '/api/invoice-requests?view=receipts');
       ok(!((j.requests || []).find((x) => x.rtRequestId === id) || {}).twins, 'the flag is for accounting only'); } }
+  console.log('── 26. receipt already issued, customer now wants the original');
+  { const r = db().ReceiptRequests.find((x) => x.status === 'issued' && x.sentStatus === 'sent' && x.requestedBy === BENZ);
+    ok(!!r, 'an issued receipt of Benz that counts as sent exists');
+    if (r) {
+      [s, j] = await call(BEE, 'PATCH', '/api/invoice-requests', { action: 'rt_original', rtRequestId: r.rtRequestId, recipient: 'A', address: 'B' }); ok(s === 404, 'another salesperson cannot ask: ' + s);
+      [s, j] = await call(BENZ, 'PATCH', '/api/invoice-requests', { action: 'rt_original', rtRequestId: r.rtRequestId, recipient: 'คุณเอ' }); ok(s === 400, 'recipient and address are both needed: ' + s);
+      [s, j] = await call(BENZ, 'PATCH', '/api/invoice-requests', { action: 'rt_original', rtRequestId: r.rtRequestId, recipient: 'คุณเอ ฝ่ายการเงิน', address: '99 ถ.สีลม กทม. 10500' });
+      const x = db().ReceiptRequests.find((y) => y.rtRequestId === r.rtRequestId);
+      ok(s === 200 && x.sentStatus === 'waiting' && /ตัวจริง/.test(x.deliveryChannel) && /คุณเอ ฝ่ายการเงิน · 99 ถ.สีลม/.test(x.deliveryAddress) && x.status === 'issued', 'it joins the "send the original" queue with the address: ' + (j.error || x.sentStatus + ' ' + x.deliveryChannel));
+      ok(/ขอใบเสร็จตัวจริง/.test((peak().chat || []).map((c) => c.text).pop() || ''), 'accounting are told in chat');
+      [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { action: 'rt_sent', rtRequestId: r.rtRequestId, trackingNo: 'TH123' });
+      ok(s === 200 && db().ReceiptRequests.find((y) => y.rtRequestId === r.rtRequestId).sentStatus === 'sent', 'accounting mark it sent as usual: ' + (j.error || '')); }
+    const d0 = db().ReceiptRequests.find((x) => x.status === 'new');
+    if (d0) { [s, j] = await call(ADMIN, 'PATCH', '/api/invoice-requests', { action: 'rt_original', rtRequestId: d0.rtRequestId, recipient: 'A', address: 'B' }); ok(s === 409, 'not before the receipt is issued: ' + s); } }
   done();
 })().catch((e) => { console.error('CRASH', e); ok(false, 'CRASH: the run stopped early: ' + e.message); done(); process.exitCode = 1; });

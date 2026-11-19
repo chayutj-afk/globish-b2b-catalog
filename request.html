@@ -1519,6 +1519,7 @@ function renderMineMore() {
     <div class="next ${nx.you ? 'you' : 'wait'}"><b>${nx.you ? 'ถัดไป (คุณ):' : nx.who ? `ถัดไป (${esc(nx.who)}):` : 'ถัดไป:'}</b> ${nx.t}</div>
     <div class="list-sub">${fmt(toNum(r.price) - toNum(r.discount))} บาท · ${esc(r.packages)} ${esc(r.whStudent)}</div>
     ${r.status === 'rejected' && r.accountNote ? `<div class="pc-note err" style="margin-top:8px">เหตุผล: ${esc(r.accountNote)}</div>` : ''}
+    ${r.status === 'issued' && canDo('request') ? `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">${r.sentStatus === 'waiting' ? `<span class="small">📮 รอฝ่ายบัญชีส่งตัวจริง · ${esc(r.deliveryAddress || r.address || '')}</span>` : ''}<button class="btn btn-g btn-sm" type="button" onclick="openRtOrig('${esc(r.rtRequestId)}')">${r.sentStatus === 'waiting' ? 'แก้ผู้รับ / ที่อยู่' : '📮 ลูกค้าขอใบเสร็จตัวจริง'}</button></div><div id="rto-${esc(r.rtRequestId)}"></div>` : ''}
     <details class="more"><summary>รายละเอียด</summary><div class="list-sub">${esc(r.rtRequestId)} · ${esc(r.createdAt)} · ${esc(r.segment)}${op ? ' · ' + esc(r.salesName) : ''} · ส่งทาง ${esc(r.deliveryChannel)}${r.trackingNo ? ' · เลขพัสดุ ' + esc(r.trackingNo) : ''}${r.accountNote && r.status !== 'rejected' ? `<br><span class="small">ฝ่ายบัญชี: ${esc(r.accountNote)}</span>` : ''}</div></details>
 </div>`; }).join('') : mineNone(qq, 'ยังไม่มีคำขอใบเสร็จ');
   $('mine-edit').innerHTML = shownE.length ? shownE.map((e) => { const nx = forMe(nextEdit(e), e); return `<div class="list-row"><div class="list-head"><div><span class="list-id">ขอแก้ ${esc(e.docType)} ${esc(e.docNo)}</span> · ${esc(e.company)}${ownerTag(e)}</div>${st(ED_ST, e.status)}</div>
@@ -2040,6 +2041,25 @@ function openOrig(id) {
     <div class="fg"><label>ที่อยู่จัดส่ง *</label><input id="or-adr-${esc(id)}" type="text" maxlength="500" value="${esc(v.originalAddress || '')}"></div></div>
     <button class="btn btn-p btn-sm" onclick="setOrig('${esc(id)}','yes')">แจ้งฝ่ายบัญชีให้ส่งตัวจริง</button> <button class="btn btn-g btn-sm" onclick="$('orig-${esc(id)}').innerHTML=''">ยกเลิก</button>
     <div id="or-msg-${esc(id)}"></div></div>`;
+}
+// Receipt already issued, the customer now wants the paper original: Sales give the recipient and address,
+// accounting get it in "รอส่งตัวจริง".
+function openRtOrig(id) {
+  const r = RTS.find((x) => x.rtRequestId === id) || {};
+  const [rec0, ...adr0] = r.sentStatus === 'waiting' ? String(r.deliveryAddress || '').split(' · ') : ['', r.deliveryAddress || ''];
+  $('rto-' + id).innerHTML = `<div class="orig-form"><div class="row">
+    <div class="fg"><label for="rto-rec-${esc(id)}">ผู้รับเอกสาร *</label><input id="rto-rec-${esc(id)}" type="text" maxlength="120" autocomplete="off" value="${esc(rec0)}"></div>
+    <div class="fg"><label for="rto-adr-${esc(id)}">ที่อยู่จัดส่ง *</label><input id="rto-adr-${esc(id)}" type="text" maxlength="500" autocomplete="off" value="${esc(adr0.join(' · '))}"></div></div>
+    <button class="btn btn-p btn-sm" type="button" onclick="sendRtOrig('${esc(id)}')">แจ้งฝ่ายบัญชีให้ส่งตัวจริง</button> <button class="btn btn-g btn-sm" type="button" onclick="$('rto-${esc(id)}').innerHTML=''">ยกเลิก</button>
+    <div id="rto-msg-${esc(id)}"></div></div>`;
+}
+async function sendRtOrig(id) {
+  const r = RTS.find((x) => x.rtRequestId === id) || {};
+  const body = { action: 'rt_original', rtRequestId: id, recipient: $('rto-rec-' + id).value.trim(), address: $('rto-adr-' + id).value.trim() };
+  if (!body.recipient || !body.address) return msg('rto-msg-' + id, 'err', 'ใส่ผู้รับและที่อยู่จัดส่ง');
+  if (!(await ask({ title: 'แจ้งฝ่ายบัญชีให้ส่งใบเสร็จตัวจริง?', ok: '📮 แจ้งส่งตัวจริง', html: `<p>ใบเสร็จ <b>${esc(r.peakRtNo || '')}</b><br>ส่งถึง: <b>${esc(body.recipient)}</b><br>${esc(body.address)}</p>` }))) return;
+  try { await withLoading('กำลังบันทึก…', async () => { await api('/api/invoice-requests', { method: 'PATCH', body: JSON.stringify(body) }); await loadAll(); }); alertMsg('แจ้งฝ่ายบัญชีแล้ว รอส่งตัวจริง', true); }
+  catch (e) { const el = $('rto-msg-' + id) || $('rto-' + id); el.innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
 }
 async function setOrig(id, want) {
   const body = { ivRequestId: id, action: 'original', originalDoc: want };

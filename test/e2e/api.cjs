@@ -685,5 +685,26 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
       ok(s === 200 && db().ReceiptRequests.find((y) => y.rtRequestId === r.rtRequestId).sentStatus === 'sent', 'accounting mark it sent as usual: ' + (j.error || '')); }
     const d0 = db().ReceiptRequests.find((x) => x.status === 'new');
     if (d0) { [s, j] = await call(ADMIN, 'PATCH', '/api/invoice-requests', { action: 'rt_original', rtRequestId: d0.rtRequestId, recipient: 'A', address: 'B' }); ok(s === 409, 'not before the receipt is issued: ' + s); } }
+  console.log('── 28. edit request closed as "INV cancelled, another INV is used instead"');
+  { const A = () => db().Invoices; const num = (v) => Number(String(v || '').replace(/,/g, '')) || 0;
+    const old = A().find((x) => x.docStatus === 'Active' && !x.paidDate && !x.rtNo && !num(x.paidAmount));
+    const other = A().find((x) => x.ivNo !== (old || {}).ivNo && x.docStatus === 'Active');
+    ok(old && other, 'an open INV and another live INV exist');
+    if (old && other) {
+      [s, j] = await call(ADMIN, 'POST', '/api/invoice-requests', { action: 'edit', docType: 'INV', docNo: old.ivNo, refId: old.ivRequestId, company: old.company, detail: 'ลูกค้าเปลี่ยนออกในนามบริษัทอื่น' }); ok(s === 200, 'edit request made ' + (j.error || '')); const ed = j.editId;
+      [s, j] = await call(BEE, 'PATCH', '/api/invoice-requests', { action: 'edit_done', editId: ed, replacedBy: other.ivNo }); ok(s === 403, 'sales cannot cancel');
+      [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { action: 'edit_done', editId: ed, replacedBy: old.ivNo }); ok(s === 400, 'cannot replace an INV with itself');
+      [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { action: 'edit_done', editId: ed, replacedBy: 'IV-29990100001' }); ok(s === 404, 'unknown replacement refused');
+      setPeak((p) => { p.invoices = p.invoices.filter((x) => x.code !== old.ivNo); p.invoices.push({ id: 'rp1', code: old.ivNo, status: 'Approve', contactCode: 'C1', issuedDate: '20261001', dueDate: '20261031', preTaxAmount: 100, netAmount: 107 }); });
+      [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { action: 'edit_done', editId: ed, replacedBy: other.ivNo }); ok(s === 409 && /void/.test(j.error), 'still approved in PEAK → void it first: ' + j.error);
+      setPeak((p) => { p.invoices.find((x) => x.id === 'rp1').status = 'Draft'; });
+      const chats = peak().chat ? peak().chat.length : 0;
+      [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { action: 'edit_done', editId: ed, replacedBy: other.ivNo.toLowerCase() }); ok(s === 200, 'voided in PEAK → closed: ' + (j.error || ''));
+      const a2 = arRow(old.ivNo), e2 = db().EditRequests.find((x) => x.editId === ed);
+      ok(a2.docStatus === 'Replaced' && a2.note.includes(other.ivNo), 'INV leaves the debt list as Replaced');
+      if (old.ivRequestId) ok(ivr(old.ivRequestId).status === 'iv_void', 'its request is void');
+      ok(e2.status === 'done' && e2.newDocNo === other.ivNo, 'edit request done, points at the INV in use');
+      [s, j] = await call(ACCT, 'GET', '/api/invoice-requests?view=ar'); const row = (j.invoices || []).find((x) => x.ivNo === old.ivNo); ok(!row || !['Outstanding', 'Overdue'].includes(row.state), 'no longer counted as open');
+    } }
   done();
 })().catch((e) => { console.error('CRASH', e); ok(false, 'CRASH: the run stopped early: ' + e.message); done(); process.exitCode = 1; });

@@ -1703,15 +1703,29 @@ function editForm(e) {
   const link = src && src.peakDocLink;
   return `<div class="pc-act" style="flex-wrap:wrap">
     ${link ? `<a class="btn btn-o btn-sm" href="${esc(e.docType === 'QT' ? peakEdit(link, 'quotation') : link)}" target="_blank" rel="noopener">เปิด ${esc(e.docNo)} ใน PEAK ↗</a>` : ''}
-    <select id="edm-mode-${id}" onchange="document.getElementById('edn-wrap-${id}').hidden=this.value!=='new'"><option value="same">แก้ในเลขเดิม (${esc(e.docNo)})</option><option value="new">ออกเลขใหม่</option></select>
+    <select id="edm-mode-${id}" aria-label="ผลการแก้" onchange="edMode('${id}')"><option value="same">แก้ในเลขเดิม (${esc(e.docNo)})</option><option value="new">ออกเลขใหม่</option>${e.docType === 'INV' ? '<option value="void">ยกเลิกใบนี้ (มีใบอื่นแทนแล้ว)</option>' : ''}</select>
+    <span id="edr-wrap-${id}" hidden><input id="edr-${id}" type="text" maxlength="40" placeholder="เลข INV ที่ใช้แทน *" aria-label="เลข INV ที่ใช้แทน" style="width:190px"> <span class="small">ต้อง void ${esc(e.docNo)} ใน PEAK ก่อน</span></span>
     <span id="edn-wrap-${id}" hidden><input id="edn-${id}" type="text" maxlength="40" placeholder="เลขเอกสารใหม่" style="width:170px"> <input id="edl-${id}" type="text" maxlength="500" placeholder="ลิงก์เอกสารใหม่ใน PEAK *" style="width:240px"></span>
-    ${e.docType === 'QT' && PEAK_LIVE ? '<span class="small">แก้ในเลขเดิม: ระบบดึงยอดและจำนวนผู้เรียนใหม่จาก PEAK ให้เอง</span>' : e.docType !== 'RT' ? `<label class="small">ยอดก่อน VAT หลังแก้ (ไม่รวม VAT)</label><input id="eda-${id}" type="number" step="0.01" value="${esc(String(amt || '').replace(/,/g, ''))}" style="width:130px">` : ''}
+    ${e.docType === 'QT' && PEAK_LIVE ? '<span class="small">แก้ในเลขเดิม: ระบบดึงยอดและจำนวนผู้เรียนใหม่จาก PEAK ให้เอง</span>' : e.docType !== 'RT' ? `<span id="eda-wrap-${id}"><label class="small">ยอดก่อน VAT หลังแก้ (ไม่รวม VAT)</label> <input id="eda-${id}" type="number" step="0.01" value="${esc(String(amt || '').replace(/,/g, ''))}" style="width:130px"></span>` : ''}
     <input id="edt-${id}" class="grow" type="text" maxlength="500" placeholder="หมายเหตุถึง Sales">
     ${e.docType === 'RT' ? '<span class="small warn">ใบเสร็จแก้ไม่ได้ ตีกลับคำขอนี้</span>' : `<button class="btn btn-p btn-sm" onclick="editAction('${id}','edit_done')">✓ แก้แล้ว</button>`}<button class="btn btn-g btn-sm" onclick="editAction('${id}','edit_reject')">ตีกลับ</button><span id="edm-${id}"></span></div>
     ${src ? '' : '<div class="small" style="padding:0 16px 10px">ไม่พบคำขอต้นทางในระบบ ระบบจะบันทึกแค่ว่าแก้แล้ว</div>'}`;
 }
+function edMode(id) {
+  const v = $('edm-mode-' + id).value;
+  $('edn-wrap-' + id).hidden = v !== 'new'; $('edr-wrap-' + id).hidden = v !== 'void';
+  if ($('eda-wrap-' + id)) $('eda-wrap-' + id).hidden = v === 'void';
+}
 async function editAction(id, action) {
   const e = EDITS.find((x) => x.editId === id) || {};
+  if (action === 'edit_done' && $('edm-mode-' + id).value === 'void') {
+    const by = ($('edr-' + id).value || '').trim().toUpperCase();
+    if (!by) { $('edm-' + id).innerHTML = '<span class="err-line">ใส่เลข INV ที่ใช้แทน</span>'; return; }
+    if (!(await ask({ title: `ยกเลิก ${e.docNo}?`, kind: 'danger', html: `<p>${esc(e.detail)}</p><p>ยกเลิก <b>${esc(e.docNo)}</b> และใช้ <b>${esc(by)}</b> แทน</p><p class="small">${esc(e.docNo)} จะออกจากยอดค้างรับและรายการติดตามหนี้ เซลจะได้รับแจ้งว่าให้ใช้ ${esc(by)} · ต้อง void ${esc(e.docNo)} ใน PEAK ก่อน</p>` }))) return;
+    try { await withLoading('กำลังบันทึก…', async () => { await api('/api/invoice-requests', { method: 'PATCH', body: JSON.stringify({ action, editId: id, replacedBy: by, note: ($('edt-' + id).value || '').trim() }) }); await loadAll(); }); }
+    catch (err) { $('edm-' + id).innerHTML = `<span class="err-line">${esc(err.message)}</span>`; }
+    return;
+  }
   const isNew = $('edm-mode-' + id).value === 'new';
   const body = { action, editId: id, note: ($('edt-' + id).value || '').trim(), newDocNo: isNew ? ($('edn-' + id).value || '').trim() : '', newLink: isNew ? ($('edl-' + id).value || '').trim() : '', newAmount: $('eda-' + id) ? $('eda-' + id).value : '' };
   if (action === 'edit_done' && isNew && (!body.newDocNo || !body.newLink)) { $('edm-' + id).innerHTML = '<span class="err-line">ใส่เลขเอกสารใหม่และลิงก์ PEAK</span>'; return; }

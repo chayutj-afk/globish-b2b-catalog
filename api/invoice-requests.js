@@ -1509,6 +1509,8 @@ async function updateEdit(req, res, user) {
   if (b.action === 'edit_reject' && !note) throw bad('ใส่เหตุผลที่ตีกลับ');
   // Older receipt edit requests can only be closed (rejected), never applied.
   if (b.action === 'edit_done' && row.docType === 'RT') throw bad('ใบเสร็จแก้ไม่ได้ ตีกลับคำขอนี้แทน', 409);
+  // The INV is not being corrected: another INV already replaces it and this one is voided in PEAK.
+  if (b.action === 'edit_done' && b.replacedBy) return editReplaced(res, user, row, text(b.replacedBy, 40).toUpperCase(), note, at, who);
   const newNo = text(b.newDocNo, 40).toUpperCase();
   const newLink = text(b.newLink, 500);
   const newAmt = b.newAmount === '' || b.newAmount === undefined ? null : Number(String(b.newAmount).replace(/,/g, ''));
@@ -1584,6 +1586,35 @@ async function updateEdit(req, res, user) {
   await Promise.all([hub.log('catalog', b.action, row.editId, `${user.email} · ${row.docNo}`),
     notify.chat(b.action === 'edit_done' ? `✅ แก้ ${row.docType} ${row.docNo}${newNo ? ' → ' + newNo : ''} แล้ว · ${notify.co(row.company)} · ${await notify.at(row.requestedBy, row.salesName)} · ${notify.link('mine', undefined, { t: 'edit', q: row.docNo })}` : `↩️ ไม่แก้ ${row.docType} ${row.docNo} · ${notify.co(row.company)} · ${await notify.at(row.requestedBy, row.salesName)} · ${notify.link('mine', undefined, { t: 'edit', q: row.docNo })}\nเหตุผล: ${notify.why(note)}`)]);
   res.status(200).json({ ok: true });
+}
+
+// Edit request closed as "this INV is cancelled, <other INV> is the one in use": the INV leaves the debt totals
+// (Replaced), its request frees the QT balance, and sales is told which INV to use. The INV must already be
+// voided in PEAK, otherwise the next sync would bring it back.
+async function editReplaced(res, user, row, by, note, at, who) {
+  if (row.docType !== 'INV') throw bad('ใช้ได้กับ INV เท่านั้น');
+  if (!/^[A-Z0-9-]{6,40}$/.test(by)) throw bad('ใส่เลข INV ที่ใช้แทน เช่น IV-20261100012');
+  if (by === String(row.docNo).toUpperCase()) throw bad('เลข INV ที่ใช้แทนต้องเป็นคนละใบกับใบที่ยกเลิก');
+  const invs = await hub.readTable('Invoices');
+  const upNo = (x) => String(x.ivNo || '').toUpperCase();
+  const other = invs.find((x) => upNo(x) === by);
+  if (!other) throw bad(`ไม่พบ ${by} ในระบบ ตรวจเลข INV ที่ใช้แทน`, 404);
+  if (['Cancelled', 'Replaced'].includes(other.docStatus)) throw bad(`${by} ถูกยกเลิกไปแล้ว ใช้แทนไม่ได้`, 409);
+  const a = invs.find((x) => (row.refId && x.ivRequestId === row.refId) || upNo(x) === String(row.docNo).toUpperCase());
+  if (a && (a.paidDate || a.rtNo || Number(String(a.paidAmount || '').replace(/,/g, '')) > 0)) throw bad(`${row.docNo} มีการรับเงินหรือใบเสร็จแล้ว ยกเลิกจากตรงนี้ไม่ได้ จัดการใบเสร็จและการรับเงินก่อน`, 409);
+  const peak = require('../lib/peak'), ps = require('../lib/peaksync');
+  if (peak.mode() !== 'off') {
+    const iv = await (a && a.peakIvId ? peak.getInvoice(a.peakIvId) : peak.findInvoiceByCode(row.docNo)).catch(() => null);
+    if (ps.isApproved(iv)) throw bad(`${row.docNo} ยังเป็นใบที่อนุมัติอยู่ใน PEAK ให้ void ใน PEAK ก่อน แล้วกดอีกครั้ง`, 409);
+  }
+  const mark = `ยกเลิก ใช้ ${by} แทน (${row.editId}) — ${who}`;
+  if (a) await hub.updateRow('Invoices', a._row, { docStatus: 'Replaced', note: [a.note, mark].filter(Boolean).join(' · ').slice(0, 500) });
+  const r = (await hub.readTable('InvoiceRequests')).find((x) => x.ivRequestId === (row.refId || (a && a.ivRequestId)));
+  if (r) await hub.updateRow('InvoiceRequests', r._row, { status: 'iv_void', accountNote: mark, updatedAt: at });
+  await hub.writeChecked('EditRequests', 'editId', row, { status: 'done', accountNote: note || `ยกเลิก ${row.docNo} ใช้ ${by} แทน`, newDocNo: by, doneBy: who, updatedAt: at });
+  await Promise.all([hub.log('catalog', 'edit_done', row.editId, `${user.email} · ${row.docNo} ยกเลิก ใช้ ${by} แทน`),
+    notify.chat(`✅ ยกเลิก INV ${row.docNo} แล้ว ใช้ ${by} แทน · ${notify.co(row.company)} · ${await notify.at(row.requestedBy, row.salesName)} · ${notify.link('mine', undefined, { t: 'edit', q: row.docNo })}${note ? `\nหมายเหตุ: ${notify.why(note)}` : ''}`)]);
+  res.status(200).json({ ok: true, replacedBy: by });
 }
 
 // One-off moves from the legacy sheets (file prepared by Claude, uploaded by an admin on /ar).

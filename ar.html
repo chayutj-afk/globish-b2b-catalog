@@ -333,7 +333,7 @@ function renderKpi() {
 // The commit date is still the due date the system filled in when the INV was issued, and nobody has
 // logged a follow-up: the payment date has not been confirmed with the customer yet.
 const noCF = (r) => (r.state === 'Outstanding' || r.state === 'Overdue') && !r.legacyCheck && !r.awaitCash
-  && !!r.commitDate && pd(r.commitDate) === pd(r.dueDate) && !(r.followUps || []).length;
+  && !!r.commitDate && pd(r.commitDate) === pd(r.dueDate) && !(r.followUps || []).some((f) => f.result !== D.lists.remind);
 function rowsFor(only, noWeek) {
   const mode = only || document.querySelector('#f-state button.on').dataset.v;
   const seg = $('f-seg').value, sal = $('f-sales').value, q = $('f-q').value.trim().toLowerCase(), wk = noWeek ? '' : $('f-week').value;
@@ -388,13 +388,24 @@ function render() {
       <td>${esc(r.dueDate)}<div class="sub">${st(r.state)}${r.awaitCash ? ' <span class="st blue">ออกใบเสร็จแล้ว รอเงินเข้า</span>' : ''}${r.partial ? ' <span class="st warn">รับบางส่วน</span>' : ''}</div></td>
       <td class="num">${d ? `<span class="days ${d > 90 ? 'd90' : d > 30 ? 'd30' : ''}">${d}</span>` : ''}</td>
       <td class="num">${fmt(r.state === 'Paid' ? (toNum(r.paidAmount) || r.expected) : r.expected)}${r.partial ? `<div class="sub" style="white-space:nowrap">รับแล้ว ${fmt(r.received)} จาก ${fmt(r.expectedFull)}</div>` : ''}</td>
-      <td>${esc(r.followStatus || '')}${r.commitDate ? `<div class="sub">นัดจ่าย ${esc(r.commitDate)}</div>` : ''}${noCF(r) ? '<div class="sub"><span class="st warn" title="วันนัดจ่ายยังเป็นวันครบกำหนดที่ระบบใส่ให้ และยังไม่มีบันทึกการติดตาม">ยังไม่ยืนยันวันจ่าย</span></div>' : ''}${r.needCommit && !r.legacyCheck ? '<div class="sub late">เลยวันนัด ต้องหาวันใหม่</div>' : ''}</td>
+      <td>${esc(r.followStatus || '')}${r.commitDate ? `<div class="sub">นัดจ่าย ${esc(r.commitDate)}</div>` : ''}${remindTag(r)}${noCF(r) ? '<div class="sub"><span class="st warn" title="วันนัดจ่ายยังเป็นวันครบกำหนดที่ระบบใส่ให้ และยังไม่มีบันทึกการติดตาม">ยังไม่ยืนยันวันจ่าย</span></div>' : ''}${r.needCommit && !r.legacyCheck ? '<div class="sub late">เลยวันนัด ต้องหาวันใหม่</div>' : ''}</td>
       <td>${esc(r.nextActionDate || '')}</td></tr>${open ? detail(r) : ''}`;
   }).join('') || `<tr><td colspan="8" class="empty">ไม่มีรายการ</td></tr>`;
   $('more').innerHTML = xs.length > SHOW ? `<button class="btn btn-g btn-sm" onclick="SHOW+=100;render()">แสดงเพิ่ม (${xs.length - SHOW} รายการ)</button>` : `<span class="small">${xs.length} รายการ</span>`;
   document.querySelectorAll('#wl tr.r').forEach((tr) => tr.onclick = () => { OPEN = OPEN === tr.dataset.iv ? null : tr.dataset.iv; render(); });
 }
 
+// Reminders sent ahead of the due date: shown on the row so nobody has to open the INV to know.
+const reminds = (r) => (r.followUps || []).filter((f) => f.result === D.lists.remind);
+function remindTag(r) {
+  const xs = reminds(r); if (!xs.length) return '';
+  const last = xs[xs.length - 1], day = String(last.loggedAt || '').slice(0, 5);
+  return `<div class="sub"><span class="st ok" title="${esc(xs.map((f) => `${f.loggedAt} · ${f.channel} · ${f.by}`).join('\n'))}">📧 เตือนแล้ว ${xs.length > 1 ? `${xs.length} ครั้ง · ล่าสุด ` : ''}${esc(day)}</span></div>`;
+}
+async function quickRemind(iv) {
+  try { await patch({ action: 'ar_followup', ivNo: iv, channel: 'Email', result: D.lists.remind }); await done(`บันทึกว่าส่งเมลเตือน ${iv} แล้ว`); }
+  catch (e) { $('msg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
+}
 const opt = (list, v, blank) => (blank ? `<option value="">${blank}</option>` : '') + list.map((x) => `<option ${x === v ? 'selected' : ''}>${esc(x)}</option>`).join('');
 function detail(r) {
   const id = esc(r.ivNo);
@@ -404,6 +415,7 @@ function detail(r) {
   return `<tr class="det"><td colspan="8">
     <div class="acts">${!CAN_EDIT ? (D.canOwner ? `<button class="btn btn-g btn-sm" onclick="openOwner('${id}')">👤 เปลี่ยนเซลเจ้าของ</button>` : '<span class="small">ดูอย่างเดียว</span>') : `
       ${closed ? '' : `<button class="btn btn-p btn-sm" onclick="openFollow('${id}')">📞 บันทึกการติดตาม</button>`}
+      ${paid || closed ? '' : `<button class="btn btn-o btn-sm" onclick="quickRemind('${id}')" title="บันทึกว่าส่งอีเมลแจ้งเตือนก่อนครบกำหนดแล้ว (วันนี้) สถานะติดตามและวันนัดจ่ายไม่เปลี่ยน">📧 เตือนแล้ว</button>`}
       ${closed ? '' : `<button class="btn ${paid ? 'btn-g' : 'btn-p'} btn-sm" onclick="openPaid('${id}')">💰 ${paid ? 'แก้ไขการรับเงิน' : r.awaitCash ? 'ยืนยันเงินเข้า' : 'บันทึกรับเงิน'}</button>`}
       ${paid && !r.rtNo ? `<a class="btn btn-o btn-sm" href="/request#pend">🧾 ออกใบเสร็จ (รออนุมัติ › ใบเสร็จ)</a>` : ''}
       <details class="mo"><summary class="btn btn-g btn-sm">เพิ่มเติม ▾</summary><div class="menu" onclick="this.parentNode.open=false">
@@ -449,7 +461,7 @@ function openFollow(iv) {
     save: async (err) => {
       const body = { action: 'ar_followup', ivNo: iv, channel: val('fu-ch'), result: val('fu-rs'), commitDate: val('fu-cm'), nextActionDate: val('fu-nx'), note: val('fu-nt') };
       if (!body.channel || !body.result) { err('เลือกช่องทางและผลการติดตาม'); return false; }
-      if (open && !body.commitDate) { err('ใส่วันที่ลูกค้านัดจ่าย ถ้ายังไม่ทราบให้ใส่วันที่คาดว่าจะจ่าย'); return false; }
+      if (open && !body.commitDate && body.result !== L.remind) { err('ใส่วันที่ลูกค้านัดจ่าย ถ้ายังไม่ทราบให้ใส่วันที่คาดว่าจะจ่าย'); return false; }
       await patch(body); await done(`บันทึกการติดตาม ${iv} แล้ว`);
     } });
 }

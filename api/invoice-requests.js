@@ -740,7 +740,7 @@ async function arList(req, res, user) {
   const canOwner = isOp(user) || can(user, 'team_view');
   const owners = canOwner ? (await users.list()).filter((u) => ['sales', 'lead'].includes(u.role)).map((u) => ({ email: u.email, name: u.name || u.email })) : [];
   res.status(200).json({ ok: true, peakLive: require('../lib/peak').mode() !== 'off', summary: summarise(all, today, events), segments, seg, invoices: out, total: all.length, canOwner, owners,
-    lists: { docStatus: ar.DOC_STATUS, payMethods: ar.PAY_METHODS, channels: ar.CHANNELS, follow: ar.FOLLOW, delay: ar.DELAY } });
+    lists: { docStatus: ar.DOC_STATUS, payMethods: ar.PAY_METHODS, channels: ar.CHANNELS, follow: ar.FOLLOW, remind: ar.REMIND, delay: ar.DELAY } });
 }
 
 // Hand an INV (and the INV request sales see under "คำขอของฉัน") to another salesperson, e.g. when the
@@ -949,6 +949,16 @@ async function arUpdate(req, res, user) {
     const commit = dateIn(b.commitDate, 'วันนัดจ่าย');
     // An open INV always carries a commit date that has not passed: it is what the cash forecast runs on.
     const e = ar.enrich(row);
+    const remind = result === ar.REMIND;
+    if (remind) {
+      // Told the customer the due date is near: logged on the INV, nothing about the INV changes (unless a date was typed).
+      if (commit && ar.parseDate(commit) < ar.todayMs()) throw bad('วันนัดจ่ายเลยมาแล้ว');
+      await hub.appendRows('FollowUps', [{ loggedAt: at, ivNo, channel, by: who, result, nextActionDate: next, note, commitDate: commit || row.commitDate || '' }]);
+      const f = {}; if (commit) f.commitDate = commit; if (next) f.nextActionDate = next;
+      if (Object.keys(f).length) await hub.updateRow('Invoices', row._row, f);
+      await hub.log('catalog', 'ar_followup', ivNo, `${user.email} · ${channel} · ${result}`);
+      return res.status(200).json({ ok: true, reminded: at });
+    }
     if (e.state === 'Outstanding' || e.state === 'Overdue') {
       const c = ar.parseDate(commit || row.commitDate);
       if (c === null) throw bad('ใส่วันที่ลูกค้านัดจ่าย ถ้ายังไม่ทราบให้ใส่วันที่คาดว่าจะจ่าย');

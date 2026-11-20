@@ -305,7 +305,8 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
   console.log('── 8. AR actions, edit requests, B2C receipt');
   [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_followup', ivNo: 'IV-20260800009', channel: 'x', result: 'y' }); ok(s === 400, 'follow-up needs a valid channel');
   [s, j] = await call(COL, 'GET', '/api/invoice-requests?view=ar'); ok(s === 200 && j.invoices.length >= 5 && j.summary, 'collector opens AR: ' + j.invoices.length + ' rows');
-  const ch = j.lists.channels[0], fo = j.lists.follow[0];
+  const ch = j.lists.channels[0], fo = j.lists.follow[1], rem = j.lists.remind;
+  ok(j.lists.follow[0] === rem && !!rem, 'the reminder is a follow-up result');
   [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_followup', ivNo: 'IV-20260800009', channel: ch, result: fo, nextActionDate: '2026-11-20', note: 'โทรแล้ว' }); ok(s === 400 && (db().FollowUps || []).length === 0, 'follow-up on an open INV needs a commit date that has not passed');
   [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_followup', ivNo: 'IV-20260800009', channel: ch, result: fo, commitDate: '2020-01-01', note: 'x' }); ok(s === 400, 'a commit date in the past is refused');
   [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_followup', ivNo: 'IV-20260800009', channel: ch, result: fo, commitDate: '2030-12-27', nextActionDate: '2026-11-20', note: 'โทรแล้ว' }); ok(s === 200 && db().FollowUps.length === 1, 'follow-up saved');
@@ -685,6 +686,21 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
       ok(s === 200 && db().ReceiptRequests.find((y) => y.rtRequestId === r.rtRequestId).sentStatus === 'sent', 'accounting mark it sent as usual: ' + (j.error || '')); }
     const d0 = db().ReceiptRequests.find((x) => x.status === 'new');
     if (d0) { [s, j] = await call(ADMIN, 'PATCH', '/api/invoice-requests', { action: 'rt_original', rtRequestId: d0.rtRequestId, recipient: 'A', address: 'B' }); ok(s === 409, 'not before the receipt is issued: ' + s); } }
+  console.log('── 29. reminder sent before the due date');
+  { [s, j] = await call(COL, 'GET', '/api/invoice-requests?view=ar'); const rem = j.lists.remind;
+    const r0 = j.invoices.find((x) => ['Outstanding', 'Overdue'].includes(x.state));
+    ok(!!r0, 'an open INV exists');
+    if (r0) {
+      const before = arRow(r0.ivNo), n0 = db().FollowUps.filter((f) => f.ivNo === r0.ivNo).length;
+      [s, j] = await call(BEE, 'PATCH', '/api/invoice-requests', { action: 'ar_followup', ivNo: r0.ivNo, channel: 'Email', result: rem }); ok(s === 403, 'sales cannot log a reminder');
+      [s, j] = await call(COL, 'PATCH', '/api/invoice-requests', { action: 'ar_followup', ivNo: r0.ivNo, channel: 'Email', result: rem }); ok(s === 200, 'reminder logged without a commit date, even when the old one has passed: ' + (j.error || ''));
+      const after = arRow(r0.ivNo), fs2 = db().FollowUps.filter((f) => f.ivNo === r0.ivNo);
+      ok(fs2.length === n0 + 1 && fs2[fs2.length - 1].result === rem && fs2[fs2.length - 1].channel === 'Email', 'kept in the follow-up history');
+      ok(after.followStatus === before.followStatus && after.commitDate === before.commitDate && after.nextActionDate === before.nextActionDate, 'follow status, commit date and next action stay as they were');
+      [s, j] = await call(COL, 'GET', '/api/invoice-requests?view=ar'); const r1 = j.invoices.find((x) => x.ivNo === r0.ivNo);
+      ok((r1.followUps || []).some((f) => f.result === rem), 'the list carries the reminder for the row badge');
+      [s, j] = await call(COL, 'GET', '/api/invoice-requests?view=arlog'); ok(s === 200 && j.entries.some((x) => x.ivNo === r0.ivNo && JSON.stringify(x).includes(rem)), 'shown in the work log');
+    } }
   console.log('── 28. edit request closed as "INV cancelled, another INV is used instead"');
   { const A = () => db().Invoices; const num = (v) => Number(String(v || '').replace(/,/g, '')) || 0;
     const old = A().find((x) => x.docStatus === 'Active' && !x.paidDate && !x.rtNo && !num(x.paidAmount));

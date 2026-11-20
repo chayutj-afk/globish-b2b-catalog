@@ -6,7 +6,7 @@ const p = require('../lib/pricing');
 test('templates: numbers come from the package, not from the wording', () => {
   templates._set({});
   const r = p.priceItem({ packageId: 'PVTK-06-36-GB-8DC-72SPD', students: 3, lang: 'TH' });
-  assert.match(r.lines[0].description, /^คลาสเรียนแบบตัวต่อตัวกับโค้ช จำนวน 36 คลาส \(คลาสละ 25 นาที\)/);
+  assert.match(r.lines[0].description, /^Private Class\nคลาสเรียนแบบตัวต่อตัวกับโค้ช จำนวน 36 คลาส \(คลาสละ 25 นาที\)/);
   assert.match(r.lines[0].description, /\nระยะเวลา 6 เดือน · โค้ช/);
   assert.match(r.lines[0].description, /\n- Discussion Class \(คลาสสนทนากลุ่ม\) 8 ครั้ง\n/);
   assert.match(r.lines[1].description, /จำนวน 8 คลาส \(คลาสละ 55 นาที\)[\s\S]*\n\(รวมอยู่ในแพ็กเกจข้างต้น\)$/);
@@ -14,7 +14,8 @@ test('templates: numbers come from the package, not from the wording', () => {
   // Catalog packages no longer bundle Master Class / Workshop (Sales add them when they give them away).
   assert.strictEqual(r.lines.length, 3);
   const en = p.priceItem({ packageId: 'PVTK-06-36-GB-8DC-72SPD', students: 3, lang: 'EN' });
-  assert.match(en.lines[0].description, /^One-on-one English coaching with a coach for 36 sessions/);
+  assert.match(en.lines[0].description, /^Private Class\nOne-on-one English coaching with a coach for 36 sessions/);
+  assert.match(p.priceItem({ packageId: 'BGOL-15', students: 30, lang: 'EN' }).lines[0].description, /^Business Group Class \(Online\)\nGroup English classes/);
   // Master Class inside a (customized) package is written as a period, never a number of sessions.
   const keyHS = 'Private Class-36-6-Asian, European and Native/36-6-HERO-8-72-0-0-0-0-0-0-0-0-0-24-0';
   const mc = p.priceCustomKeyHS({ keyHS, qty: 3, unitPrice: 28000, lang: 'TH' }).lines.find((l) => l.component === 'Master Class');

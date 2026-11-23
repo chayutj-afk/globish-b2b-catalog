@@ -640,7 +640,13 @@ function summarise(all, today, events = cashEvents(all)) {
     const start = Date.UTC(y, m, 1), end = Date.UTC(y, m + 1, 1) - 1;
     const iss = all.filter((r) => r.issueMs !== null && r.issueMs >= start && r.issueMs <= end && r.state !== 'Closed');
     const paid = events.filter((e) => e.ms >= start && e.ms <= end);
-    months.push({ month: ar.fmt(start).slice(3), invoiced: sum(iss, 'preVatN'), count: iss.length, cash: paidAmt(paid),
+    // The same two figures per seller, so sellers can be read side by side.
+    const who = (r) => r.salesName || r.salesEmail || '(ไม่ระบุ)';
+    const bySales = {};
+    for (const r of iss) { const o = bySales[who(r)] || (bySales[who(r)] = { invoiced: 0, count: 0, cash: 0 }); o.invoiced += r.preVatN || 0; o.count++; }
+    for (const e of paid) { const o = bySales[who(e.r)] || (bySales[who(e.r)] = { invoiced: 0, count: 0, cash: 0 }); o.cash += e.amount; }
+    for (const o of Object.values(bySales)) { o.invoiced = round2(o.invoiced); o.cash = round2(o.cash); }
+    months.push({ month: ar.fmt(start).slice(3), invoiced: sum(iss, 'preVatN'), count: iss.length, cash: paidAmt(paid), bySales,
       bySegment: Object.fromEntries([...new Set(iss.map((r) => r.segment || 'Others'))].map((sg) => [sg, sum(iss.filter((r) => (r.segment || 'Others') === sg), 'preVatN')])) });
   }
   const recentPaid = all.filter((r) => r.paidMs !== null && r.paidMs >= today - 90 * DAY && r.cycleDays !== '');
@@ -660,7 +666,8 @@ function summarise(all, today, events = cashEvents(all)) {
 function drillRows(all, today, key, events = cashEvents(all)) {
   const DAY = 86400e3;
   const open = all.filter((r) => (r.state === 'Outstanding' || r.state === 'Overdue') && !r.legacyCheck && !r.old);
-  const [k, a = '', b = ''] = String(key).split('|');
+  const [k, a = '', b = '', c = ''] = String(key).split('|');
+  const who = (r) => r.salesName || r.salesEmail || '(ไม่ระบุ)';
   const seg = (r) => r.segment || 'Others';
   const month = (ms) => (ms === null ? '' : ar.fmt(ms).slice(3));
   const cur = ar.weekEnd(today);
@@ -678,8 +685,8 @@ function drillRows(all, today, key, events = cashEvents(all)) {
   else if (k === 'fc-later') xs = open.filter((r) => r.planMs !== null && r.planMs > last);
   else if (k === 'paid') { paid = true; ev = events.filter((e) => (e.round || e.r.paidWeekMs !== null) && ar.fmt(ar.weekEnd(e.ms)) === a); }
   else if (k === 'aging') xs = open.filter((r) => (!a || seg(r) === a) && (!b || r.aging === b));
-  else if (k === 'month-inv') xs = all.filter((r) => r.issueMs !== null && month(r.issueMs) === a && r.state !== 'Closed' && (!b || seg(r) === b));
-  else if (k === 'month-cash') { paid = true; ev = events.filter((e) => month(e.ms) === a); }
+  else if (k === 'month-inv') xs = all.filter((r) => r.issueMs !== null && month(r.issueMs) === a && r.state !== 'Closed' && (!b || seg(r) === b) && (!c || who(r) === c));
+  else if (k === 'month-cash') { paid = true; ev = events.filter((e) => month(e.ms) === a && (!c || who(e.r) === c)); }
   else if (k === 'sales') xs = open.filter((r) => (r.salesName || r.salesEmail || '(ไม่ระบุ)') === a && (!b || r.state === 'Overdue'));
   else if (k === 'vs') { paid = true; xs = all.filter((r) => r.paidMs !== null && r.paidMs >= today - 90 * DAY && r.paidVsCommit !== '' && (a === 'early' ? r.paidVsCommit < 0 : a === 'late' ? r.paidVsCommit > 0 : r.paidVsCommit === 0)); }
   const preVat = k === 'month-inv';

@@ -190,7 +190,7 @@ table.sum tr.now td{background:var(--primary-soft)}
       <div class="card"><h2>Forecast Cash-In คาดการณ์เงินเข้ารายสัปดาห์</h2><p class="hint">ตามวันที่ลูกค้านัดจ่าย (Date Commit) · ใบที่จ่ายแล้วนับในสัปดาห์ที่รับเงิน</p><div id="fc"></div></div>
       <div class="card"><h2>Actual Cash-In เงินเข้าจริงรายสัปดาห์</h2><p class="hint">ตามวันที่รับเงิน (Date Paid)</p><div id="cash"></div></div>
     </div>
-    <div class="card"><h2>ออก INV และเงินเข้ารายเดือน (12 เดือน)</h2><p class="hint">ยอด INV ก่อน VAT ไม่นับเอกสารยกเลิก / เปลี่ยนเอกสาร</p><div class="wrap" id="months"></div></div>
+    <div class="card"><h2>ออก INV และเงินเข้ารายเดือน (12 เดือน)</h2><p class="hint" id="months-hint">ยอด INV ก่อน VAT ไม่นับเอกสารยกเลิก / เปลี่ยนเอกสาร</p><div class="seg" id="months-by" role="group" aria-label="มุมมองรายเดือน"><button class="on" type="button" data-v="seg">ตามกลุ่มลูกค้า</button><button type="button" data-v="inv">ออก INV ตามเซล</button><button type="button" data-v="cash">เงินเข้าตามเซล</button></div><div class="wrap" id="months"></div></div>
 <div class="sum-wide">
     <div class="card"><h2>ยอดค้างรับตามอายุหนี้</h2><div class="wrap" id="aging"></div></div>
     <div class="card"><h2>ค้างรับแยกตามเซล</h2><div class="wrap" id="bysales"></div></div>
@@ -247,6 +247,7 @@ document.querySelectorAll('#tabs button').forEach((b) => b.onclick = () => {
   $('f-sales').hidden = $('f-q').hidden = sum;
   if (D) render();
 });
+document.querySelectorAll('#months-by button').forEach((b) => b.onclick = () => { MONTHS_BY = b.dataset.v; renderMonths(); });
 // The page opens on the summary; the list filters that do not apply there start hidden.
 document.querySelector('#tabs button[data-t="sum"]').click();
 document.querySelectorAll('#f-state button').forEach((b) => b.onclick = () => { document.querySelectorAll('#f-state button').forEach((x) => x.classList.toggle('on', x === b)); SHOW = 100; render(); });
@@ -701,6 +702,32 @@ function openDoc(iv) {
 let confirmDoc = false;
 
 // ---- drill-down: the companies / invoices behind a figure
+// Monthly table: by customer group (issued), or per seller (issued / cash in) so sellers can be compared.
+let MONTHS_BY = 'seg', MONTHS_S = null, MONTHS_D = null;
+function renderMonths(s, d) {
+  if (s) { MONTHS_S = s; MONTHS_D = d; } else { s = MONTHS_S; d = MONTHS_D; }
+  if (!s) return;
+  document.querySelectorAll('#months-by button').forEach((b) => b.classList.toggle('on', b.dataset.v === MONTHS_BY));
+  if (MONTHS_BY === 'seg') {
+    $('months-hint').textContent = 'ยอด INV ก่อน VAT ไม่นับเอกสารยกเลิก / เปลี่ยนเอกสาร';
+    const segs = [...new Set(s.months.flatMap((m) => Object.keys(m.bySegment)))].sort();
+    $('months').innerHTML = `<table class="sum"><tr><th>เดือน</th>${segs.map((g) => `<th>${esc(g)}</th>`).join('')}<th>ออก INV รวม</th><th>ใบ</th><th>เงินเข้า</th></tr>
+    ${s.months.map((m) => `<tr><td>${esc(m.month)}</td>${segs.map((g) => `<td>${d('month-inv|' + m.month + '|' + g, 'ออก INV ' + m.month + ' · ' + g, m.bySegment[g] || 0)}</td>`).join('')}<td>${d('month-inv|' + m.month, 'ออก INV ' + m.month, m.invoiced)}</td><td>${m.count}</td><td>${d('month-cash|' + m.month, 'เงินเข้า ' + m.month, m.cash)}</td></tr>`).join('')}</table>`;
+    return;
+  }
+  const f = MONTHS_BY === 'inv' ? 'invoiced' : 'cash', key = MONTHS_BY === 'inv' ? 'month-inv' : 'month-cash', word = MONTHS_BY === 'inv' ? 'ออก INV' : 'เงินเข้า';
+  $('months-hint').textContent = MONTHS_BY === 'inv' ? 'ยอด INV ก่อน VAT ตามเดือนที่ออก ไม่นับเอกสารยกเลิก / เปลี่ยนเอกสาร · เรียงเซลตามยอดรวม 12 เดือน' : 'เงินที่เข้าจริงตามเดือนที่เงินเข้า (รวม VAT หลังหัก ณ ที่จ่าย) นับตามเซลเจ้าของ INV · เรียงเซลตามยอดรวม 12 เดือน';
+  const tot = {};
+  s.months.forEach((m) => Object.entries(m.bySales || {}).forEach(([n, o]) => { tot[n] = (tot[n] || 0) + (o[f] || 0); }));
+  const names = Object.keys(tot).filter((n) => Math.round(tot[n]) !== 0).sort((x, y) => tot[y] - tot[x]);
+  const all = names.reduce((t, n) => t + tot[n], 0);
+  const short = (n) => { const m = /\(([^)]+)\)/.exec(n); return m ? m[1] : n.split('@')[0]; };
+  if (!names.length) { $('months').innerHTML = '<p class="small">ไม่มีข้อมูลในช่วง 12 เดือน</p>'; return; }
+  $('months').innerHTML = `<table class="sum"><tr><th>เดือน</th>${names.map((n) => `<th title="${esc(n)}">${esc(short(n))}</th>`).join('')}<th>รวม</th></tr>
+    ${s.months.map((m) => `<tr><td>${esc(m.month)}</td>${names.map((n) => `<td>${d(key + '|' + m.month + '||' + n, word + ' ' + m.month + ' · ' + short(n), ((m.bySales || {})[n] || {})[f] || 0)}</td>`).join('')}<td>${d(key + '|' + m.month, word + ' ' + m.month, m[f])}</td></tr>`).join('')}
+    <tr class="tot"><td>รวม 12 เดือน</td>${names.map((n) => `<td>${fmt0(tot[n])}</td>`).join('')}<td>${fmt0(all)}</td></tr>
+    <tr><td class="small">สัดส่วน</td>${names.map((n) => `<td class="small">${all ? Math.round(tot[n] / all * 100) : 0}%</td>`).join('')}<td></td></tr></table>`;
+}
 const drBtn = (k, t, inner, n) => (n === 0 || inner === '0' || inner === '' ? inner : `<button type="button" class="dr" data-k="${esc(k)}" data-t="${esc(t)}" title="ดูรายชื่อบริษัท">${inner}</button>`);
 function showDrill(title, sub, rows, total, basis) {
   $('d-title').textContent = title;
@@ -927,9 +954,7 @@ function renderSum() {
   $('aging').innerHTML = `<table class="sum"><tr><th>กลุ่ม</th>${B.map((b) => `<th>${b === 'Not due' ? 'ยังไม่ถึงกำหนด' : b + ' วัน'}</th>`).join('')}<th>รวม</th></tr>
     ${s.aging.map((a) => `<tr><td>${esc(a.segment)}</td>${B.map((b) => `<td>${d('aging|' + a.segment + '|' + b, 'ค้างรับ ' + a.segment + ' · ' + bl(b), a[b])}</td>`).join('')}<td>${d('aging|' + a.segment, 'ค้างรับ ' + a.segment, a.total)}</td></tr>`).join('')}
     <tr class="tot"><td>รวม</td>${B.map((b) => `<td>${d('aging||' + b, 'ค้างรับ · ' + bl(b), tot[b])}</td>`).join('')}<td>${d('open', 'ยอดค้างรับทั้งหมด', s.open)}</td></tr></table>`;
-  const segs = [...new Set(s.months.flatMap((m) => Object.keys(m.bySegment)))].sort();
-  $('months').innerHTML = `<table class="sum"><tr><th>เดือน</th>${segs.map((g) => `<th>${esc(g)}</th>`).join('')}<th>ออก INV รวม</th><th>ใบ</th><th>เงินเข้า</th></tr>
-    ${s.months.map((m) => `<tr><td>${esc(m.month)}</td>${segs.map((g) => `<td>${d('month-inv|' + m.month + '|' + g, 'ออก INV ' + m.month + ' · ' + g, m.bySegment[g] || 0)}</td>`).join('')}<td>${d('month-inv|' + m.month, 'ออก INV ' + m.month, m.invoiced)}</td><td>${m.count}</td><td>${d('month-cash|' + m.month, 'เงินเข้า ' + m.month, m.cash)}</td></tr>`).join('')}</table>`;
+  renderMonths(s, d);
   const by = {};
   D.invoices.filter((r) => (r.state === 'Overdue' || r.state === 'Outstanding') && !r.legacyCheck && !r.old && (!$('f-seg').value || (r.segment || 'Others') === $('f-seg').value)).forEach((r) => { const k = r.salesName || r.salesEmail || '(ไม่ระบุ)'; by[k] = by[k] || { open: 0, over: 0, n: 0 }; by[k].open += r.expected; by[k].n++; if (r.state === 'Overdue') by[k].over += r.expected; });
   $('bysales').innerHTML = `<table class="sum"><tr><th>เซล</th><th>ค้างรับ</th><th>เกินกำหนด</th><th>ใบ</th></tr>${Object.entries(by).sort((a, b) => b[1].open - a[1].open).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${d('sales|' + k, 'ค้างรับของ ' + k, v.open)}</td><td>${d('sales|' + k + '|over', 'เกินกำหนดของ ' + k, v.over)}</td><td>${v.n}</td></tr>`).join('')}</table>`;

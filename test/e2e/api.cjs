@@ -686,6 +686,20 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
       ok(s === 200 && db().ReceiptRequests.find((y) => y.rtRequestId === r.rtRequestId).sentStatus === 'sent', 'accounting mark it sent as usual: ' + (j.error || '')); }
     const d0 = db().ReceiptRequests.find((x) => x.status === 'new');
     if (d0) { [s, j] = await call(ADMIN, 'PATCH', '/api/invoice-requests', { action: 'rt_original', rtRequestId: d0.rtRequestId, recipient: 'A', address: 'B' }); ok(s === 409, 'not before the receipt is issued: ' + s); } }
+  console.log('── 31. monthly issued / cash in per seller');
+  { [s, j] = await call(ACCT, 'GET', '/api/invoice-requests?view=ar'); const ms = j.summary.months;
+    const m0 = ms.find((m) => Object.keys(m.bySales || {}).length);
+    ok(!!m0, 'months carry a per-seller split');
+    if (m0) {
+      const r2 = (n) => Math.round(n * 100) / 100, vals = Object.values(m0.bySales);
+      ok(Math.abs(r2(vals.reduce((t, o) => t + o.invoiced, 0)) - m0.invoiced) < 0.02 && Math.abs(r2(vals.reduce((t, o) => t + o.cash, 0)) - m0.cash) < 0.02, `sellers add up to the month: ${m0.month} issued ${m0.invoiced} cash ${m0.cash}`);
+      ok(vals.reduce((t, o) => t + o.count, 0) === m0.count, 'INV counts add up');
+      const [name, o] = Object.entries(m0.bySales).sort((a, b) => b[1].invoiced - a[1].invoiced)[0];
+      [s, j] = await call(ACCT, 'GET', '/api/invoice-requests?view=ar&drill=' + encodeURIComponent(`month-inv|${m0.month}||${name}`)); ok(s === 200 && Math.abs(j.total - o.invoiced) < 0.02 && j.rows.every((x) => (x.salesName || '(ไม่ระบุ)') === name), `drill lists only that seller's INVs: ${name} ${j.total}`);
+      const mc = ms.find((m) => Object.values(m.bySales || {}).some((x) => x.cash > 0));
+      if (mc) { const [n2, o2] = Object.entries(mc.bySales).find(([, x]) => x.cash > 0);
+        [s, j] = await call(ACCT, 'GET', '/api/invoice-requests?view=ar&drill=' + encodeURIComponent(`month-cash|${mc.month}||${n2}`)); ok(s === 200 && Math.abs(j.total - o2.cash) < 0.02, `cash drill matches: ${n2} ${j.total} vs ${o2.cash}`); }
+    } }
   console.log('── 29. reminder sent before the due date');
   { [s, j] = await call(COL, 'GET', '/api/invoice-requests?view=ar'); const rem = j.lists.remind;
     const r0 = j.invoices.find((x) => ['Outstanding', 'Overdue'].includes(x.state));

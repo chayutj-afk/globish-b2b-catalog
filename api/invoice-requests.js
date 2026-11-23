@@ -43,7 +43,7 @@ const rtNoAdd = (cur, no) => { const xs = String(cur || '').split(/\s*,\s*/).fil
 const hub = require('../lib/hub');
 const drive = require('../lib/drive');
 const notify = require('../lib/notify');
-const { OPP_ONLY_RE, OPP_RE, normaliseOppId } = require('../lib/crm');
+const { OPP_ONLY_RE, OPP_RE, MAX_OPP, normaliseOppId, oppList, oppAll } = require('../lib/crm');
 const { validTaxId, normBranch } = require('../lib/taxid');
 const ar = require('../lib/ar');
 const peakdoc = require('../lib/peakdoc');
@@ -118,8 +118,9 @@ function validate(b) {
   };
   if (!r.qtNo) throw bad('ใส่เลขที่ใบเสนอราคา (QT) ที่ต้องการออก INV');
   if (!['0', '1', '2', '3', '5'].includes(r.whtRate)) throw bad('เลือกหัก ณ ที่จ่าย (ไม่หัก / 1% / 2% / 3% / 5%)');
-  if (/^CRM-LEAD-/.test(r.opportunityId)) throw bad('ออก INV ได้เมื่อ lead ถูก convert เป็น Opportunity แล้วเท่านั้น ใส่ Opportunity ID (CRM-OPP-YYYY-NNNNN)');
-  if (r.opportunityId && !OPP_ONLY_RE.test(r.opportunityId)) throw bad('Opportunity ID ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN');
+  if (/CRM-LEAD-/.test(r.opportunityId)) throw bad('ออก INV ได้เมื่อ lead ถูก convert เป็น Opportunity แล้วเท่านั้น ใส่ Opportunity ID (CRM-OPP-YYYY-NNNNN)');
+  if (oppList(r.opportunityId).length > MAX_OPP) throw bad(`ใส่ Opportunity ID ได้ไม่เกิน ${MAX_OPP} รหัสต่อเอกสาร`);
+  if (r.opportunityId && !oppAll(r.opportunityId, OPP_ONLY_RE)) throw bad('Opportunity ID ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN');
   checkEntity(r, 'ลูกค้าตาม QT');
   if (!EVIDENCE.includes(r.evidenceType)) throw bad('เลือกประเภทหลักฐานที่ลูกค้ายอมรับ');
   if (r.evidenceType === 'อื่นๆ' && !r.evidenceOther) throw bad('ระบุว่าหลักฐานเป็นเอกสารอะไร');
@@ -217,7 +218,7 @@ async function create(req, res, user) {
       throw bad(`QT ${linked.peakQtNo} มีคำขอแก้ไขที่รอฝ่ายบัญชีอยู่ ขอ INV ได้หลังฝ่ายบัญชีแก้เสร็จ`, 409);
     }
     // A QT asked for with a Lead ID does not pass its ID on: the INV needs the Opportunity ID.
-    if (!r.opportunityId && !/^CRM-LEAD-/.test(linked.opportunityId || '')) r.opportunityId = linked.opportunityId || '';
+    if (!r.opportunityId && !/CRM-LEAD-/.test(linked.opportunityId || '')) r.opportunityId = linked.opportunityId || '';
     r.segment = linked.segment || r.segment;
   }
   // Customer type (PEAK G012): the QT's own, or picked on the form for a QT outside the app.

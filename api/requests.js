@@ -11,7 +11,7 @@ const { validTaxId, normBranch } = require('../lib/taxid');
 const hub = require('../lib/hub');
 const peak = require('../lib/peak');
 const qtdraft = require('../lib/qtdraft');
-const { OPP_RE, normaliseOppId } = require('../lib/crm');
+const { OPP_RE, MAX_OPP, normaliseOppId, oppList, oppAll } = require('../lib/crm');
 
 const SEGMENTS = ['B2B', 'B2C', 'MaoMao', 'B2S', 'B2E', 'Others'];
 // The rules the old segments had (requests made before customer types came from PEAK, and tests).
@@ -64,7 +64,8 @@ function validate(b, type) {
   r.segment = type.name;
   if (!DEAL_TYPES.includes(r.dealType)) throw bad('เลือกประเภทดีล (New Logo / Retention / Others)');
   if (!type.opp) r.opportunityId = '';
-  if (r.opportunityId && !OPP_RE.test(r.opportunityId)) throw bad('Opportunity ID / Lead ID ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN หรือ CRM-LEAD-YYYY-NNNNN');
+  if (oppList(r.opportunityId).length > MAX_OPP) throw bad(`ใส่ Opportunity ID ได้ไม่เกิน ${MAX_OPP} รหัสต่อเอกสาร`);
+  if (r.opportunityId && !oppAll(r.opportunityId, OPP_RE)) throw bad('Opportunity ID / Lead ID ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN หรือ CRM-LEAD-YYYY-NNNNN');
   if (type.opp && !r.opportunityId) throw bad(`ใส่ Opportunity ID หรือ Lead ID จาก CRM (CRM-OPP-YYYY-NNNNN / CRM-LEAD-YYYY-NNNNN) สำหรับลูกค้า ${r.segment}`);
   if (!r.company) throw bad('กรอกชื่อบริษัทหรือหน่วยงาน');
   // The 13-digit tax ID (+ branch) is the single source of truth for the customer in every segment.

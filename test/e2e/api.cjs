@@ -722,5 +722,14 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
       ok(e2.status === 'done' && e2.newDocNo === other.ivNo, 'edit request done, points at the INV in use');
       [s, j] = await call(ACCT, 'GET', '/api/invoice-requests?view=ar'); const row = (j.invoices || []).find((x) => x.ivNo === old.ivNo); ok(!row || !['Outstanding', 'Overdue'].includes(row.state), 'no longer counted as open');
     } }
+  console.log('── 30. one document for several CRM opportunities');
+  { [s, j] = await call(BENZ, 'POST', '/api/requests', qtBody({ company: 'บริษัท หลายดีล จำกัด', opportunityId: 'crm-opp-2026-00201, CRM-OPP-2026-00202 , CRM-OPP-2026-00201', confirmDuplicate: true })); ok(s === 200, 'QT with two Opportunity IDs: ' + (j.error || ''));
+    const qm = j.requestId; let rm = req(qm);
+    ok(rm.opportunityId === 'CRM-OPP-2026-00201, CRM-OPP-2026-00202', 'stored as a clean list, duplicates dropped: ' + rm.opportunityId);
+    [s, j] = await call(ACCT, 'PATCH', '/api/requests', { requestId: qm, action: 'approve', seen: seen(rm) }); ok(s === 200, 'approved ' + (j.error || '')); rm = req(qm); console.log('   ', rm.status, (rm.peakNote || '').slice(0, 120));
+    const pm = peak().quotations.find((x) => x.reference === qm);
+    ok(pm && pm.tags.includes('CRM-OPP-2026-00201') && pm.tags.includes('CRM-OPP-2026-00202') && pm.tags.includes(qm), 'PEAK QT carries one tag per Opportunity: ' + (pm ? pm.tags.join(' | ') : 'no QT'));
+    [s, j] = await call(BENZ, 'POST', '/api/requests', qtBody({ company: 'บริษัท หลายดีล สอง จำกัด', opportunityId: 'CRM-OPP-2026-00201, CRM-OPP-2026-0020', confirmDuplicate: true })); ok(s === 400 && /รูปแบบ/.test(j.error), 'a half-typed extra ID is refused, not dropped');
+  }
   done();
 })().catch((e) => { console.error('CRASH', e); ok(false, 'CRASH: the run stopped early: ' + e.message); done(); process.exitCode = 1; });

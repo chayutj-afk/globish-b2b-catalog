@@ -52,6 +52,8 @@ test('INV requests accept an optional, well-formed Opportunity ID', () => {
   const base = { poNeeded: 'no', financeContact: 'A', financeEmail: 'a@b.co', financePhone: '0812345678', whtRate: '3', qtNo: 'QO-1', company: 'Co', taxId: '0105555555554', evidenceType: 'PO จากลูกค้า', file: { name: 'qt.pdf', type: 'application/pdf', data: 'JVBERi0=' }, invoices: [{ ...L, amountPreVat: 100 }] };
   assert.equal(inv.validate(base).r.opportunityId, '');
   assert.throws(() => inv.validate({ ...base, opportunityId: 'x' }), /รูปแบบ/);
+  assert.equal(inv.validate({ ...base, opportunityId: 'CRM-OPP-2026-00001,crm-opp-2026-00002' }).r.opportunityId, 'CRM-OPP-2026-00001, CRM-OPP-2026-00002');
+  assert.throws(() => inv.validate({ ...base, opportunityId: 'CRM-OPP-2026-00001, CRM-LEAD-2026-00002' }), /convert/);
 });
 
 test('contact lookup splits PEAK contacts into this branch and the others', () => {
@@ -63,3 +65,11 @@ test('contact lookup splits PEAK contacts into this branch and the others', () =
   assert.equal(split(all, '00009').otherBranches.length, 2);
 });
 
+
+test('several Opportunity IDs on one document', () => {
+  const crm = require('../lib/crm');
+  assert.equal(crm.normaliseOppId('crm-opp-2026-00001 , CRM-OPP-2026-00002\nhttps://crm/app/opportunity/CRM-OPP-2026-00001'), 'CRM-OPP-2026-00001, CRM-OPP-2026-00002');
+  assert.deepEqual(crm.oppList(''), []);
+  assert.equal(validate({ ...qt, opportunityId: 'CRM-OPP-2026-00001, CRM-LEAD-2026-00009' }).r.opportunityId, 'CRM-OPP-2026-00001, CRM-LEAD-2026-00009');
+  assert.throws(() => validate({ ...qt, opportunityId: Array.from({ length: 6 }, (_, i) => `CRM-OPP-2026-0000${i + 1}`).join(',') }), /ไม่เกิน 5/);
+});

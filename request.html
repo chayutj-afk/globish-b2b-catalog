@@ -42,6 +42,7 @@ details.more{margin-top:8px}details.more>summary{cursor:pointer;font-size:12.5px
 .opp .od{flex:1 1 0;min-width:0;max-width:32px;height:36px;padding:0;text-align:center;border:1px solid var(--line2);border-radius:4px;background:var(--input);color:var(--head);font-family:ui-monospace,Menlo,monospace;font-size:15px}
 .opp .od:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft)}
 .opp-dash{color:var(--muted);padding:0 2px}
+.opp-more{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px}.opp-more .chip-x{display:inline-flex;align-items:center;gap:4px;font-family:ui-monospace,Menlo,monospace;font-size:12px;background:var(--input);border:1px solid var(--line2);border-radius:999px;padding:3px 4px 3px 10px;color:var(--head)}.opp-more .chip-x button{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:14px;line-height:1;min-width:24px;min-height:24px;border-radius:50%}.opp-more .chip-x button:hover{color:var(--bad-ink)}.opp-more input{width:190px;height:32px;font-family:ui-monospace,Menlo,monospace;font-size:12px}
 .note-box{margin-top:5px;padding:5px 8px;background:var(--primary-soft);border:1px solid var(--primary-line);border-radius:4px}
 .newc{border:1px dashed var(--accent,#f60);border-radius:10px;padding:10px 12px;margin:6px 0 10px}.newc-h{font-size:13px;margin-bottom:6px;color:var(--accent,#c50)}
 .hbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
@@ -99,7 +100,7 @@ details.more{margin-top:8px}details.more>summary{cursor:pointer;font-size:12.5px
       <div class="fg"><label>ประเภทดีล</label>
         <select id="q-deal"><option value="New Logo">New Logo (ลูกค้าใหม่)</option><option value="Retention">Retention (ต่อสัญญา)</option><option value="Others">อื่นๆ</option></select></div>
       <div class="fg" id="q-opp-wrap"><label id="q-opp-label">Opportunity ID / Lead ID ใน CRM *</label>
-        <div class="opp" id="q-opp" data-p="q"></div><input type="hidden" id="q-opp-y"><input type="hidden" id="q-opp-n"></div>
+        <div class="opp" id="q-opp" data-p="q"></div><input type="hidden" id="q-opp-y"><input type="hidden" id="q-opp-n"><input type="hidden" id="q-opp-x"><div class="opp-more" id="q-opp-more"></div></div>
     </div>
     <div class="row c3" id="q-cls" hidden></div>
     <div class="row c3">
@@ -172,7 +173,7 @@ details.more{margin-top:8px}details.more>summary{cursor:pointer;font-size:12.5px
     <div id="i-balance"></div>
     <div class="row c4">
       <div class="fg"><label>ประเภทลูกค้า <span class="small">(PEAK)</span> *</label><select id="i-seg" class="ctype" data-blank="1" onchange="onInvSeg()"><option value="">— เลือก —</option><option value="B2B" data-code="G012-00002">B2B</option><option value="B2C" data-code="G012-00001">B2C</option><option value="B2S" data-code="G012-00003">B2S</option></select></div>
-      <div class="fg" id="i-opp-wrap"><label>Opportunity ID ใน CRM *</label><div class="opp" id="i-opp" data-p="i"></div><div class="sub" id="i-opp-hint"></div><input type="hidden" id="i-opp-y"><input type="hidden" id="i-opp-n"></div>
+      <div class="fg" id="i-opp-wrap"><label>Opportunity ID ใน CRM *</label><div class="opp" id="i-opp" data-p="i"></div><div class="sub" id="i-opp-hint"></div><input type="hidden" id="i-opp-y"><input type="hidden" id="i-opp-n"><input type="hidden" id="i-opp-x"><div class="opp-more" id="i-opp-more"></div></div>
       <div class="fg"><label>เลขผู้เสียภาษีของลูกค้าตาม QT *</label><input id="i-tax" type="text" maxlength="13" inputmode="numeric" placeholder="13 หลัก" oninput="digits(this);taxHint('i')"><div class="sub" id="i-tax-hint"></div></div>
       <div class="fg"><label>รหัสสาขา</label><input id="i-branch" type="text" maxlength="5" inputmode="numeric" placeholder="00000" oninput="digits(this)"></div>
     </div>
@@ -379,8 +380,38 @@ function oppPaste(e, p) {
 }
 // The ID is the Opportunity's, or the Lead's while the lead is not converted yet (same shape, other prefix).
 const oppKind = (p) => { const k = $(p + '-opp').querySelector('.opp-kind'); return k && k.value === 'LEAD' ? 'LEAD' : 'OPP'; };
-function getOpp(p) { const y = $(p + '-opp-y').value, n = $(p + '-opp-n').value; return y || n ? `CRM-${oppKind(p)}-${y}-${n}` : ''; }
-function setOpp(p, id) { const m = /CRM-(OPP|LEAD)-(\d{4})-(\d{5})/.exec(id || ''); $(p + '-opp-y').value = m ? m[2] : ''; $(p + '-opp-n').value = m ? m[3] : ''; const k = $(p + '-opp').querySelector('.opp-kind'); if (k && m) k.value = m[1]; paintOpp(p); }
+// One document can cover several CRM records: the first ID sits in the digit boxes, the others in p-opp-x ("ID, ID").
+const OPP_MAX = 5;
+const oppExtra = (p) => ($(p + '-opp-x').value || '').split(',').map((x) => x.trim()).filter(Boolean);
+const oppFirst = (p) => { const y = $(p + '-opp-y').value, n = $(p + '-opp-n').value; return y || n ? `CRM-${oppKind(p)}-${y}-${n}` : ''; };
+function getOpp(p) { return [...new Set([oppFirst(p), ...oppExtra(p)].filter(Boolean))].join(', '); }
+const oppIds = (v) => String(v || '').split(',').map((x) => x.trim()).filter(Boolean);
+function setOpp(p, id) {
+  const all = String(id || '').toUpperCase().match(/CRM-(?:OPP|LEAD)-\d{4}-\d{5}/g) || [];
+  const m = /CRM-(OPP|LEAD)-(\d{4})-(\d{5})/.exec(all[0] || '');
+  $(p + '-opp-y').value = m ? m[2] : ''; $(p + '-opp-n').value = m ? m[3] : ''; $(p + '-opp-x').value = [...new Set(all.slice(1))].filter((x) => x !== all[0]).join(', ');
+  const k = $(p + '-opp').querySelector('.opp-kind'); if (k && m) k.value = m[1]; paintOpp(p);
+}
+function paintOppMore(p) {
+  const el = $(p + '-opp-more'); if (!el) return;
+  const xs = oppExtra(p), full = xs.length + 1 >= OPP_MAX;
+  el.innerHTML = xs.map((x, i) => `<span class="chip-x">${esc(x)}<button type="button" aria-label="เอา ${esc(x)} ออก" title="เอาออก" onclick="oppDel('${p}',${i})">×</button></span>`).join('')
+    + (full ? `<span class="small">ครบ ${OPP_MAX} รหัสแล้ว</span>` : `<input type="text" id="${p}-opp-add" maxlength="60" autocomplete="off" placeholder="${p === 'i' ? 'CRM-OPP-2026-00000' : 'CRM-OPP- หรือ CRM-LEAD-'}" aria-label="Opportunity ID เพิ่มเติม" onkeydown="if(event.key==='Enter'){event.preventDefault();oppAdd('${p}')}"><button class="btn btn-g btn-sm" type="button" onclick="oppAdd('${p}')">＋ เพิ่ม ID</button><span class="small" id="${p}-opp-addmsg">${xs.length ? '' : 'เอกสารใบเดียวครอบคลุมหลาย Opportunity ได้ ใส่ ID ที่เหลือตรงนี้'}</span>`);
+}
+function oppAdd(p) {
+  const inp = $(p + '-opp-add'), say = (t) => { $(p + '-opp-addmsg').innerHTML = `<span class="err-line">${esc(t)}</span>`; };
+  const t = (inp.value || '').trim().toUpperCase(); if (!t) return;
+  const m = /(?:CRM-(OPP|LEAD)-)?(\d{4})-?(\d{5})(?!\d)/.exec(t);
+  if (!m) return say('รูปแบบต้องเป็น CRM-OPP-YYYY-NNNNN');
+  const id = `CRM-${p === 'i' ? 'OPP' : (m[1] || oppKind(p))}-${m[2]}-${m[3]}`;
+  if (p === 'i' && m[1] === 'LEAD') return say('ออก INV ใช้ Opportunity ID เท่านั้น');
+  const xs = oppExtra(p);
+  if (id === oppFirst(p) || xs.includes(id)) return say('รหัสนี้ใส่ไว้แล้ว');
+  $(p + '-opp-x').value = [...xs, id].join(', '); paintOppMore(p);
+  const again = $(p + '-opp-add'); if (again) again.focus();
+  $(p + '-opp-x').dispatchEvent(new Event('input', { bubbles: true }));
+}
+function oppDel(p, i) { const xs = oppExtra(p); xs.splice(i, 1); $(p + '-opp-x').value = xs.join(', '); paintOppMore(p); $(p + '-opp-x').dispatchEvent(new Event('input', { bubbles: true })); }
 // Opportunity ID as digit boxes: CRM-OPP- [□□□□]-[□□□□□]; the hidden p-opp-y / p-opp-n hold the values.
 function buildOpp(p) {
   const box = (k) => `<input class="od" data-k="${k}" type="text" inputmode="numeric" maxlength="1" aria-label="หลักที่ ${k + 1}" autocomplete="off">`;
@@ -404,7 +435,7 @@ function buildOpp(p) {
     b.addEventListener('focus', () => b.select());
   });
 }
-function paintOpp(p) { const el = $(p + '-opp'); if (!el) return; const d = ($(p + '-opp-y').value + '    ').slice(0, 4) + ($(p + '-opp-n').value + '     ').slice(0, 5); el.querySelectorAll('.od').forEach((b, k) => { b.value = d[k].trim(); }); }
+function paintOpp(p) { paintOppMore(p); const el = $(p + '-opp'); if (!el) return; const d = ($(p + '-opp-y').value + '    ').slice(0, 4) + ($(p + '-opp-n').value + '     ').slice(0, 5); el.querySelectorAll('.od').forEach((b, k) => { b.value = d[k].trim(); }); }
 function validTax(s) { if (!/^\d{13}$/.test(s)) return false; let t = 0; for (let i = 0; i < 12; i++) t += Number(s[i]) * (13 - i); return (11 - (t % 11)) % 10 === Number(s[12]); }
 function disc(raw, gross) { const d = String(raw ?? '').trim().replace(/,/g, ''); if (!d) return 0; if (/^\d+(\.\d+)?%$/.test(d)) return gross * Number(d.slice(0, -1)) / 100; return /^\d+(\.\d+)?$/.test(d) ? Number(d) : NaN; }
 function msg(id, kind, text) { $(id).innerHTML = text ? `<div class="msg ${kind}">${esc(text)}</div>` : ''; }
@@ -596,7 +627,7 @@ function changeSegment() {
   CART = CART.filter((it) => KINDS[seg].includes(kindOf(it)));
   const dropped = before - CART.length;
   if (dropped) saveCart();
-  if (!oppOf(seg)) { $('q-opp-y').value = ''; $('q-opp-n').value = ''; paintOpp('q'); }
+  if (!oppOf(seg)) { $('q-opp-y').value = ''; $('q-opp-n').value = ''; $('q-opp-x').value = ''; paintOpp('q'); }
   onSegment();
   msg('q-msg', dropped ? 'info' : '', dropped ? `เปลี่ยนเป็น ${seg} แล้ว ระบบลบ ${dropped} รายการที่ ${seg} ใช้ไม่ได้ออก` : '');
   saveDraft();
@@ -919,7 +950,7 @@ async function submitQT() {
   if (body.creditTermDays === '') return msg('q-msg', 'err', 'ใส่เครดิตเทอม (วัน)');
   if (body.whtRate === '') return msg('q-msg', 'err', 'เลือกหัก ณ ที่จ่าย (ไม่หัก / 1% / 2% / 3% / 5%)');
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.customerEmail)) return msg('q-msg', 'err', 'ใส่อีเมลลูกค้าสำหรับส่งเอกสาร');
-  if (body.opportunityId && !OPP_OK(body.opportunityId)) return msg('q-msg', 'err', 'รหัส CRM ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN หรือ CRM-LEAD-YYYY-NNNNN');
+  if (body.opportunityId && !oppIds(body.opportunityId).every(OPP_OK)) return msg('q-msg', 'err', 'รหัส CRM ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN หรือ CRM-LEAD-YYYY-NNNNN');
   if (body.taxId.length !== 13) return msg('q-msg', 'err', 'กรอกเลขประจำตัวผู้เสียภาษี 13 หลัก (บังคับทุกกลุ่มลูกค้า บุคคลธรรมดาใช้เลขบัตรประชาชน)');
   if (!/^\d{5}$/.test(body.branch)) return msg('q-msg', 'err', 'เลือกหรือกรอกรหัสสาขา 5 หลัก');
   const badSvc = CART.find((it) => kindOf(it) === 'service' && it.svc !== 'ok' && it.svc !== 'inactive');
@@ -940,7 +971,7 @@ async function submitQT() {
     if (!d) { msg('q-msg', 'info', 'ยังไม่ได้ส่ง ดูคำขอเดิมได้ที่ "คำขอของฉัน"'); return; }
     const doneHtml = `<div class="done-card"><b>✓ ส่งคำขอ ${esc(d.requestId)} แล้ว</b><div style="margin:6px 0 10px">${d.vatMode === 'incl' ? `ยอดรวม VAT ${fmt(d.totalInclVat)} (ก่อน VAT ${fmt(d.total)})` : `ยอดก่อน VAT ${fmt(d.total)}`} · ${esc(d.message)}${d.belowFloor ? '<br>มีรายการต่ำกว่าราคาขั้นต่ำ Catalog (บันทึกไว้ให้ผู้อนุมัติเห็น)' : ''}</div><button class="btn btn-o btn-sm" onclick="go('mine')">ดูสถานะในคำขอของฉัน</button></div>`;
     CART = []; saveCart(); renderItems();
-    ['q-opp-y', 'q-opp-n', 'q-tax', 'q-branch', 'q-client', 'q-company', 'q-date', 'q-term', 'q-wht', 'q-note', 'q-email', 'q-replaces', 'nc-type', 'nc-prefix', 'nc-phone', 'nc-addr', 'nc-sub', 'nc-dist', 'nc-prov', 'nc-post', 'nc-cname', 'nc-cphone'].forEach((id) => { $(id).value = ''; }); paintOpp('q'); showNewC('q', false); $('q-segment').value = ''; changeSegment(); prefillClasses(true);
+    ['q-opp-y', 'q-opp-n', 'q-opp-x', 'q-tax', 'q-branch', 'q-client', 'q-company', 'q-date', 'q-term', 'q-wht', 'q-note', 'q-email', 'q-replaces', 'nc-type', 'nc-prefix', 'nc-phone', 'nc-addr', 'nc-sub', 'nc-dist', 'nc-prov', 'nc-post', 'nc-cname', 'nc-cphone'].forEach((id) => { $(id).value = ''; }); paintOpp('q'); showNewC('q', false); $('q-segment').value = ''; changeSegment(); prefillClasses(true); paintOpp('q');
     onTaxInput('q');
     clearDraft();
     taxHint('q'); loadAll();
@@ -1090,7 +1121,7 @@ function onPickQT() {
   freshenQT(q);
   if (q) {
     $('i-qt').value = q.peakQtNo || ''; $('i-company').value = q.company || ''; $('i-tax').value = q.taxId || '';
-    $('i-branch').value = q.branch || ''; const lead = /^CRM-LEAD-/.test(q.opportunityId || ''); setOpp('i', lead ? '' : q.opportunityId); taxHint('i');
+    $('i-branch').value = q.branch || ''; const lead = /CRM-LEAD-/.test(q.opportunityId || ''); setOpp('i', lead ? '' : q.opportunityId); taxHint('i');
     $('i-opp-hint').textContent = lead ? `QT นี้ขอด้วย Lead ID (${q.opportunityId}) · ออก INV ได้เมื่อ convert เป็น Opportunity แล้ว ใส่ Opportunity ID ที่ได้จาก CRM` : '';
     $('i-seg').value = q.segment || '';
     if (q.whtRate !== undefined && q.whtRate !== '') { $('i-wht').value = q.whtRate; $('i-wht-hint').textContent = 'ดึงจาก QT ' + whtText(q.whtRate) + ' · เปลี่ยนได้ถ้าใบนี้ต่างจาก QT'; }
@@ -1129,7 +1160,7 @@ async function submitINV() {
   if (!body.segment) return msg('i-msg', 'err', 'เลือกกลุ่มลูกค้า');
   if (body.whtRate === '') return msg('i-msg', 'err', 'เลือกหัก ณ ที่จ่าย (ไม่หัก / 1% / 2% / 3% / 5%)');
   if (oppOf(body.segment) && !body.opportunityId) return msg('i-msg', 'err', `ใส่ Opportunity ID จาก CRM สำหรับลูกค้า ${body.segment} (lead ต้อง convert เป็น Opportunity ก่อนออก INV)`);
-  if (body.opportunityId && !/^CRM-OPP-\d{4}-\d{5}$/.test(body.opportunityId)) return msg('i-msg', 'err', 'Opportunity ID ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN');
+  if (body.opportunityId && !oppIds(body.opportunityId).every((x) => /^CRM-OPP-\d{4}-\d{5}$/.test(x))) return msg('i-msg', 'err', 'Opportunity ID ต้องเป็นรูปแบบ CRM-OPP-YYYY-NNNNN');
   const badInv = INVS.findIndex((x) => !x.students || !x.wantedIssueDate || x.creditTermDays === '' || x.creditTermDays === undefined);
   if (badInv >= 0) return msg('i-msg', 'err', `INV ใบที่ ${badInv + 1}: ใส่จำนวนผู้เรียน วันที่ต้องการให้ลงใน INV และเครดิตเทอมให้ครบ`);
   const f = $('i-file').files[0];
@@ -1174,7 +1205,7 @@ async function submitINV() {
     if (!d) { msg('i-msg', 'info', 'ยังไม่ได้ส่ง ดูคำขอเดิมได้ที่ "คำขอของฉัน"'); return; }
     INV_DIRTY = false;
     $('i-msg').innerHTML = `<div class="done-card"><b>✓ ส่งคำขอ ${esc(d.batchId)} (${d.ivRequestIds.length} ใบ) แล้ว</b><div style="margin:6px 0 10px">${d.remaining !== null && d.remaining !== undefined ? `QT คงเหลือ ${fmt(d.remaining)} · ` : ''}${esc(d.message)}</div><button class="btn btn-o btn-sm" onclick="go('mine');setMine('inv',document.querySelectorAll('#mine-seg button')[1])">ดูสถานะในคำขอของฉัน</button></div>`;
-    ['i-req', 'i-qt', 'i-seg', 'i-wht', 'i-opp-y', 'i-opp-n', 'i-company', 'i-tax', 'i-branch', 'i-evother', 'i-fin-name', 'i-fin-email', 'i-fin-phone', 'i-note', 'i-over', 'i-off', 'i-poneed', 'i-paycycle'].forEach((id) => { $(id).value = ''; }); paintOpp('i');
+    ['i-req', 'i-qt', 'i-seg', 'i-wht', 'i-opp-y', 'i-opp-n', 'i-opp-x', 'i-company', 'i-tax', 'i-branch', 'i-evother', 'i-fin-name', 'i-fin-email', 'i-fin-phone', 'i-note', 'i-over', 'i-off', 'i-poneed', 'i-paycycle'].forEach((id) => { $(id).value = ''; }); paintOpp('i');
     $('i-file').value = ''; $('i-qt').readOnly = false; $('i-seg').disabled = false; onInvSeg(); $('i-qt-hint').textContent = ''; INVS = [blankInv()]; renderInvs(); taxHint('i'); onPickQT();
     loadAll();
   } catch (e) { msg('i-msg', 'err', e.message); }
@@ -2117,7 +2148,7 @@ async function markSent(id) {
 
 // ─── QT draft: kept in this browser so a trip to the catalog doesn't lose it ─
 const DRAFT_KEY = 'gc_qt_draft_v1';
-const DRAFT_FIELDS = ['q-segment', 'q-deal', 'q-opp-y', 'q-opp-n', 'q-tax', 'q-branch', 'q-client', 'q-company', 'q-lang', 'q-date', 'q-term', 'q-wht', 'q-po', 'q-note', 'q-email', 'q-replaces', 'nc-type', 'nc-prefix', 'nc-phone', 'nc-addr', 'nc-sub', 'nc-dist', 'nc-prov', 'nc-post', 'nc-cname', 'nc-cphone'];
+const DRAFT_FIELDS = ['q-segment', 'q-deal', 'q-opp-y', 'q-opp-n', 'q-opp-x', 'q-tax', 'q-branch', 'q-client', 'q-company', 'q-lang', 'q-date', 'q-term', 'q-wht', 'q-po', 'q-note', 'q-email', 'q-replaces', 'nc-type', 'nc-prefix', 'nc-phone', 'nc-addr', 'nc-sub', 'nc-dist', 'nc-prov', 'nc-post', 'nc-cname', 'nc-cphone'];
 function saveDraft() { try { const d = {}; DRAFT_FIELDS.forEach((id) => { d[id] = $(id).value; }); localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch {} }
 function restoreDraft() { try { const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null'); if (d) DRAFT_FIELDS.forEach((id) => { if (d[id] !== undefined && d[id] !== null) $(id).value = d[id]; }); } catch {} }
 function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch {} }
@@ -2141,7 +2172,7 @@ function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch {} }
   // so a later visit (or a package added from the Catalog) never lands on top of an old, half-written request.
   // Only the "เลือกจาก B2B Catalog" trip keeps the draft (data-keep).
   let KEEP = false;
-  const QT_FIELDS = ['q-opp-y', 'q-opp-n', 'q-tax', 'q-branch', 'q-client', 'q-company', 'q-date', 'q-term', 'q-wht', 'q-note', 'q-email'];
+  const QT_FIELDS = ['q-opp-y', 'q-opp-n', 'q-opp-x', 'q-tax', 'q-branch', 'q-client', 'q-company', 'q-date', 'q-term', 'q-wht', 'q-note', 'q-email'];
   const dirty = () => ['r-tax', 'r-name', 'r-price', 'r-pkg'].some((id) => $(id).value.trim()) || CART.length > 0 || QT_FIELDS.some((id) => $(id).value.trim()) || !!$('i-qt').value.trim() || (INV_DIRTY && INVS.some((x) => x.amountPreVat || x.wantedIssueDate));
   const clearAll = () => { try { localStorage.removeItem(CART_KEY); localStorage.removeItem(DRAFT_KEY); } catch {} };
   const leaveAsk = () => ask({ kind: 'warn', title: 'ออกจากหน้านี้?', ok: 'ออกและล้างข้อมูล', cancel: 'อยู่ต่อ',

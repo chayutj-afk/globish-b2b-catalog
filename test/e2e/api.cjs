@@ -745,5 +745,12 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
     ok(pm && pm.tags.includes('CRM-OPP-2026-00201') && pm.tags.includes('CRM-OPP-2026-00202') && pm.tags.includes(qm), 'PEAK QT carries one tag per Opportunity: ' + (pm ? pm.tags.join(' | ') : 'no QT'));
     [s, j] = await call(BENZ, 'POST', '/api/requests', qtBody({ company: 'บริษัท หลายดีล สอง จำกัด', opportunityId: 'CRM-OPP-2026-00201, CRM-OPP-2026-0020', confirmDuplicate: true })); ok(s === 400 && /รูปแบบ/.test(j.error), 'a half-typed extra ID is refused, not dropped');
   }
+  console.log('── 32. a customer PEAK does not have needs the new-customer details');
+  { [s, j] = await call(BENZ, 'POST', '/api/requests', qtBody({ company: 'บริษัท ไม่เคยมี จำกัด', taxId: '0105540099991', clientCode: '', confirmDuplicate: true })); ok(s === 400 && /ยังไม่มีลูกค้า/.test(j.error), 'no PEAK code and no details → refused at submit: ' + j.error);
+    [s, j] = await call(BENZ, 'POST', '/api/requests', qtBody({ company: 'บริษัท ไม่เคยมี จำกัด', taxId: '0105540099991', clientCode: '', confirmDuplicate: true, newContact: { type: '2', address: '1 ถนนทดสอบ', province: 'กรุงเทพมหานคร', postCode: '10110', contactName: 'คุณเอ' } })); ok(s === 200, 'with the details → accepted: ' + (j.error || ''));
+    const nid = j.requestId; [s, j] = await call(BENZ, 'GET', '/api/requests'); const mine2 = j.requests.find((x) => x.requestId === nid);
+    ok(mine2 && mine2.newContactData && mine2.newContactData.type === '2' && mine2.newContactData.address === '1 ถนนทดสอบ' && mine2.newContactData.contactName === 'คุณเอ', 'the list gives the details back in form shape, for rebuilding a sent-back request');
+    [s, j] = await call(BENZ, 'POST', '/api/requests', qtBody({ confirmDuplicate: true, clientCode: '' })); ok(s === 200, 'a customer PEAK has passes without a code typed: ' + (j.error || ''));
+  }
   done();
 })().catch((e) => { console.error('CRASH', e); ok(false, 'CRASH: the run stopped early: ' + e.message); done(); process.exitCode = 1; });

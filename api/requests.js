@@ -122,6 +122,15 @@ async function create(req, res, user) {
   if (recent >= LIMIT_PER_HOUR) throw bad(`ส่งคำขอได้ไม่เกิน ${LIMIT_PER_HOUR} ครั้งต่อชั่วโมง`, 429);
   const dupCheck = req.body && req.body.confirmDuplicate !== true;
 
+  // No PEAK contact code and no new-customer details: the request could only stall at approval ("customer not
+  // found"). Look the customer up now; when PEAK has nobody under this tax ID + branch, Sales must give the details.
+  // PEAK not reachable → let it through, as before (accounting checks on approval).
+  if (!r.clientCode && !r.newContact && peak.mode() !== 'off') {
+    let found = null;
+    try { found = (await peak.findContacts(r.taxId)).filter((c) => (c.branchCode || '00000') === (r.branch || '00000')); } catch { found = null; }
+    if (found && !found.length) throw Object.assign(bad(`ยังไม่มีลูกค้าเลขภาษี ${r.taxId} สาขา ${r.branch || '00000'} ใน PEAK กรอกข้อมูลลูกค้าใหม่ (ประเภท ที่อยู่ จังหวัด รหัสไปรษณีย์) แล้วส่งอีกครั้ง`), { needNewContact: true });
+  }
+
   // Whitehouse Package ID / PEAK service code must exist in PEAK; the name always comes from PEAK.
   // PEAK API on: every service code is checked in PEAK (name + text from PEAK). Types that pick from PEAK
   // groups (e.g. B2S: B2S services + Assessment) may only use services in those groups.
@@ -252,6 +261,8 @@ async function list(req, res, user) {
       // AG empty (rows from before the VAT split): the segment decides.
       vatMode: r.vatMode || (vatIncluded(r.segment) ? 'incl' : 'excl'),
       newContact: r.newContact && !r.clientCode ? require('../lib/newcontact').summary(require('../lib/newcontact').parse(r.newContact)) : '',
+      // The details as the form takes them, so a sent-back request can be rebuilt without typing them again.
+      newContactData: r.newContact && !r.clientCode ? require('../lib/newcontact').toForm(require('../lib/newcontact').parse(r.newContact)) : undefined,
       totalInclVat: n(r.totalInclVat) || Math.round(n(r.totalPreVat) * 107) / 100,
       invoicedInclVat: Math.round((invoicedIncl[r.requestId] || 0) * 100) / 100,
       invoicedPreVat: Math.round((invoiced[r.requestId] || 0) * 100) / 100, lines: (byId[r.requestId] || []).map(({ _row: _, ...l }) => l) })),

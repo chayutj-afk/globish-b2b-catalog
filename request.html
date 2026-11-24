@@ -937,6 +937,13 @@ async function submitQT() {
   };
   if (!seg) return msg('q-msg', 'err', 'เลือกประเภทลูกค้า');
   if (!CART.length) return msg('q-msg', 'err', 'ยังไม่มีรายการสินค้า');
+  // No PEAK code and the new-customer section is not open: the lookup has not run for this tax ID (or is still
+  // running). Look now; when PEAK has no such customer the section opens and the details are asked for.
+  if (/^\d{13}$/.test(body.taxId) && !body.clientCode && $('q-newc').hidden) {
+    await withLoading('กำลังตรวจลูกค้าใน PEAK…', () => onTaxInput('q'));
+    body.clientCode = v('q-client'); body.branch = v('q-branch'); body.company = v('q-company') || body.company; body.newContact = newContactOf();
+    if (!$('q-newc').hidden) { $('q-newc').scrollIntoView({ block: 'center' }); return msg('q-msg', 'err', 'ลูกค้ารายนี้ยังไม่มีใน PEAK กรอกข้อมูลลูกค้าใหม่ (ประเภท ที่อยู่ จังหวัด รหัสไปรษณีย์) ก่อนส่ง'); }
+  }
   const nc = body.newContact;
   if (nc) {
     if (!nc.type) return msg('q-msg', 'err', 'เลือกประเภทลูกค้าใหม่');
@@ -1476,6 +1483,9 @@ async function rebuildQT(id) {
     } else if (l.role === 'wh_package' || l.role === 'service') CART.push({ kind: 'service', code: l.packageId, name: '', qty: n(l.qty), unitPrice: n(l.unitPrice), discount: n(l.discount) || '', extra: l.salesNote || '', freebie: l.freebie || '', svc: '' });
     else if (l.role === 'surcharge' && l.packageId === 'SURCHARGE') CART.push({ kind: 'surcharge', type: /Travel|เดินทาง/i.test(l.description || '') ? 'travel' : 'coach', note: String(l.description || '').split(' · ')[1] || '', qty: n(l.qty), unitPrice: n(l.unitPrice), discount: n(l.discount) || '' });
   });
+  const ncd = q.newContactData || {};
+  [['nc-type', ncd.type], ['nc-prefix', ncd.prefixNameType], ['nc-phone', ncd.phone], ['nc-addr', ncd.address], ['nc-sub', ncd.subDistrict], ['nc-dist', ncd.district], ['nc-prov', ncd.province], ['nc-post', ncd.postCode], ['nc-cname', ncd.contactName], ['nc-cphone', ncd.contactPhone]].forEach(([k, val]) => set(k, val));
+  ncType();
   $('q-replaces').value = id; saveCart(); saveDraft();
   go('qt'); onSegment(); onTaxInput('q'); renderItems();
   CART.forEach((it, i) => { if (kindOf(it) === 'service' && it.code) lookupSvc(i); });
@@ -2195,6 +2205,9 @@ function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch {} }
   window.addEventListener('beforeunload', (e) => { if (LOADING > 0 || (!KEEP && dirty())) { e.preventDefault(); e.returnValue = ''; } });
   window.addEventListener('pagehide', () => { if (!KEEP && LOADING <= 0 && dirty()) clearAll(); });
   onSegment(); renderInvs(); taxHint('q');
+  // A restored draft (back from the Catalog, or a reload) has the tax ID but not the lookup result: look again,
+  // or the new-customer section stays hidden and the request goes out without the customer's details.
+  if ($('q-tax').value.length === 13) onTaxInput('q');
   try { const r = await fetch('/packages.json', { cache: 'no-store' }); if (r.ok) { PKGS = await r.json(); renderItems(); } } catch {}
   try { const d = await api('/api/auth/me'); ME = d.user; $('me').textContent = ME.email; onSegment(); } catch {}
   // A link from a chat message: #mine?t=inv&q=IV-… → that tab, that sub-tab, filtered to that document.

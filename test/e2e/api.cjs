@@ -752,5 +752,35 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
     ok(mine2 && mine2.newContactData && mine2.newContactData.type === '2' && mine2.newContactData.address === '1 ถนนทดสอบ' && mine2.newContactData.contactName === 'คุณเอ', 'the list gives the details back in form shape, for rebuilding a sent-back request');
     [s, j] = await call(BENZ, 'POST', '/api/requests', qtBody({ confirmDuplicate: true, clientCode: '' })); ok(s === 200, 'a customer PEAK has passes without a code typed: ' + (j.error || ''));
   }
+  console.log('── 33. PEAK already holds a receipt for the INV (an earlier press was cut off)');
+  { const fsx = require('fs'), F = '/tmp/sales-desk-e2e/db.json';
+    // Two paid INVs with no receipt in the app, each with its approved INV in PEAK.
+    const T = require('./lib.cjs').T; const raw = JSON.parse(fsx.readFileSync(F, 'utf8'));
+    const mkInv = (n) => ({ ivNo: 'IV-2999010000' + n, issueDate: '01/11/2026', segment: 'B2B', salesEmail: BEE, salesName: 'Bee', clientCode: 'C1', company: 'บริษัท ค้างใบเสร็จ ' + n, taxId: '0105540000001', preVat: 1000, creditTermDays: 30, whtRate: '0', docStatus: 'Active', paidDate: '20/11/2026', paidAmount: 1070, paymentMethod: 'Bank Transfer', peakIvId: 'ix' + n });
+    for (const n of [8, 9]) raw.Invoices.push(T.Invoices.map((h) => mkInv(n)[h] ?? ''));
+    fsx.writeFileSync(F, JSON.stringify(raw));
+    setPeak((p) => { for (const n of [8, 9]) p.invoices.push({ id: 'ix' + n, code: 'IV-2999010000' + n, status: 'Approve', isVoid: 0, contactCode: 'C1', issuedDate: '20261101', dueDate: '20261201', preTaxAmount: 1000, vatAmount: 70, netAmount: 1070, remainAmount: 1070 }); });
+    const cands = db().Invoices.filter((x) => /^IV-2999010000[89]$/.test(x.ivNo));
+    ok(cands.length === 2, 'two paid INVs with no receipt in the app');
+    const mk = { paymentMethodCode: 'BNK001', deliveryChannel: 'sales' };
+    if (cands[0]) { const a = cands[0], pid = peak().invoices.find((i) => i.code === a.ivNo && i.status === 'Approve').id;
+      setPeak((p) => { p.rtRefuse = [pid]; });
+      [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { action: 'rt_make', ivNo: a.ivNo, ...mk }); ok(s === 409 && /รอรับชำระ/.test(j.error) && !/Waiting Payment/.test(j.error), 'refused and no receipt found → a plain Thai message: ' + String(j.error).slice(0, 70));
+      setPeak((p) => { p.receipts.push({ id: 'rx1', code: 'RT-29991100001', status: 'Draft', isVoid: 0, reference: a.ivNo, documentLink: 'https://doc.peakaccount.com/receipt?emi=rx1' }); });
+      const before = peak().receipts.length;
+      [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { action: 'rt_make', ivNo: a.ivNo, ...mk }); ok(s === 200 && j.adopted && j.peakRtNo === 'RT-29991100001', 'the Draft PEAK holds is taken into the app: ' + (j.error || j.message));
+      const row = db().ReceiptRequests.find((r) => String(r.refDoc).toUpperCase() === a.ivNo && r.peakRtNo === 'RT-29991100001');
+      ok(row && row.status === 'rt_draft' && row.peakRtId === 'rx1' && peak().receipts.length === before, 'app row waits for approval; nothing new in PEAK');
+      setPeak((p) => { p.receipts.find((r) => r.id === 'rx1').status = 'Approve'; });
+      await call(ACCT, 'PATCH', '/api/invoice-requests', { action: 'rt_check', rtRequestId: row.rtRequestId });
+      ok(arRow(a.ivNo).rtNo === 'RT-29991100001', 'approved in PEAK → the INV gets the receipt number: ' + arRow(a.ivNo).rtNo);
+    }
+    if (cands[1]) { const a = cands[1], pid = peak().invoices.find((i) => i.code === a.ivNo && i.status === 'Approve').id;
+      setPeak((p) => { p.rtRefuse = [pid]; p.receipts.push({ id: 'rx2', code: 'RT-29991100002', status: 'Approve', isVoid: 0, reference: a.ivNo, documentLink: 'https://doc.peakaccount.com/receipt?emi=rx2' }); });
+      [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { action: 'rt_make', ivNo: a.ivNo, ...mk }); ok(s === 200 && j.adopted && arRow(a.ivNo).rtNo === 'RT-29991100002', 'an approved receipt in PEAK is recorded at once: ' + (j.error || j.message));
+      ok(db().ReceiptRequests.some((r) => String(r.refDoc).toUpperCase() === a.ivNo && r.status === 'issued' && r.peakRtNo === 'RT-29991100002'), 'and Sales finds it under their receipts');
+    }
+    setPeak((p) => { p.rtRefuse = []; });
+  }
   done();
 })().catch((e) => { console.error('CRASH', e); ok(false, 'CRASH: the run stopped early: ' + e.message); done(); process.exitCode = 1; });

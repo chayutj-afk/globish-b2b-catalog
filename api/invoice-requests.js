@@ -1366,13 +1366,26 @@ async function rtMake(req, res, user) {
     tags: [a.requestId, a.ivRequestId].filter(Boolean),
     paidPayments: { paymentDate: payDate, payments: [{ paymentMethodCode: pm.code, amount: paid }], ...(wht > 0.009 ? { withHoldingTaxAmount: wht.toFixed(2) } : {}) },
   } } };
-  const made = await peak.createReceiptFromInvoiceDraft(body);
-  const notes = [`RT Draft ${made.code} รอฝ่ายบัญชีอนุมัติใน PEAK`, `รับเงินเข้า ${pm.name}`];
-  if (qt) notes.push(...await require('../lib/qtdraft').classifyDoc(made.id, 103, qt, users));
-  // The payment slip goes on the receipt too.
+  let made, adopted = false;
+  try { made = await peak.createReceiptFromInvoiceDraft(body); } catch (e) {
+    // PEAK takes one receipt per INV: "must be Waiting Payment" means a receipt (or a payment) is already on it.
+    // Usually that is the receipt an earlier press created before the app could record it (the run was cut off
+    // after PEAK answered). Take that receipt into the app instead of leaving the INV stuck in the queue.
+    if (!/Waiting Payment/i.test(e.message || '')) throw e;
+    const ex = plan.round || plan.rest ? null : await peak.findReceiptForInvoice(ivNo, { any: true }).catch(() => null);
+    await hub.log('peak', 'rt_live_refused', ivNo, `${user.email} · ${String(e.message).slice(0, 120)} · ${ex ? `พบ ${ex.code} (${ex.status})` : 'ไม่พบใบเสร็จของ INV นี้'}`).catch(() => {});
+    if (!ex) throw bad(`INV ${ivNo} ใน PEAK ไม่ได้อยู่ในสถานะรอรับชำระแล้ว (มีการรับชำระหรือออกใบเสร็จใน PEAK ไปแล้ว) เปิด INV ใน PEAK เพื่อตรวจ ถ้ามีใบเสร็จแล้วให้กด "หาใบเสร็จที่ออกใน PEAK ไว้แล้ว" หรือใส่เลขใบเสร็จเอง`, 409);
+    if (/approve/i.test(ex.status || '')) {
+      const no = String(ex.code).toUpperCase(), at0 = hub.sheetDateTime();
+      await hub.updateRow('Invoices', a._row, { rtNo: no, note: [a.note, `ใบเสร็จ ${no} ออกใน PEAK ไว้แล้ว (${at0})`].filter(Boolean).join(' · ').slice(0, 500) });
+      await rtRowFromPeak(a, ex, user, rts, ivreqs);
+      await hub.log('catalog', 'rt_find', ivNo, `${user.email} · found ${no}`).catch(() => {});
+      return res.status(200).json({ ok: true, adopted: true, peakRtNo: no, message: `INV นี้มีใบเสร็จ ${no} ที่อนุมัติใน PEAK อยู่แล้ว ระบบดึงเลขมาให้ ไม่ได้สร้างอะไรใหม่ใน PEAK` });
+    }
+    made = { id: ex.id, code: ex.code, documentLink: ex.documentLink }; adopted = true;
+  }
+  const notes = [adopted ? `พบ RT Draft ${made.code} ของ INV นี้ใน PEAK อยู่แล้ว ระบบดึงมาให้ รอฝ่ายบัญชีอนุมัติใน PEAK` : `RT Draft ${made.code} รอฝ่ายบัญชีอนุมัติใน PEAK`, `รับเงินเข้า ${pm.name}`];
   const notice = plan.round ? (plan.slip ? { slipLink: plan.slip } : null) : pns.filter((n) => String(n.ivNo).toUpperCase() === ivNo && n.slipLink && ['confirmed', 'matched'].includes(n.status)).pop();
-  const slip = notice ? await drive.download(notice.slipLink).catch(() => null) : null;
-  if (slip) await attachToPeak('receipt', made.id, slip, `PAYMENT_${ivNo}`);
 
   const at = hub.sheetDateTime(); const id = shortId('RTREQ');
   await hub.appendRows('ReceiptRequests', [{ rtRequestId: id, createdAt: at, requestedBy: iv.requestedBy || a.salesEmail || user.email, salesName: a.salesName || iv.salesName || '',
@@ -1380,8 +1393,17 @@ async function rtMake(req, res, user) {
     whtRate: String(Math.round(ar.num(a.whtRate) < 1 ? ar.num(a.whtRate) * 100 : ar.num(a.whtRate))), packages: a.keyHS || '', description: a.packageName || '', price: ar.num(a.preVat), discount: 0,
     paidDate: plan.paidDate, paymentProof: notice ? notice.slipLink : '', deliveryChannel: RT_CHANNEL[ch], docLang: 'TH', note: `ออกจาก INV ${ivNo}${plan.tag}`, status: 'rt_draft', peakRtNo: made.code || '', peakDocLink: made.documentLink || '',
     sentStatus: '', sentAt: '', trackingNo: '', accountNote: `${notes.join(' · ')} — ${user.name || user.email}`.slice(0, 500), updatedAt: at, peakRtId: made.id || '' }]);
-  await hub.log('peak', 'rt_live_draft', ivNo, `${user.email} · ${made.code}`);
-  res.status(200).json({ ok: true, rtRequestId: id, peakRtNo: made.code, message: notes.join(' · ') });
+  await hub.log('peak', 'rt_live_draft', ivNo, `${user.email} · ${made.code}${adopted ? ' (มีอยู่แล้วใน PEAK)' : ''}`);
+  // Classification and the payment slip come after the app has the receipt on record: they are slow and can fail,
+  // and a receipt PEAK holds but the app does not know blocks the INV (PEAK refuses a second one).
+  if (!adopted) {
+    try {
+      if (qt) await require('../lib/qtdraft').classifyDoc(made.id, 103, qt, users);
+      const slip = notice ? await drive.download(notice.slipLink).catch(() => null) : null;
+      if (slip) await attachToPeak('receipt', made.id, slip, `PAYMENT_${ivNo}`);
+    } catch (e) { await hub.log('catalog', 'rt_after_failed', ivNo, String(e.message).slice(0, 200)).catch(() => {}); }
+  }
+  res.status(200).json({ ok: true, rtRequestId: id, peakRtNo: made.code, adopted, message: notes.join(' · ') });
 }
 
 // RT approved in PEAK → issued (number, link), AR gets the receipt number, delivery as chosen. Used by

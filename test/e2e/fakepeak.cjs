@@ -68,6 +68,8 @@ global.fetch = async (url, opts = {}) => {
   } else if (m === 'GET' && path === '/Receipts') out = { PeakReceipts: { resCode: '200', receipts: pick(s.receipts, q) } };
   else if (m === 'POST' && path === '/Receipts/createbyinvoice') {
     const b = body.PeakReceipts; const r = { ...[].concat(b.receipts)[0] }; s.lastRtBody = b;
+    // PEAK takes one receipt per INV: a second createbyinvoice is refused like the real one.
+    if ((s.rtRefuse || []).includes(b.invoiceId)) { save(s); return json({ PeakReceipts: { resCode: '200', receipts: [{ resCode: '100', resDesc: 'Transaction must be Waiting Payment Status' }] } }); }
     r.id = 'r' + (s.receipts.length + 1); r.code = seq(s, 'RT'); r.isVoid = 0; r.resCode = '200'; r.documentLink = 'https://doc.peakaccount.com/receipt?emi=' + r.id;
     s.receipts.push(r); out = { PeakReceipts: { resCode: '200', receipts: [r] } };
   } else if (m === 'GET' && path === '/PaymentMethods') out = { PeakPaymentMethods: { resCode: '200', totalPaymentMethod: 2, paymentMethods: [{ code: 'CSH001', name: 'เงินสด', type: 1 }, { code: 'BNK001', name: 'KBank ออมทรัพย์', type: 2 }] } };

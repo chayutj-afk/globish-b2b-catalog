@@ -782,5 +782,41 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
     }
     setPeak((p) => { p.rtRefuse = []; });
   }
+
+  console.log('── 34. Bank charge taken out of the transfer (the company absorbs it)');
+  { const fsx = require('fs'), F = '/tmp/sales-desk-e2e/db.json';
+    const T = require('./lib.cjs').T; const raw = JSON.parse(fsx.readFileSync(F, 'utf8'));
+    const no = (n) => 'IV-299902000' + n;
+    const mkInv = (n, wht) => ({ ivNo: no(n), issueDate: '01/11/2026', segment: 'B2B', salesEmail: BEE, salesName: 'Bee', clientCode: 'C1', company: 'บริษัท ค่าธรรมเนียม ' + n, taxId: '0105540000001', preVat: 1000, creditTermDays: 30, whtRate: wht, docStatus: 'Active', commitDate: '01/12/2026', peakIvId: 'fx' + n });
+    raw.Invoices.push(T.Invoices.map((h) => mkInv(11, '0.03')[h] ?? ''), T.Invoices.map((h) => mkInv(12, '0')[h] ?? ''), T.Invoices.map((h) => mkInv(13, '0')[h] ?? ''));
+    const pn = { noticeId: 'PAY-FEE-1', createdAt: '20/11/2026 10:00', requestedBy: BEE, salesName: 'Bee', ivNo: no(13), company: 'บริษัท ค่าธรรมเนียม 13', paidDate: '20/11/2026', amount: 1045, paymentMethod: 'Bank Transfer', deliveryChannel: 'sales', status: 'new', source: 'sales' };
+    raw.PaymentNotices.push(T.PaymentNotices.map((h) => pn[h] ?? ''));
+    fsx.writeFileSync(F, JSON.stringify(raw));
+    setPeak((p) => { for (const n of [11, 12, 13]) p.invoices.push({ id: 'fx' + n, code: no(n), status: 'Approve', isVoid: 0, contactCode: 'C1', issuedDate: '20261101', dueDate: '20261201', preTaxAmount: 1000, vatAmount: 70, netAmount: 1070, remainAmount: 1070 }); });
+    const slip = { name: 's.png', type: 'image/png', data: 'aGk=' }, mk = { paymentMethodCode: 'BNK001', deliveryChannel: 'sales' };
+    const upd = (b) => call(ACCT, 'PATCH', '/api/invoice-requests', { action: 'ar_update', paymentMethod: 'Bank Transfer', file: slip, ...b });
+    // A: 3% withheld (1,040 due), 30 taken by the bank → 1,010 in the bank closes the INV.
+    [s, j] = await upd({ ivNo: no(11), paidDate: '2026-11-20', paidAmount: 1010, bankFee: -5, deliveryChannel: 'sales' }); ok(s === 400, 'a negative charge is refused');
+    [s, j] = await upd({ ivNo: no(11), paidDate: '2026-11-20', paidAmount: 1010, bankFee: 30, deliveryChannel: 'sales' }); ok(s === 200, 'payment with a bank charge is recorded ' + (j.error || ''));
+    let a = arRow(no(11)); ok(a.paidDate === '20/11/2026' && Number(a.paidAmount) === 1010 && Number(a.bankFee) === 30, `INV closed: cash 1,010 + charge 30 (${a.paidAmount} / ${a.bankFee})`);
+    ok(db().PaymentNotices.some((n) => n.ivNo === no(11) && Number(n.amount) === 1010 && Number(n.bankFee) === 30), 'the round keeps its charge');
+    [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { action: 'rt_make', ivNo: no(11), ...mk }); ok(s === 200 && /ค่าธรรมเนียมธนาคาร 30\.00/.test(j.message), 'receipt Draft made, with the reminder to book the charge: ' + (j.error || j.message).slice(0, 90));
+    let pp = peak().lastRtBody.receipts.paidPayments; ok(pp.payments[0].amount === 1040 && pp.withHoldingTaxAmount === '30.00', `receipt books the whole 1,040 and WHT 30, the charge is not WHT (${pp.payments[0].amount} / ${pp.withHoldingTaxAmount})`);
+    // The correction form sets the INV's total charge.
+    [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { action: 'ar_update', ivNo: no(11), bankFee: 25 }); ok(s === 200 && Number(arRow(no(11)).bankFee) === 25, 'correcting a paid INV replaces the charge');
+    // B: paid in rounds, each with a charge.
+    [s, j] = await upd({ ivNo: no(12), partial: true, paidDate: '2026-11-18', paidAmount: 500, bankFee: 20 }); ok(s === 200 && j.remaining === 550, 'round 1: 500 + charge 20 leaves 550: ' + (j.error || j.remaining));
+    [s, j] = await call(ACCT, 'GET', '/api/invoice-requests?view=ar'); const lr = ((j.rows || j.invoices || []).find((x) => x.ivNo === no(12))) || {};
+    ok(lr.expected === 550 && lr.fee === 20, `the list shows 550 still owed (${lr.expected}, charge ${lr.fee})`);
+    [s, j] = await upd({ ivNo: no(12), partial: true, paidDate: '2026-11-20', paidAmount: 540, bankFee: 10 }); ok(s === 400 && /ครบ/.test(j.error), 'a round that settles the INV with its charge is not partial');
+    [s, j] = await upd({ ivNo: no(12), paidDate: '2026-11-20', paidAmount: 540, bankFee: 10, deliveryChannel: 'sales' }); ok(s === 200, 'last round closes the INV ' + (j.error || ''));
+    a = arRow(no(12)); ok(Number(a.paidAmount) === 1040 && Number(a.bankFee) === 30 && a.paidDate, `totals: cash 1,040, charges 30 (${a.paidAmount} / ${a.bankFee})`);
+    [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { action: 'rt_make', ivNo: no(12), ...mk }); pp = peak().lastRtBody.receipts.paidPayments;
+    ok(s === 200 && pp.payments[0].amount === 1070 && !pp.withHoldingTaxAmount, `one receipt for the whole INV: 1,070, no WHT (${pp.payments[0].amount})`);
+    // C: Sales reported 1,045; accounting confirms and adds the 25 the bank took.
+    [s, j] = await call(BEE, 'PATCH', '/api/invoice-requests', { action: 'pay_confirm', noticeId: 'PAY-FEE-1', bankFee: 25 }); ok(s === 403, 'sales cannot confirm (or add a charge) ' + s);
+    [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { action: 'pay_confirm', noticeId: 'PAY-FEE-1', bankFee: 25 }); ok(s === 200 && !j.partial, 'confirming with the charge closes the INV ' + (j.error || ''));
+    a = arRow(no(13)); ok(a.paidDate && Number(a.paidAmount) === 1045 && Number(a.bankFee) === 25, `cash 1,045 + charge 25 (${a.paidAmount} / ${a.bankFee})`);
+  }
   done();
 })().catch((e) => { console.error('CRASH', e); ok(false, 'CRASH: the run stopped early: ' + e.message); done(); process.exitCode = 1; });

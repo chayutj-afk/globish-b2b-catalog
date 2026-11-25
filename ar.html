@@ -118,6 +118,8 @@ table.sum tr.now td{background:var(--primary-soft)}
 .wl tr.grp button .n{font-weight:400;color:var(--muted);font-size:13px}.wl tr.grp button .car{color:var(--muted);font-size:11px;width:10px}
 .wl tr.grp .i{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;border:1px solid var(--muted);color:var(--muted);font-size:10px;font-weight:600;cursor:help}
 .why .note{font-size:13px;color:var(--warn-ink);background:color-mix(in srgb,var(--warn-ink) 8%,transparent);border:1px dashed color-mix(in srgb,var(--warn-ink) 40%,transparent);border-radius:10px;padding:8px 12px;cursor:pointer;font:inherit;font-size:13px;text-align:left}
+.faint{color:var(--muted);opacity:.75}
+.addc{font:inherit;font-size:12.5px;background:none;border:1px dashed var(--primary);color:var(--primary);border-radius:999px;padding:3px 10px;cursor:pointer;min-height:28px}.addc:hover{background:color-mix(in srgb,var(--primary) 10%,transparent)}
 .why{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;margin:0 0 12px}
 .why .lbl{font-size:12px;color:var(--muted);align-self:center;margin-right:2px}
 .why button{font:inherit;text-align:left;background:var(--panel);border:1px solid var(--line2);border-radius:10px;padding:6px 10px;cursor:pointer;color:var(--ink);min-height:44px;display:flex;flex-direction:column;justify-content:center}
@@ -416,6 +418,8 @@ function whyBar() {
   document.addEventListener('focusout', () => { $('tip').hidden = true; });
   document.addEventListener('scroll', () => { $('tip').hidden = true; }, true);
 })();
+// No payment date from the customer yet: none at all, or only the due date the system filled in.
+const needDate = (r) => isOpenRow(r) && !r.legacyCheck && !r.awaitCash && (!r.commitDate || noCF(r));
 function rowsFor(only, noWeek) {
   const mode = only || document.querySelector('#f-state button.on').dataset.v;
   const seg = $('f-seg').value, sal = $('f-sales').value, q = $('f-q').value.trim().toLowerCase(), wk = noWeek ? '' : $('f-week').value;
@@ -490,7 +494,7 @@ function render() {
       <td>${esc(r.dueDate)}<div class="sub">${st(r.state)}${r.awaitCash ? ' <span class="st blue">ออกใบเสร็จแล้ว รอเงินเข้า</span>' : ''}${r.partial ? ' <span class="st warn">รับบางส่วน</span>' : ''}</div></td>
       <td class="num">${d ? `<span class="days ${d > 90 ? 'd90' : d > 30 ? 'd30' : ''}">${d}</span>` : ''}</td>
       <td class="num">${fmt(r.state === 'Paid' ? (toNum(r.paidAmount) || r.expected) : r.expected)}${r.partial ? `<div class="sub" style="white-space:nowrap">รับแล้ว ${fmt(r.received)} จาก ${fmt(r.expectedFull)}</div>` : ''}</td>
-      <td>${esc(r.followStatus || '')}${r.commitDate ? (noCF(r) ? `<div class="sub" data-tip="วันนี้ระบบใส่ให้เองตามวันครบกำหนดตอนออก INV ลูกค้ายังไม่ได้ยืนยันว่าจะจ่ายวันไหน">คาดจ่าย ${esc(r.commitDate)} (ตามวันครบกำหนด)</div>` : `<div class="sub">นัดจ่าย ${esc(r.commitDate)}</div>`) : ''}${remindTag(r)}${whyTag(r)}</td>
+      <td>${esc(r.followStatus || '')}${needDate(r) ? (CAN_EDIT ? `<div class="sub"><button type="button" class="addc" onclick="event.stopPropagation();openFollow('${esc(r.ivNo)}')" data-tip="ยังไม่มีวันนัดจ่ายจากลูกค้า ติดต่อลูกค้าแล้วกดเพื่อบันทึกวันที่ลูกค้าบอก · ระบบใช้วันครบกำหนด ${esc(r.dueDate)} คาดการณ์เงินเข้าไปก่อน">＋ ใส่วันนัดจ่าย</button></div>` : '<div class="sub faint">ยังไม่มีวันนัดจ่าย</div>') : r.commitDate ? `<div class="sub">นัดจ่าย ${esc(r.commitDate)}</div>` : ''}${remindTag(r)}${whyTag(r)}</td>
       <td>${esc(r.nextActionDate || '')}</td></tr>${open ? detail(r) : ''}`;
   }
 }
@@ -532,7 +536,7 @@ function detail(r) {
         ${D.canOwner ? `<button type="button" onclick="openOwner('${id}')">👤 เปลี่ยนเซลเจ้าของ</button>` : ''}
       </div></details>`}
     </div>
-    <div class="kv">${kv('วันที่ออก', esc(r.issueDate))}${kv('เครดิต', esc(r.creditTermDays) + ' วัน')}${kv('ก่อน VAT', fmt(toNum(r.preVat)))}${kv('หัก ณ ที่จ่าย', whtPct(r.whtRate))}${kv('QT', esc(r.qtNo))}${kv('เลขภาษี', esc(r.taxId) + (r.branch ? ' / ' + esc(r.branch) : ''))}${kv('PO', esc(r.poNo))}${kv('งวด', esc(r.installment))}${kv(paid ? 'นัดจ่ายไว้เดิม' : 'ลูกค้านัดจ่าย', esc(paid ? r.promisedDate : r.commitDate))}${kv('จ่ายเทียบวันนัด', r.paidVsCommit === '' || r.paidVsCommit === undefined ? '' : r.paidVsCommit < 0 ? `ก่อนนัด ${-r.paidVsCommit} วัน` : r.paidVsCommit > 0 ? `ช้ากว่านัด ${r.paidVsCommit} วัน` : 'ตรงวันนัด')}${kv('RT', esc(r.rtNo))}${kv('วันที่ใบเสร็จ / วันรับเช็ค', esc(r.rtDate))}${kv('วันที่เงินเข้า', esc(r.paidDate))}${kv('ยอดที่รับ', r.paidAmount ? fmt(toNum(r.paidAmount)) : '')}${kv('วิธีจ่าย', esc(r.paymentMethod))}${kv('เหตุผลจ่ายช้า', esc(r.delayReason))}${kv('หมายเหตุ', esc(r.note))}${kv('ที่มา', esc(r.source))}</div>
+    <div class="kv">${kv('วันที่ออก', esc(r.issueDate))}${kv('เครดิต', esc(r.creditTermDays) + ' วัน')}${kv('ก่อน VAT', fmt(toNum(r.preVat)))}${kv('หัก ณ ที่จ่าย', whtPct(r.whtRate))}${kv('QT', esc(r.qtNo))}${kv('เลขภาษี', esc(r.taxId) + (r.branch ? ' / ' + esc(r.branch) : ''))}${kv('PO', esc(r.poNo))}${kv('งวด', esc(r.installment))}${kv(paid ? 'นัดจ่ายไว้เดิม' : 'ลูกค้านัดจ่าย', paid ? esc(r.promisedDate) : needDate(r) ? `<span class="faint" data-tip="ลูกค้ายังไม่ได้ยืนยันวันจ่าย ระบบใช้วันครบกำหนด ${esc(r.dueDate)} คาดการณ์เงินเข้าไปก่อน">ยังไม่มี</span>` : esc(r.commitDate))}${kv('จ่ายเทียบวันนัด', r.paidVsCommit === '' || r.paidVsCommit === undefined ? '' : r.paidVsCommit < 0 ? `ก่อนนัด ${-r.paidVsCommit} วัน` : r.paidVsCommit > 0 ? `ช้ากว่านัด ${r.paidVsCommit} วัน` : 'ตรงวันนัด')}${kv('RT', esc(r.rtNo))}${kv('วันที่ใบเสร็จ / วันรับเช็ค', esc(r.rtDate))}${kv('วันที่เงินเข้า', esc(r.paidDate))}${kv('ยอดที่รับ', r.paidAmount ? fmt(toNum(r.paidAmount)) : '')}${kv('วิธีจ่าย', esc(r.paymentMethod))}${kv('เหตุผลจ่ายช้า', esc(r.delayReason))}${kv('หมายเหตุ', esc(r.note))}${kv('ที่มา', esc(r.source))}</div>
     ${r.rounds && r.rounds.length ? `<div class="box"><h4>รอบรับเงิน ${r.partial ? `· รับแล้ว ${fmt(r.received)} จาก ${fmt(r.expectedFull)} เหลือ ${fmt(r.expected)}` : '· รับครบแล้ว'}</h4><div class="log">${r.rounds.map((x, i) => `<div>รอบ ${i + 1} · ${esc(x.paidDate)} · <b>${fmt(x.amount)}</b> · ${esc(x.by || '')}${x.note ? ' · ' + esc(x.note) : ''} · ${x.rt ? `ใบเสร็จ ${esc(x.rt)}` : CAN_RT && D.peakLive ? `<button class="btn btn-g btn-sm" type="button" onclick="roundRt('${id}','${esc(x.noticeId)}')">🧾 ออกใบเสร็จรอบนี้</button>` : 'ยังไม่ออกใบเสร็จ'}</div>`).join('')}</div></div>` : ''}
     <div class="box"><h4>ประวัติการติดตาม</h4><div class="log">${fu}</div></div>
   </td></tr>`;
@@ -562,7 +566,7 @@ function openFollow(iv) {
   formModal({ title: '📞 บันทึกการติดตาม', html: head(r) + `
     <div class="row"><div class="fg"><label>ช่องทาง *</label><select id="fu-ch">${opt(L.channels, '', '— เลือก —')}</select></div>
     <div class="fg"><label>ผล *</label><select id="fu-rs">${opt(L.follow, '', '— เลือก —')}</select></div></div>
-    <div class="row"><div class="fg"><label>ลูกค้านัดจ่าย${open ? ' *' : ''}</label><input type="date" id="fu-cm" value="${r.needCommit ? '' : iso(r.commitDate)}">${open ? `<div class="sub">${r.needCommit ? `วันนัดเดิม ${esc(r.commitDate || r.dueDate)} เลยมาแล้ว ใส่วันใหม่ · ` : ''}ยังไม่ทราบให้ใส่วันที่คาดว่าจะจ่าย</div>` : ''}</div>
+    <div class="row"><div class="fg"><label>ลูกค้านัดจ่าย${open ? ' *' : ''}</label><input type="date" id="fu-cm" value="${r.needCommit || needDate(r) ? '' : iso(r.commitDate)}">${open ? `<div class="sub">${needDate(r) ? `ยังไม่มีวันนัดจากลูกค้า ใส่วันที่ลูกค้าบอก (วันครบกำหนด ${esc(r.dueDate)}) · ` : r.needCommit ? `วันนัดเดิม ${esc(r.commitDate || r.dueDate)} เลยมาแล้ว ใส่วันใหม่ · ` : ''}ยังไม่ทราบให้ใส่วันที่คาดว่าจะจ่าย</div>` : ''}</div>
     <div class="fg"><label>ติดตามครั้งถัดไป</label><input type="date" id="fu-nx"></div></div>
     <div class="fg"><label>หมายเหตุ</label><input type="text" id="fu-nt" maxlength="500" placeholder="เช่น คุยกับฝ่ายบัญชีลูกค้า รอรอบจ่ายวันที่ 25"></div>`,
     save: async (err) => {

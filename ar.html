@@ -107,6 +107,17 @@ table.sum tr.now td{background:var(--primary-soft)}
 .states .seg button .i:hover{opacity:1}
 #tip{position:fixed;z-index:1000;max-width:320px;background:var(--head);color:var(--panel);font-size:12.5px;line-height:1.5;padding:8px 10px;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.18);pointer-events:none}
 #tip[hidden]{display:none}
+.moretab{position:relative}.moretab summary{list-style:none;cursor:pointer;font-size:13px;color:var(--muted);padding:8px 12px;border:1px solid var(--line2);border-radius:14px;white-space:nowrap;min-height:36px;display:flex;align-items:center}
+.moretab summary::-webkit-details-marker{display:none}.moretab summary:hover{border-color:var(--primary);color:var(--head)}.moretab.on summary{border-color:var(--primary);color:var(--head);background:color-mix(in srgb,var(--primary) 8%,var(--panel))}
+.moretab .pop{position:absolute;z-index:20;top:calc(100% + 6px);left:0;min-width:230px;background:var(--panel);border:1px solid var(--line2);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:6px;display:flex;flex-direction:column;gap:2px}
+.moretab .pop button{font:inherit;font-size:13px;text-align:left;background:none;border:0;border-radius:8px;padding:9px 10px;cursor:pointer;color:var(--ink);white-space:nowrap}
+.moretab .pop button:hover{background:var(--panel-2)}.moretab .pop button.on{color:var(--primary);font-weight:600}.moretab .pop button[hidden]{display:none}
+.moretab .pop .i{display:inline-grid;place-items:center;width:16px;height:16px;margin-left:6px;border-radius:50%;border:1px solid currentColor;font-size:10px;font-weight:600;opacity:.55}
+.wl tr.grp td{padding:14px 8px 6px;border-bottom:1px solid var(--line2);background:var(--panel)}
+.wl tr.grp button{font:inherit;background:none;border:0;padding:4px 0;cursor:pointer;color:var(--head);font-weight:600;font-size:14px;display:inline-flex;align-items:center;gap:8px;min-height:32px}
+.wl tr.grp button .n{font-weight:400;color:var(--muted);font-size:13px}.wl tr.grp button .car{color:var(--muted);font-size:11px;width:10px}
+.wl tr.grp .i{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;border:1px solid var(--muted);color:var(--muted);font-size:10px;font-weight:600;cursor:help}
+.why .note{font-size:13px;color:var(--warn-ink);background:color-mix(in srgb,var(--warn-ink) 8%,transparent);border:1px dashed color-mix(in srgb,var(--warn-ink) 40%,transparent);border-radius:10px;padding:8px 12px;cursor:pointer;font:inherit;font-size:13px;text-align:left}
 .why{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;margin:0 0 12px}
 .why .lbl{font-size:12px;color:var(--muted);align-self:center;margin-right:2px}
 .why button{font:inherit;text-align:left;background:var(--panel);border:1px solid var(--line2);border-radius:10px;padding:6px 10px;cursor:pointer;color:var(--ink);min-height:44px;display:flex;flex-direction:column;justify-content:center}
@@ -160,18 +171,17 @@ table.sum tr.now td{background:var(--primary-soft)}
     <div class="card">
       <div class="states" id="f-state">
         <div class="seg">
-          <button class="on" data-v="due" type="button">ต้องตาม</button>
-          <button data-v="recommit" type="button">ต้องหาวันนัดใหม่</button>
-          <button data-v="nocf" type="button">ยังไม่ยืนยันวันจ่าย</button>
-          <button data-v="wait" type="button">รอถึงวันนัด</button>
-          <button data-v="await" type="button" id="b-await" hidden>รอเงินเข้า</button>
+          <button class="on" data-v="due" type="button">ต้องทำวันนี้</button>
+          <button data-v="wait" type="button">รอลูกค้าจ่าย</button>
           <button data-v="open" type="button">ค้างทั้งหมด</button>
           <button data-v="Paid" type="button">จ่ายแล้ว</button>
-          <button data-v="all" type="button" id="b-all">ทั้งหมด</button>
         </div>
-        <div class="seg oldg" id="g-old" hidden><span class="lbl">ข้อมูลเก่า</span>
-          <button data-v="check" type="button" id="b-check" hidden>รอตรวจกับ PEAK</button>
-        </div>
+        <details class="moretab" id="more-tab"><summary id="more-sum">เพิ่มเติม ▾</summary>
+          <div class="pop">
+            <button data-v="all" type="button" id="b-all">ทั้งหมด</button>
+            <button data-v="check" type="button" id="b-check" hidden>ข้อมูลเก่า รอตรวจกับ PEAK</button>
+          </div>
+        </details>
         <select class="sel" id="f-week" aria-label="สัปดาห์" title="ใบที่ยังค้าง: สัปดาห์ที่คาดว่าเงินเข้า (วันนัดจ่าย หรือวันครบกำหนดถ้ายังไม่มีวันนัด) · ใบที่จ่ายแล้ว: สัปดาห์ที่รับเงิน"><option value="">ทุกสัปดาห์</option></select>
         <select class="sel" id="f-due" aria-label="กำหนดชำระ" hidden><option value="">ทุกกำหนดชำระ</option><option value="Overdue">เกินกำหนด</option><option value="Outstanding">ยังไม่ถึงกำหนด</option></select>
       </div>
@@ -266,7 +276,8 @@ document.querySelectorAll('#tabs button').forEach((b) => b.onclick = () => {
 document.querySelectorAll('#months-by button').forEach((b) => b.onclick = () => { MONTHS_BY = b.dataset.v; renderMonths(); });
 // The page opens on the summary; the list filters that do not apply there start hidden.
 document.querySelector('#tabs button[data-t="sum"]').click();
-document.querySelectorAll('#f-state button').forEach((b) => b.onclick = () => { document.querySelectorAll('#f-state button').forEach((x) => x.classList.toggle('on', x === b)); SHOW = 100; render(); });
+document.querySelectorAll('#f-state button').forEach((b) => b.onclick = () => { document.querySelectorAll('#f-state button').forEach((x) => x.classList.toggle('on', x === b)); $('more-tab').open = false; SHOW = 100; render(); });
+document.addEventListener('click', (e) => { if (!e.target.closest('#more-tab')) $('more-tab').open = false; });
 // The group filter and the group select of the summary tab move together.
 const hasOpt = (el, v) => [...el.options].some((o) => o.value === v);
 $('f-seg').onchange = () => { SHOW = 100; render(); loadSum(); logRender(1); };
@@ -295,10 +306,9 @@ async function load() {
   catch (e) { $('msg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; return; }
   renderNotices(); if (window.refreshPayBadge) window.refreshPayBadge();
   const s = D.summary;
-  $('b-check').hidden = !s.legacyCheckCount; $('g-old').hidden = !s.legacyCheckCount;
-  $('b-await').hidden = !D.invoices.some((r) => r.awaitCash);
-  if ($('b-await').hidden && $('b-await').classList.contains('on')) { $('b-await').classList.remove('on'); document.querySelector('#f-state button[data-v="due"]').classList.add('on'); }
-  $('f-hint').innerHTML = `<b>ต้องตาม</b> = ใบที่มีงานต้องทำวันนี้ เรียงตามลำดับที่ควรทำ: เลยวันนัดจ่าย, ถึงวันติดตาม, เลื่อนนัดเกิน 2 ครั้ง, ติดตามแล้วยังไม่ได้คำตอบ, เกินหรือใกล้ครบกำหนด (7 วัน) แต่ลูกค้ายังไม่ยืนยันวันจ่าย ในแต่ละกลุ่มเรียงจากยอดมากไปน้อย<br><b>รอถึงวันนัด</b> = ลูกค้ายืนยันวันจ่ายแล้วและยังไม่ถึงวันนั้น ยังไม่ต้องทำอะไร พอเลยวันแล้วเงินยังไม่เข้าจะกลับมาอยู่ในต้องตามเอง<br><b>ยังไม่ยืนยันวันจ่าย</b> = วันนัดจ่ายยังเป็นวันครบกำหนดที่ระบบใส่ให้ตอนออก INV และยังไม่มีบันทึกการติดตาม ให้ติดต่อลูกค้าเพื่อยืนยันวันจ่ายจริง แล้วบันทึกการติดตาม<br><b>ต้องหาวันนัดใหม่</b> = เลยวันที่ลูกค้านัดจ่ายแล้วยังไม่จ่าย<br><b>รอเงินเข้า</b> = ออกใบเสร็จแล้ว (ล่วงหน้า หรือรับเช็ค) แต่เงินยังไม่เข้าบัญชี ยังนับเป็นยอดค้างรับ<br><b>ค้างทั้งหมด</b> = INV ปี 2026 เป็นต้นไปที่ยังไม่ได้รับเงิน เลือกดูเฉพาะเกินกำหนดหรือยังไม่ถึงกำหนดได้${s.oldCount ? `<br><b>ค้างเก่าก่อนปี 2026</b> ${s.oldCount} ใบ (${fmt0(s.old)} บาท) แยกไว้ ดูได้ที่แท็บ "สรุป"` : ''}${s.legacyCheckCount ? `<br><b>รอตรวจกับ PEAK</b> ${s.legacyCheckCount} ใบ (${fmt0(s.legacyCheck)} บาท) = ข้อมูลที่ย้ายมาและยังไม่มีใครตรวจ ไม่นับในยอดค้างรับจนกว่าจะตรวจ` : ''}`;
+  $('b-check').hidden = !s.legacyCheckCount;
+  if ($('b-check').hidden && $('b-check').classList.contains('on')) { $('b-check').classList.remove('on'); document.querySelector('#f-state button[data-v="due"]').classList.add('on'); }
+  $('f-hint').innerHTML = `<b>ต้องทำวันนี้</b> = ใบที่มีงานต้องทำวันนี้ แบ่งเป็นกลุ่มเรียงตามลำดับที่ควรทำ ทำจากบนลงล่าง: 1. เลยวันนัดจ่าย 2. ถึงวันติดตาม 3. เลื่อนนัดเกิน 2 ครั้ง 4. ติดตามแล้วยังไม่ได้คำตอบ 5. เกินหรือใกล้ครบกำหนด (7 วัน) แต่ลูกค้ายังไม่ยืนยันวันจ่าย ในแต่ละกลุ่มเรียงจากยอดมากไปน้อย กดหัวข้อกลุ่มเพื่อพับ<br><b>รอลูกค้าจ่าย</b> = ยังไม่ต้องทำอะไร: ลูกค้ายืนยันวันจ่ายแล้วและยังไม่ถึงวัน ตั้งวันติดตามไว้และยังไม่ถึง หรือออกใบเสร็จ / รับเช็คแล้วรอเงินเข้า พอเลยวันแล้วเงินยังไม่เข้าจะกลับไปอยู่ในต้องทำวันนี้เอง<br><b>ค้างทั้งหมด</b> = INV ปี 2026 เป็นต้นไปที่ยังไม่ได้รับเงิน เลือกดูเฉพาะเกินกำหนดหรือยังไม่ถึงกำหนดได้${s.oldCount ? `<br><b>ค้างเก่าก่อนปี 2026</b> ${s.oldCount} ใบ (${fmt0(s.old)} บาท) แยกไว้ ดูได้ที่แท็บ "สรุป"` : ''}${s.legacyCheckCount ? `<br><b>รอตรวจกับ PEAK</b> ${s.legacyCheckCount} ใบ (${fmt0(s.legacyCheck)} บาท) = ข้อมูลที่ย้ายมาและยังไม่มีใครตรวจ ไม่นับในยอดค้างรับจนกว่าจะตรวจ` : ''}`;
   const segs = D.segments || [];
   const sales = [...new Set(D.invoices.map((r) => r.salesName || r.salesEmail).filter(Boolean))].sort();
   const keepS = $('f-seg').value, keepP = $('f-sales').value;
@@ -361,13 +371,12 @@ const WHY = [['late', 'เลยวันนัด', 'ลูกค้านั�
   ['noans', 'ยังไม่ได้คำตอบ', 'ติดตามครั้งล่าสุดติดต่อไม่ได้ หรือยังไม่ได้กำหนดวันจ่าย และไม่ได้ตั้งวันติดตามครั้งถัดไป'],
   ['nodate', 'ลูกค้ายังไม่ยืนยันวันจ่าย', 'เกินกำหนดหรือครบกำหนดใน 7 วัน และวันที่ในระบบยังเป็นวันครบกำหนดที่ระบบใส่ให้เอง ลูกค้ายังไม่เคยยืนยันว่าจะจ่ายวันไหน: ติดต่อเพื่อขอวันจ่ายจริง แล้วบันทึกการติดตาม']];
 const WHY_RANK = Object.fromEntries(WHY.map((w, i) => [w[0], i]));
-let DUE_WHY = '';
 const reals = (r) => (r.followUps || []).filter((f) => f.result !== D.lists.remind);
 // Times the promised date was pushed later (from one logged follow-up to the next).
 function moves(r) { let n = 0, prev = null; for (const f of reals(r)) { const c = pd(f.commitDate); if (c === null) continue; if (prev !== null && c > prev) n++; prev = c; } return n; }
 function track(r) {
   if (!isOpenRow(r) || r.legacyCheck || r.old) return { key: '' };
-  if (r.awaitCash) return { key: 'await' };
+  if (r.awaitCash) return { key: 'wait', until: pd(r.commitDate) ?? TODAY, label: 'รอเงินเข้า (ออกใบเสร็จ / รับเช็คแล้ว)', cash: true };
   const commit = pd(r.commitDate), next = pd(r.nextActionDate), due = pd(r.dueDate);
   const rs = reals(r), last = rs[rs.length - 1], unans = !!last && UNANS.includes(last.result), mv = moves(r);
   const confirmed = commit !== null && !noCF(r) && !unans;
@@ -382,27 +391,20 @@ function track(r) {
 }
 const T = (r) => r._t || (r._t = track(r));
 const TIPS = {
-  due: 'ใบที่มีงานต้องทำวันนี้ เรียงตามลำดับที่ควรทำ: เลยวันนัดจ่าย → ถึงวันติดตาม → เลื่อนนัดเกิน 2 ครั้ง → ติดตามแล้วยังไม่ได้คำตอบ → เกินหรือใกล้ครบกำหนด (7 วัน) แต่ลูกค้ายังไม่ยืนยันวันจ่าย · ใบที่ลูกค้ายืนยันวันจ่ายแล้วและยังไม่ถึงวันนั้น ไม่อยู่ที่นี่',
-  recommit: 'เลยวันที่นัดจ่าย (หรือวันครบกำหนดที่ระบบใส่ให้) แล้วเงินยังไม่เข้า ต้องหาวันนัดใหม่กับลูกค้า',
-  nocf: 'วันนัดจ่ายยังเป็นวันครบกำหนดที่ระบบใส่ให้ตอนออก INV และยังไม่มีบันทึกการติดตาม = ยังไม่เคยยืนยันวันจ่ายจริงกับลูกค้า รวมใบที่ยังไม่ถึงกำหนดด้วย',
-  wait: 'ลูกค้ายืนยันวันจ่ายแล้วและยังไม่ถึงวันนั้น หรือตั้งวันติดตามครั้งถัดไปไว้และยังไม่ถึง: ยังไม่ต้องทำอะไร เรียงตามวันที่ใกล้สุด พอเลยวันแล้วเงินยังไม่เข้า ใบจะกลับไปอยู่ใน "ต้องตาม" เอง',
-  await: 'ออกใบเสร็จแล้ว (ล่วงหน้า หรือรับเช็คมาแล้ว) แต่เงินยังไม่เข้าบัญชี ยังนับเป็นยอดค้างรับ',
-  open: 'INV ปี 2026 เป็นต้นไปที่ยังไม่ได้รับเงินทุกใบ เลือกดูเฉพาะเกินกำหนดหรือยังไม่ถึงกำหนดได้',
+  due: 'ใบที่มีงานต้องทำวันนี้ แบ่งเป็นกลุ่มเรียงตามลำดับที่ควรทำ: เลยวันนัดจ่าย → ถึงวันติดตาม → เลื่อนนัดเกิน 2 ครั้ง → ติดตามแล้วยังไม่ได้คำตอบ → เกินหรือใกล้ครบกำหนด (7 วัน) แต่ลูกค้ายังไม่ยืนยันวันจ่าย ทำจากบนลงล่างได้เลย',
+  wait: 'ยังไม่ต้องทำอะไร: ลูกค้ายืนยันวันจ่ายแล้วและยังไม่ถึงวันนั้น ตั้งวันติดตามครั้งถัดไปไว้และยังไม่ถึง หรือออกใบเสร็จ / รับเช็คแล้วรอเงินเข้าบัญชี เรียงตามวันที่ใกล้สุด พอเลยวันแล้วเงินยังไม่เข้า ใบจะกลับไปอยู่ใน "ต้องทำวันนี้" เอง',
+  open: 'INV ปี 2026 เป็นต้นไปที่ยังไม่ได้รับเงินทุกใบ รวมใบที่ยังไม่ถึงเวลาต้องตาม เลือกดูเฉพาะเกินกำหนดหรือยังไม่ถึงกำหนดได้',
   Paid: 'INV ที่รับเงินครบแล้ว',
   all: 'ทุกสถานะ รวมเอกสารที่ยกเลิกและค้างเก่าก่อนปี 2026',
   check: 'ข้อมูลเก่าที่นำเข้ามาและยังไม่ได้ตรวจกับ PEAK ว่าจ่ายแล้วหรือยัง',
 };
+const COLL = new Set(); // groups folded in "ต้องทำวันนี้"
 function whyBar() {
   const el = $('why'), on = document.querySelector('#f-state button.on').dataset.v === 'due';
-  el.hidden = !on; if (!on) return;
-  const base = rowsFor('due');
-  const chip = (k, t, tip, xs, n) => `<button type="button" data-why="${k}" class="${DUE_WHY === k ? 'on' : ''}"${xs.length ? '' : ' disabled'} data-tip="${esc(tip)}"><b>${n ? n + '. ' : ''}${esc(t)} · ${xs.length}</b><span>${fmt0(xs.reduce((a, r) => a + (r.expected || 0), 0))} บาท</span></button>`;
-  const orphan = D.invoices.filter((r) => isOpenRow(r) && !r.legacyCheck && !r.old && !(r.salesName || r.salesEmail));
-  el.innerHTML = `<span class="lbl">ทำตามลำดับ</span>` + chip('', 'ทั้งหมด', 'ทุกใบที่ต้องตามวันนี้', base, 0)
-    + WHY.map(([k, t, tip], i) => chip(k, t, tip, base.filter((r) => T(r).why === k), i + 1)).join('')
-    + (orphan.length ? `<button type="button" class="gap" data-gap="owner" data-tip="INV ที่ยังค้างแต่ไม่มีเซลเจ้าของ ไม่มีใครได้รับแจ้งเตือนของใบนี้ กดเพื่อดูรายการ แล้วกำหนดเจ้าของที่ เพิ่มเติม › เปลี่ยนเจ้าของ"><b>ตกหล่น: ไม่มีเซลเจ้าของ · ${orphan.length}</b><span>${fmt0(orphan.reduce((a, r) => a + (r.expected || 0), 0))} บาท</span></button>` : '');
-  el.querySelectorAll('[data-why]').forEach((b) => b.onclick = () => { DUE_WHY = b.dataset.why; SHOW = 100; render(); });
-  const g = el.querySelector('[data-gap]'); if (g) g.onclick = () => { $('f-sales').value = '__none'; document.querySelectorAll('#f-state button').forEach((x) => x.classList.toggle('on', x.dataset.v === 'open')); SHOW = 100; render(); };
+  const orphan = on ? D.invoices.filter((r) => isOpenRow(r) && !r.legacyCheck && !r.old && !(r.salesName || r.salesEmail)) : [];
+  el.hidden = !orphan.length; if (!orphan.length) return;
+  el.innerHTML = `<button type="button" class="note" data-tip="INV ที่ยังค้างแต่ไม่มีเซลเจ้าของ จึงไม่มีใครได้รับแจ้งเตือนของใบนี้ กดเพื่อดูรายการ แล้วกำหนดเจ้าของที่ เพิ่มเติม › เปลี่ยนเจ้าของ ในแต่ละใบ">⚠ ตกหล่น: INV ค้างที่ไม่มีเซลเจ้าของ ${orphan.length} ใบ · ${fmt0(orphan.reduce((a, r) => a + (r.expected || 0), 0))} บาท · กดเพื่อดู</button>`;
+  el.querySelector('button').onclick = () => { $('f-sales').value = '__none'; document.querySelectorAll('#f-state button').forEach((x) => x.classList.toggle('on', x.dataset.v === 'open')); SHOW = 100; render(); };
 }
 // One tooltip for anything carrying data-tip (the "!" on each tab, the chips): shown on hover and on keyboard focus.
 (() => {
@@ -428,10 +430,7 @@ function rowsFor(only, noWeek) {
     if (mode === 'old') return r.old && (r.state === 'Outstanding' || r.state === 'Overdue');
     if (r.old && mode !== 'Paid') return false; // the old book is on the summary tab
     if (mode === 'open') { const du = only ? '' : $('f-due').value; return (r.state === 'Outstanding' || r.state === 'Overdue') && (!du || r.state === du); }
-    if (mode === 'nocf') return noCF(r);
-    if (mode === 'recommit') return r.needCommit;
-    if (mode === 'await') return r.awaitCash;
-    if (mode === 'due') return T(r).key === 'todo' && (only || !DUE_WHY || T(r).why === DUE_WHY);
+    if (mode === 'due') return T(r).key === 'todo';
     if (mode === 'wait') return T(r).key === 'wait';
     return r.state === mode;
   });
@@ -449,10 +448,11 @@ function countTabs() {
     b.innerHTML = `${esc(b.dataset.label)} (${rowsFor(b.dataset.v).length})${tip ? `<span class="i" data-tip="${esc(tip)}" aria-hidden="true">!</span>` : ''}`;
     if (tip) b.setAttribute('aria-description', tip);
   });
+  const act = document.querySelector('#more-tab button.on');
+  $('more-sum').textContent = (act ? act.dataset.label : 'เพิ่มเติม') + ' ▾'; $('more-tab').classList.toggle('on', !!act);
 }
 function render() {
   D.invoices.forEach((r) => { r._t = null; });
-  if (document.querySelector('#f-state button.on').dataset.v !== 'due') DUE_WHY = '';
   fillWeeks(); countTabs(); renderKpi(); whyBar();
   const xs = rowsFor();
   const tabV = document.querySelector('#f-state button.on').dataset.v;
@@ -461,7 +461,27 @@ function render() {
   const sets = !(D.peakLive && (CAN_EDIT || CAN_RT)) ? [] : [['open', 'ใบค้างปี 2026 เป็นต้นไป'], ['old', 'ค้างเก่าก่อนปี 2026'], ['check', 'ข้อมูลเก่ารอตรวจ']].map(([m, t]) => [m, t, rowsFor(m).filter(isOpenRow).length]).filter((x) => x[2]);
   $('pc-bar').hidden = !(D.peakLive && (CAN_EDIT || CAN_RT));
   $('pc-btns').innerHTML = sets.map(([m, t, n]) => `<button class="btn btn-o btn-sm" type="button" onclick="peakCheckSet('${m}')">🔎 ตรวจ${t} (${n} ใบ)</button>`).join('');
-  $('wl').innerHTML = xs.slice(0, SHOW).map((r) => {
+  // "ต้องทำวันนี้": one heading per reason, in working order; a heading folds its group.
+  const grouped = tabV === 'due';
+  const shown = grouped ? xs.filter((r) => !COLL.has(T(r).why)) : xs;
+  let lastWhy = null;
+  const head = (k) => { const w = WHY.find((x) => x[0] === k), all = xs.filter((r) => T(r).why === k), shut = COLL.has(k);
+    return `<tr class="grp"><td colspan="8"><button type="button" data-grp="${k}" aria-expanded="${!shut}"><span class="car">${shut ? '▸' : '▾'}</span>${WHY_RANK[k] + 1}. ${esc(w[1])}<span class="n">${all.length} ใบ · ${fmt0(all.reduce((a, r) => a + (r.expected || 0), 0))} บาท</span></button> <span class="i" data-tip="${esc(w[2])}" tabindex="0" aria-label="${esc(w[2])}">!</span></td></tr>`; };
+  const folded = grouped ? WHY.map((w) => w[0]).filter((k) => COLL.has(k) && xs.some((r) => T(r).why === k)) : [];
+  $('wl').innerHTML = shown.slice(0, SHOW).map((r) => {
+    let pre = '';
+    if (grouped && T(r).why !== lastWhy) {
+      // folded groups that come before this one keep their heading
+      for (const k of folded.filter((f) => WHY_RANK[f] < WHY_RANK[T(r).why] && (lastWhy === null || WHY_RANK[f] > WHY_RANK[lastWhy]))) pre += head(k);
+      pre += head(T(r).why); lastWhy = T(r).why;
+    }
+    return pre + rowHtml(r);
+  }).join('') + (grouped ? folded.filter((f) => lastWhy === null || WHY_RANK[f] > WHY_RANK[lastWhy]).map(head).join('') : '') || `<tr><td colspan="8" class="empty">${grouped ? 'ไม่มีใบที่ต้องตามวันนี้ 🎉' : 'ไม่มีรายการ'}</td></tr>`;
+  document.querySelectorAll('#wl [data-grp]').forEach((b) => b.onclick = () => { const k = b.dataset.grp; if (COLL.has(k)) COLL.delete(k); else COLL.add(k); render(); });
+  $('more').innerHTML = shown.length > SHOW ? `<button class="btn btn-g btn-sm" onclick="SHOW+=100;render()">แสดงเพิ่ม (${shown.length - SHOW} รายการ)</button>` : `<span class="small">${xs.length} รายการ</span>`;
+  document.querySelectorAll('#wl tr.r').forEach((tr) => tr.onclick = () => { OPEN = OPEN === tr.dataset.iv ? null : tr.dataset.iv; render(); });
+  return;
+  function rowHtml(r) {
     const d = r.daysOverdue;
     const open = OPEN === r.ivNo;
     return `<tr class="r${open ? ' open' : ''}" data-iv="${esc(r.ivNo)}"><td class="mono">${r.peakDocLink ? `<a class="doc" href="${esc(r.peakDocLink)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(r.ivNo)}</a>` : esc(r.ivNo)}<div class="sub">${esc(r.segment)}${r.dealType ? ' · ' + esc(r.dealType) : ''}</div></td>
@@ -472,9 +492,7 @@ function render() {
       <td class="num">${fmt(r.state === 'Paid' ? (toNum(r.paidAmount) || r.expected) : r.expected)}${r.partial ? `<div class="sub" style="white-space:nowrap">รับแล้ว ${fmt(r.received)} จาก ${fmt(r.expectedFull)}</div>` : ''}</td>
       <td>${esc(r.followStatus || '')}${r.commitDate ? (noCF(r) ? `<div class="sub" data-tip="วันนี้ระบบใส่ให้เองตามวันครบกำหนดตอนออก INV ลูกค้ายังไม่ได้ยืนยันว่าจะจ่ายวันไหน">คาดจ่าย ${esc(r.commitDate)} (ตามวันครบกำหนด)</div>` : `<div class="sub">นัดจ่าย ${esc(r.commitDate)}</div>`) : ''}${remindTag(r)}${whyTag(r)}</td>
       <td>${esc(r.nextActionDate || '')}</td></tr>${open ? detail(r) : ''}`;
-  }).join('') || `<tr><td colspan="8" class="empty">ไม่มีรายการ</td></tr>`;
-  $('more').innerHTML = xs.length > SHOW ? `<button class="btn btn-g btn-sm" onclick="SHOW+=100;render()">แสดงเพิ่ม (${xs.length - SHOW} รายการ)</button>` : `<span class="small">${xs.length} รายการ</span>`;
-  document.querySelectorAll('#wl tr.r').forEach((tr) => tr.onclick = () => { OPEN = OPEN === tr.dataset.iv ? null : tr.dataset.iv; render(); });
+  }
 }
 
 // Why the INV sits where it sits: the reason it needs work today, or what it is waiting for.

@@ -102,6 +102,19 @@ table.sum tr.now td{background:var(--primary-soft)}
 .dr:hover,.dr:focus-visible{color:var(--primary);text-decoration-color:var(--primary)}
 .stat .bar{height:4px;border-radius:2px;background:var(--line);margin:5px 0 4px;overflow:hidden}.stat .bar i{display:block;height:100%;width:0;background:var(--ok-ink,#1a7f4b);border-radius:2px;transition:width .2s}.stat .s b{color:var(--head);font-weight:500}
 .st.warn{background:color-mix(in srgb,var(--warn-ink) 12%,transparent);border-color:color-mix(in srgb,var(--warn-ink) 35%,transparent);color:var(--warn-ink)}
+.st.bad{background:color-mix(in srgb,var(--bad-ink) 12%,transparent);border-color:color-mix(in srgb,var(--bad-ink) 35%,transparent);color:var(--bad-ink)}
+.states .seg button .i{display:inline-grid;place-items:center;width:16px;height:16px;margin-left:6px;border-radius:50%;border:1px solid currentColor;font-size:10px;font-weight:600;line-height:1;opacity:.55;cursor:help;vertical-align:1px}
+.states .seg button .i:hover{opacity:1}
+#tip{position:fixed;z-index:1000;max-width:320px;background:var(--head);color:var(--panel);font-size:12.5px;line-height:1.5;padding:8px 10px;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.18);pointer-events:none}
+#tip[hidden]{display:none}
+.why{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;margin:0 0 12px}
+.why .lbl{font-size:12px;color:var(--muted);align-self:center;margin-right:2px}
+.why button{font:inherit;text-align:left;background:var(--panel);border:1px solid var(--line2);border-radius:10px;padding:6px 10px;cursor:pointer;color:var(--ink);min-height:44px;display:flex;flex-direction:column;justify-content:center}
+.why button b{font-weight:600;color:var(--head);font-size:13px}.why button span{font-size:12px;color:var(--muted)}
+.why button:hover{border-color:var(--primary)}.why button.on{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 8%,var(--panel))}
+.why button[disabled]{opacity:.5;cursor:default}.why button[disabled]:hover{border-color:var(--line2)}
+.why .gap{border-style:dashed}
+
 .stat.go{cursor:pointer}.stat.go:hover{border-color:var(--primary)}
 .chk.go{cursor:pointer;text-align:left;font:inherit}.chk.go:hover{border-color:var(--primary)}
 #d-body table{width:100%;border-collapse:collapse;font-size:13px}
@@ -115,6 +128,7 @@ table.sum tr.now td{background:var(--primary-soft)}
 <body data-page="ar">
 <div class="ov" id="ov-modal" hidden><div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="m-title"><h3 id="m-title"></h3><div class="mb" id="m-body"></div><div class="mf"><button class="btn btn-g" id="m-cancel">ยกเลิก</button><button class="btn btn-p" id="m-ok">ยืนยัน</button></div></div></div>
 <div class="ov" id="ov-form" hidden><div class="modal" style="max-width:620px" role="dialog" aria-modal="true" aria-labelledby="f-title"><h3 id="f-title"></h3><div class="mb" id="f-body"></div><div class="mf"><button class="btn btn-g" id="f-cancel" type="button">ยกเลิก</button><button class="btn btn-p" id="f-ok" type="button">บันทึก</button></div></div></div>
+<div id="tip" role="tooltip" hidden></div>
 <div class="ov" id="ov-drill" hidden><div class="modal" style="max-width:900px" role="dialog" aria-modal="true" aria-labelledby="d-title"><h3 id="d-title"></h3><div class="small" id="d-sub"></div><div class="mb" id="d-body" style="max-height:62vh"></div><div class="mf"><button class="btn btn-g" id="d-close" type="button">ปิด</button></div></div></div>
 <div class="ov" id="ov-load" hidden><div class="ldbox" role="status" aria-live="polite"><div class="spin"></div><b id="ld-text">กำลังดำเนินการ…</b><small id="ld-sub">กรุณารอสักครู่</small></div></div>
 <div class="app"><nav class="rail" id="rail"></nav><div class="main">
@@ -146,13 +160,14 @@ table.sum tr.now td{background:var(--primary-soft)}
     <div class="card">
       <div class="states" id="f-state">
         <div class="seg">
-          <button class="on" data-v="due" type="button" title="เกินกำหนด ครบกำหนดใน 7 วัน หรือถึงวันติดตามครั้งถัดไป">ต้องตาม</button>
-          <button data-v="recommit" type="button" title="เลยวันที่ลูกค้านัดจ่ายแล้วยังไม่จ่าย ต้องหาวันนัดใหม่">ต้องหาวันนัดใหม่</button>
-          <button data-v="nocf" type="button" title="วันนัดจ่ายยังเป็นวันครบกำหนดที่ระบบใส่ให้ตอนออก INV และยังไม่มีบันทึกการติดตาม = ยังไม่ได้ยืนยันวันจ่ายจริงกับลูกค้า">ยังไม่ยืนยันวันจ่าย</button>
-          <button data-v="await" type="button" id="b-await" hidden title="ออกใบเสร็จแล้ว (ล่วงหน้า หรือรับเช็คมาแล้ว) แต่เงินยังไม่เข้าบัญชี ยังนับเป็นยอดค้างรับ">รอเงินเข้า</button>
-          <button data-v="open" type="button" title="INV ปี 2026 เป็นต้นไปที่ยังไม่ได้รับเงิน">ค้างทั้งหมด</button>
+          <button class="on" data-v="due" type="button">ต้องตาม</button>
+          <button data-v="recommit" type="button">ต้องหาวันนัดใหม่</button>
+          <button data-v="nocf" type="button">ยังไม่ยืนยันวันจ่าย</button>
+          <button data-v="wait" type="button">รอถึงวันนัด</button>
+          <button data-v="await" type="button" id="b-await" hidden>รอเงินเข้า</button>
+          <button data-v="open" type="button">ค้างทั้งหมด</button>
           <button data-v="Paid" type="button">จ่ายแล้ว</button>
-          <button data-v="all" type="button" id="b-all" title="ทุกสถานะ รวมเอกสารที่ยกเลิกและค้างเก่าก่อนปี 2026">ทั้งหมด</button>
+          <button data-v="all" type="button" id="b-all">ทั้งหมด</button>
         </div>
         <div class="seg oldg" id="g-old" hidden><span class="lbl">ข้อมูลเก่า</span>
           <button data-v="check" type="button" id="b-check" hidden>รอตรวจกับ PEAK</button>
@@ -160,6 +175,7 @@ table.sum tr.now td{background:var(--primary-soft)}
         <select class="sel" id="f-week" aria-label="สัปดาห์" title="ใบที่ยังค้าง: สัปดาห์ที่คาดว่าเงินเข้า (วันนัดจ่าย หรือวันครบกำหนดถ้ายังไม่มีวันนัด) · ใบที่จ่ายแล้ว: สัปดาห์ที่รับเงิน"><option value="">ทุกสัปดาห์</option></select>
         <select class="sel" id="f-due" aria-label="กำหนดชำระ" hidden><option value="">ทุกกำหนดชำระ</option><option value="Overdue">เกินกำหนด</option><option value="Outstanding">ยังไม่ถึงกำหนด</option></select>
       </div>
+      <div class="why" id="why" hidden></div>
       <details class="help" id="f-help"><summary>แต่ละแท็บคืออะไร</summary><div class="small" id="f-hint"></div></details>
       <div class="wrap"><table class="wl"><thead><tr><th>INV</th><th>บริษัท</th><th>เซล</th><th>ครบกำหนด</th><th class="num">เกิน (วัน)</th><th class="num">ยอดที่ต้องได้รับ</th><th>สถานะติดตาม</th><th>ติดตามครั้งถัดไป</th></tr></thead><tbody id="wl"></tbody></table></div>
       <div class="more" id="more"></div>
@@ -282,7 +298,7 @@ async function load() {
   $('b-check').hidden = !s.legacyCheckCount; $('g-old').hidden = !s.legacyCheckCount;
   $('b-await').hidden = !D.invoices.some((r) => r.awaitCash);
   if ($('b-await').hidden && $('b-await').classList.contains('on')) { $('b-await').classList.remove('on'); document.querySelector('#f-state button[data-v="due"]').classList.add('on'); }
-  $('f-hint').innerHTML = `<b>ต้องตาม</b> = เกินกำหนด หรือครบกำหนดใน 7 วัน หรือถึงวันติดตามครั้งถัดไป เรียงจากเกินนานสุด<br><b>ยังไม่ยืนยันวันจ่าย</b> = วันนัดจ่ายยังเป็นวันครบกำหนดที่ระบบใส่ให้ตอนออก INV และยังไม่มีบันทึกการติดตาม ให้ติดต่อลูกค้าเพื่อยืนยันวันจ่ายจริง แล้วบันทึกการติดตาม<br><b>ต้องหาวันนัดใหม่</b> = เลยวันที่ลูกค้านัดจ่ายแล้วยังไม่จ่าย<br><b>รอเงินเข้า</b> = ออกใบเสร็จแล้ว (ล่วงหน้า หรือรับเช็ค) แต่เงินยังไม่เข้าบัญชี ยังนับเป็นยอดค้างรับ<br><b>ค้างทั้งหมด</b> = INV ปี 2026 เป็นต้นไปที่ยังไม่ได้รับเงิน เลือกดูเฉพาะเกินกำหนดหรือยังไม่ถึงกำหนดได้${s.oldCount ? `<br><b>ค้างเก่าก่อนปี 2026</b> ${s.oldCount} ใบ (${fmt0(s.old)} บาท) แยกไว้ ดูได้ที่แท็บ "สรุป"` : ''}${s.legacyCheckCount ? `<br><b>รอตรวจกับ PEAK</b> ${s.legacyCheckCount} ใบ (${fmt0(s.legacyCheck)} บาท) = ข้อมูลที่ย้ายมาและยังไม่มีใครตรวจ ไม่นับในยอดค้างรับจนกว่าจะตรวจ` : ''}`;
+  $('f-hint').innerHTML = `<b>ต้องตาม</b> = ใบที่มีงานต้องทำวันนี้ เรียงตามลำดับที่ควรทำ: เลยวันนัดจ่าย, ถึงวันติดตาม, เลื่อนนัดเกิน 2 ครั้ง, ติดตามแล้วยังไม่ได้คำตอบ, เกินหรือใกล้ครบกำหนด (7 วัน) แต่ยังไม่มีวันนัด ในแต่ละกลุ่มเรียงจากยอดมากไปน้อย<br><b>รอถึงวันนัด</b> = ลูกค้ายืนยันวันจ่ายแล้วและยังไม่ถึงวันนั้น ยังไม่ต้องทำอะไร พอเลยวันแล้วเงินยังไม่เข้าจะกลับมาอยู่ในต้องตามเอง<br><b>ยังไม่ยืนยันวันจ่าย</b> = วันนัดจ่ายยังเป็นวันครบกำหนดที่ระบบใส่ให้ตอนออก INV และยังไม่มีบันทึกการติดตาม ให้ติดต่อลูกค้าเพื่อยืนยันวันจ่ายจริง แล้วบันทึกการติดตาม<br><b>ต้องหาวันนัดใหม่</b> = เลยวันที่ลูกค้านัดจ่ายแล้วยังไม่จ่าย<br><b>รอเงินเข้า</b> = ออกใบเสร็จแล้ว (ล่วงหน้า หรือรับเช็ค) แต่เงินยังไม่เข้าบัญชี ยังนับเป็นยอดค้างรับ<br><b>ค้างทั้งหมด</b> = INV ปี 2026 เป็นต้นไปที่ยังไม่ได้รับเงิน เลือกดูเฉพาะเกินกำหนดหรือยังไม่ถึงกำหนดได้${s.oldCount ? `<br><b>ค้างเก่าก่อนปี 2026</b> ${s.oldCount} ใบ (${fmt0(s.old)} บาท) แยกไว้ ดูได้ที่แท็บ "สรุป"` : ''}${s.legacyCheckCount ? `<br><b>รอตรวจกับ PEAK</b> ${s.legacyCheckCount} ใบ (${fmt0(s.legacyCheck)} บาท) = ข้อมูลที่ย้ายมาและยังไม่มีใครตรวจ ไม่นับในยอดค้างรับจนกว่าจะตรวจ` : ''}`;
   const segs = D.segments || [];
   const sales = [...new Set(D.invoices.map((r) => r.salesName || r.salesEmail).filter(Boolean))].sort();
   const keepS = $('f-seg').value, keepP = $('f-sales').value;
@@ -335,6 +351,69 @@ function renderKpi() {
 // logged a follow-up: the payment date has not been confirmed with the customer yet.
 const noCF = (r) => (r.state === 'Outstanding' || r.state === 'Overdue') && !r.legacyCheck && !r.awaitCash
   && !!r.commitDate && pd(r.commitDate) === pd(r.dueDate) && !(r.followUps || []).some((f) => f.result !== D.lists.remind);
+// ── What each open INV needs today ─────────────────────────────────────────────────────────────
+// "ต้องตาม" lists only INVs with something to do now. An INV whose customer confirmed a payment date that has not
+// come yet waits in "รอถึงวันนัด" and returns by itself once that date passes. Order = the order to work in.
+const UNANS = ['ติดต่อได้ ยังไม่มีกำหนดวันจ่ายชัดเจน', 'ติดต่อไม่ได้'];
+const WHY = [['late', 'เลยวันนัด', 'ลูกค้านัดจ่ายไว้แล้วเลยวันนั้นมา เงินยังไม่เข้า: ติดต่อเพื่อขอวันจ่ายใหม่ หรือถ้าจ่ายแล้วให้ขอสลิป'],
+  ['next', 'ถึงวันติดตาม', 'ถึงวันติดตามครั้งถัดไปที่ตั้งไว้ตอนบันทึกการติดตามครั้งก่อน'],
+  ['slip', 'เลื่อนนัดซ้ำ', 'ลูกค้าเลื่อนวันจ่ายมาแล้วเกิน 2 ครั้ง: อยู่ในรายการนี้จนกว่าจะจ่าย แม้วันนัดล่าสุดจะยังไม่ถึง ควรยกระดับ (หัวหน้าเซล / ผู้มีอำนาจฝั่งลูกค้า)'],
+  ['noans', 'ยังไม่ได้คำตอบ', 'ติดตามครั้งล่าสุดติดต่อไม่ได้ หรือยังไม่ได้กำหนดวันจ่าย และไม่ได้ตั้งวันติดตามครั้งถัดไป'],
+  ['nodate', 'ยังไม่มีวันนัด', 'เกินกำหนดหรือครบกำหนดใน 7 วัน แต่ยังไม่เคยยืนยันวันจ่ายกับลูกค้า: ติดต่อเพื่อขอวันจ่ายจริง']];
+const WHY_RANK = Object.fromEntries(WHY.map((w, i) => [w[0], i]));
+let DUE_WHY = '';
+const reals = (r) => (r.followUps || []).filter((f) => f.result !== D.lists.remind);
+// Times the promised date was pushed later (from one logged follow-up to the next).
+function moves(r) { let n = 0, prev = null; for (const f of reals(r)) { const c = pd(f.commitDate); if (c === null) continue; if (prev !== null && c > prev) n++; prev = c; } return n; }
+function track(r) {
+  if (!isOpenRow(r) || r.legacyCheck || r.old) return { key: '' };
+  if (r.awaitCash) return { key: 'await' };
+  const commit = pd(r.commitDate), next = pd(r.nextActionDate), due = pd(r.dueDate);
+  const rs = reals(r), last = rs[rs.length - 1], unans = !!last && UNANS.includes(last.result), mv = moves(r);
+  const confirmed = commit !== null && !noCF(r) && !unans;
+  const soon = r.state === 'Overdue' || (due !== null && due - TODAY <= 7 * 864e5);
+  if (confirmed && commit < TODAY) return { key: 'todo', why: 'late', label: `เลยวันนัด ${Math.round((TODAY - commit) / 864e5)} วัน`, cls: 'bad' };
+  if (next !== null && next <= TODAY) return { key: 'todo', why: 'next', label: 'ถึงวันติดตาม', cls: 'bad' };
+  if (mv > 2) return { key: 'todo', why: 'slip', label: `เลื่อนนัด ${mv} ครั้ง`, cls: 'bad' };
+  if (unans) return next !== null ? { key: 'wait', until: next, label: `รอวันติดตาม ${String(r.nextActionDate).slice(0, 5)}` } : { key: 'todo', why: 'noans', label: 'ยังไม่ได้คำตอบ', cls: 'warn' };
+  if (confirmed) return { key: 'wait', until: commit, label: `รอถึงวันนัด ${String(r.commitDate).slice(0, 5)}` };
+  if (soon) return { key: 'todo', why: 'nodate', label: r.state === 'Overdue' ? 'เกินกำหนด ยังไม่มีวันนัด' : 'ใกล้ครบกำหนด ยังไม่มีวันนัด', cls: 'warn' };
+  return { key: 'far' };
+}
+const T = (r) => r._t || (r._t = track(r));
+const TIPS = {
+  due: 'ใบที่มีงานต้องทำวันนี้ เรียงตามลำดับที่ควรทำ: เลยวันนัดจ่าย → ถึงวันติดตาม → เลื่อนนัดเกิน 2 ครั้ง → ติดตามแล้วยังไม่ได้คำตอบ → เกินหรือใกล้ครบกำหนด (7 วัน) แต่ยังไม่มีวันนัด · ใบที่ลูกค้ายืนยันวันจ่ายแล้วและยังไม่ถึงวันนั้น ไม่อยู่ที่นี่',
+  recommit: 'เลยวันที่นัดจ่าย (หรือวันครบกำหนดที่ระบบใส่ให้) แล้วเงินยังไม่เข้า ต้องหาวันนัดใหม่กับลูกค้า',
+  nocf: 'วันนัดจ่ายยังเป็นวันครบกำหนดที่ระบบใส่ให้ตอนออก INV และยังไม่มีบันทึกการติดตาม = ยังไม่เคยยืนยันวันจ่ายจริงกับลูกค้า รวมใบที่ยังไม่ถึงกำหนดด้วย',
+  wait: 'ลูกค้ายืนยันวันจ่ายแล้วและยังไม่ถึงวันนั้น หรือตั้งวันติดตามครั้งถัดไปไว้และยังไม่ถึง: ยังไม่ต้องทำอะไร เรียงตามวันที่ใกล้สุด พอเลยวันแล้วเงินยังไม่เข้า ใบจะกลับไปอยู่ใน "ต้องตาม" เอง',
+  await: 'ออกใบเสร็จแล้ว (ล่วงหน้า หรือรับเช็คมาแล้ว) แต่เงินยังไม่เข้าบัญชี ยังนับเป็นยอดค้างรับ',
+  open: 'INV ปี 2026 เป็นต้นไปที่ยังไม่ได้รับเงินทุกใบ เลือกดูเฉพาะเกินกำหนดหรือยังไม่ถึงกำหนดได้',
+  Paid: 'INV ที่รับเงินครบแล้ว',
+  all: 'ทุกสถานะ รวมเอกสารที่ยกเลิกและค้างเก่าก่อนปี 2026',
+  check: 'ข้อมูลเก่าที่นำเข้ามาและยังไม่ได้ตรวจกับ PEAK ว่าจ่ายแล้วหรือยัง',
+};
+function whyBar() {
+  const el = $('why'), on = document.querySelector('#f-state button.on').dataset.v === 'due';
+  el.hidden = !on; if (!on) return;
+  const base = rowsFor('due');
+  const chip = (k, t, tip, xs, n) => `<button type="button" data-why="${k}" class="${DUE_WHY === k ? 'on' : ''}"${xs.length ? '' : ' disabled'} data-tip="${esc(tip)}"><b>${n ? n + '. ' : ''}${esc(t)} · ${xs.length}</b><span>${fmt0(xs.reduce((a, r) => a + (r.expected || 0), 0))} บาท</span></button>`;
+  const orphan = D.invoices.filter((r) => isOpenRow(r) && !r.legacyCheck && !r.old && !(r.salesName || r.salesEmail));
+  el.innerHTML = `<span class="lbl">ทำตามลำดับ</span>` + chip('', 'ทั้งหมด', 'ทุกใบที่ต้องตามวันนี้', base, 0)
+    + WHY.map(([k, t, tip], i) => chip(k, t, tip, base.filter((r) => T(r).why === k), i + 1)).join('')
+    + (orphan.length ? `<button type="button" class="gap" data-gap="owner" data-tip="INV ที่ยังค้างแต่ไม่มีเซลเจ้าของ ไม่มีใครได้รับแจ้งเตือนของใบนี้ กดเพื่อดูรายการ แล้วกำหนดเจ้าของที่ เพิ่มเติม › เปลี่ยนเจ้าของ"><b>ตกหล่น: ไม่มีเซลเจ้าของ · ${orphan.length}</b><span>${fmt0(orphan.reduce((a, r) => a + (r.expected || 0), 0))} บาท</span></button>` : '');
+  el.querySelectorAll('[data-why]').forEach((b) => b.onclick = () => { DUE_WHY = b.dataset.why; SHOW = 100; render(); });
+  const g = el.querySelector('[data-gap]'); if (g) g.onclick = () => { $('f-sales').value = '__none'; document.querySelectorAll('#f-state button').forEach((x) => x.classList.toggle('on', x.dataset.v === 'open')); SHOW = 100; render(); };
+}
+// One tooltip for anything carrying data-tip (the "!" on each tab, the chips): shown on hover and on keyboard focus.
+(() => {
+  const show = (t) => { const tip = $('tip'); tip.textContent = t.dataset.tip; tip.hidden = false; const r = t.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+    tip.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + 'px'; tip.style.top = (r.bottom + 8 + h > window.innerHeight ? r.top - h - 8 : r.bottom + 8) + 'px'; };
+  const pick = (e) => e.target.closest && e.target.closest('[data-tip]');
+  document.addEventListener('mouseover', (e) => { const t = pick(e); if (t) show(t); else $('tip').hidden = true; });
+  document.addEventListener('focusin', (e) => { const t = pick(e) || (e.target.querySelector && e.target.matches('#f-state button') && e.target.querySelector('[data-tip]')); if (t) show(t); });
+  document.addEventListener('focusout', () => { $('tip').hidden = true; });
+  document.addEventListener('scroll', () => { $('tip').hidden = true; }, true);
+})();
 function rowsFor(only, noWeek) {
   const mode = only || document.querySelector('#f-state button.on').dataset.v;
   const seg = $('f-seg').value, sal = $('f-sales').value, q = $('f-q').value.trim().toLowerCase(), wk = noWeek ? '' : $('f-week').value;
@@ -352,15 +431,13 @@ function rowsFor(only, noWeek) {
     if (mode === 'nocf') return noCF(r);
     if (mode === 'recommit') return r.needCommit;
     if (mode === 'await') return r.awaitCash;
-    if (mode === 'due') {
-      if (r.state === 'Overdue') return true;
-      if (r.state !== 'Outstanding') return false;
-      const due = pd(r.dueDate), nxt = pd(r.nextActionDate);
-      return (due !== null && due - TODAY <= 7 * 864e5) || (nxt !== null && nxt <= TODAY);
-    }
+    if (mode === 'due') return T(r).key === 'todo' && (only || !DUE_WHY || T(r).why === DUE_WHY);
+    if (mode === 'wait') return T(r).key === 'wait';
     return r.state === mode;
   });
-  xs.sort((a, b) => (b.daysOverdue - a.daysOverdue) || ((pd(a.dueDate) || 0) - (pd(b.dueDate) || 0)));
+  if (mode === 'due') xs.sort((a, b) => (WHY_RANK[T(a).why] - WHY_RANK[T(b).why]) || ((b.expected || 0) - (a.expected || 0)));
+  else if (mode === 'wait') xs.sort((a, b) => (T(a).until - T(b).until) || ((b.expected || 0) - (a.expected || 0)));
+  else xs.sort((a, b) => (b.daysOverdue - a.daysOverdue) || ((pd(a.dueDate) || 0) - (pd(b.dueDate) || 0)));
   return xs;
 }
 
@@ -368,11 +445,15 @@ function rowsFor(only, noWeek) {
 function countTabs() {
   document.querySelectorAll('#f-state button').forEach((b) => {
     if (!b.dataset.label) b.dataset.label = b.textContent.trim();
-    b.textContent = `${b.dataset.label} (${rowsFor(b.dataset.v).length})`;
+    const tip = TIPS[b.dataset.v];
+    b.innerHTML = `${esc(b.dataset.label)} (${rowsFor(b.dataset.v).length})${tip ? `<span class="i" data-tip="${esc(tip)}" aria-hidden="true">!</span>` : ''}`;
+    if (tip) b.setAttribute('aria-description', tip);
   });
 }
 function render() {
-  fillWeeks(); countTabs(); renderKpi();
+  D.invoices.forEach((r) => { r._t = null; });
+  if (document.querySelector('#f-state button.on').dataset.v !== 'due') DUE_WHY = '';
+  fillWeeks(); countTabs(); renderKpi(); whyBar();
   const xs = rowsFor();
   const tabV = document.querySelector('#f-state button.on').dataset.v;
   $('f-due').hidden = tabV !== 'open';
@@ -389,13 +470,20 @@ function render() {
       <td>${esc(r.dueDate)}<div class="sub">${st(r.state)}${r.awaitCash ? ' <span class="st blue">ออกใบเสร็จแล้ว รอเงินเข้า</span>' : ''}${r.partial ? ' <span class="st warn">รับบางส่วน</span>' : ''}</div></td>
       <td class="num">${d ? `<span class="days ${d > 90 ? 'd90' : d > 30 ? 'd30' : ''}">${d}</span>` : ''}</td>
       <td class="num">${fmt(r.state === 'Paid' ? (toNum(r.paidAmount) || r.expected) : r.expected)}${r.partial ? `<div class="sub" style="white-space:nowrap">รับแล้ว ${fmt(r.received)} จาก ${fmt(r.expectedFull)}</div>` : ''}</td>
-      <td>${esc(r.followStatus || '')}${r.commitDate ? `<div class="sub">นัดจ่าย ${esc(r.commitDate)}</div>` : ''}${remindTag(r)}${noCF(r) ? '<div class="sub"><span class="st warn" title="วันนัดจ่ายยังเป็นวันครบกำหนดที่ระบบใส่ให้ และยังไม่มีบันทึกการติดตาม">ยังไม่ยืนยันวันจ่าย</span></div>' : ''}${r.needCommit && !r.legacyCheck ? '<div class="sub late">เลยวันนัด ต้องหาวันใหม่</div>' : ''}</td>
+      <td>${esc(r.followStatus || '')}${r.commitDate ? `<div class="sub">นัดจ่าย ${esc(r.commitDate)}</div>` : ''}${remindTag(r)}${whyTag(r)}</td>
       <td>${esc(r.nextActionDate || '')}</td></tr>${open ? detail(r) : ''}`;
   }).join('') || `<tr><td colspan="8" class="empty">ไม่มีรายการ</td></tr>`;
   $('more').innerHTML = xs.length > SHOW ? `<button class="btn btn-g btn-sm" onclick="SHOW+=100;render()">แสดงเพิ่ม (${xs.length - SHOW} รายการ)</button>` : `<span class="small">${xs.length} รายการ</span>`;
   document.querySelectorAll('#wl tr.r').forEach((tr) => tr.onclick = () => { OPEN = OPEN === tr.dataset.iv ? null : tr.dataset.iv; render(); });
 }
 
+// Why the INV sits where it sits: the reason it needs work today, or what it is waiting for.
+function whyTag(r) {
+  const t = T(r);
+  if (t.key === 'todo') return `<div class="sub"><span class="st ${t.cls}" data-tip="${esc((WHY.find((w) => w[0] === t.why) || [])[2] || '')}">${esc(t.label)}</span></div>`;
+  if (t.key === 'wait') return `<div class="sub"><span class="st blue" data-tip="ยังไม่ต้องทำอะไร พอเลยวันนี้แล้วเงินยังไม่เข้า ใบจะกลับไปอยู่ใน ต้องตาม เอง">${esc(t.label)}</span></div>`;
+  return noCF(r) ? '<div class="sub"><span class="st warn" data-tip="วันนัดจ่ายยังเป็นวันครบกำหนดที่ระบบใส่ให้ และยังไม่มีบันทึกการติดตาม ยังไม่ถึงเวลาต้องตาม (เหลือเกิน 7 วัน)">ยังไม่ยืนยันวันจ่าย</span></div>' : '';
+}
 // Reminders sent ahead of the due date: shown on the row so nobody has to open the INV to know.
 const reminds = (r) => (r.followUps || []).filter((f) => f.result === D.lists.remind);
 function remindTag(r) {

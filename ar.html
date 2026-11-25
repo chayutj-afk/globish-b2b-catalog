@@ -119,6 +119,14 @@ table.sum tr.now td{background:var(--primary-soft)}
 .wl tr.grp .i{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;border:1px solid var(--muted);color:var(--muted);font-size:10px;font-weight:600;cursor:help}
 .why .note{font-size:13px;color:var(--warn-ink);background:color-mix(in srgb,var(--warn-ink) 8%,transparent);border:1px dashed color-mix(in srgb,var(--warn-ink) 40%,transparent);border-radius:10px;padding:8px 12px;cursor:pointer;font:inherit;font-size:13px;text-align:left}
 .faint{color:var(--muted);opacity:.75}
+.wl tr.qd td{background:color-mix(in srgb,var(--primary) 6%,var(--panel));padding:10px 12px 12px;border-bottom:1px solid var(--line2)}
+.qd form{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin:0}
+.qd label{font-size:13px;color:var(--head);font-weight:500}
+.qd input[type=date],.qd select{font:inherit;font-size:13.5px;padding:6px 8px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);color:inherit;min-height:34px}
+.qd .chip{font:inherit;font-size:12.5px;border:1px solid var(--line);background:var(--panel);color:inherit;border-radius:999px;padding:4px 11px;cursor:pointer;min-height:30px}.qd .chip:hover{border-color:var(--primary);color:var(--primary)}
+.qd .lnk{font:inherit;font-size:12.5px;background:none;border:0;color:var(--muted);text-decoration:underline;cursor:pointer;padding:4px 2px;min-height:30px}
+.qd .left{font-size:12.5px;color:var(--muted);margin-left:auto}.qd .err-line{flex-basis:100%;margin:0}
+.addc.on{background:color-mix(in srgb,var(--primary) 12%,transparent);border-style:solid}
 .addc{font:inherit;font-size:12.5px;background:none;border:1px dashed var(--primary);color:var(--primary);border-radius:999px;padding:3px 10px;cursor:pointer;min-height:28px}.addc:hover{background:color-mix(in srgb,var(--primary) 10%,transparent)}
 .why{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;margin:0 0 12px}
 .why .lbl{font-size:12px;color:var(--muted);align-self:center;margin-right:2px}
@@ -480,7 +488,7 @@ function render() {
       for (const k of folded.filter((f) => WHY_RANK[f] < WHY_RANK[T(r).why] && (lastWhy === null || WHY_RANK[f] > WHY_RANK[lastWhy]))) pre += head(k);
       pre += head(T(r).why); lastWhy = T(r).why;
     }
-    return pre + rowHtml(r);
+    return pre + rowHtml(r) + (QD === r.ivNo && needDate(r) ? qdHtml(r, xs) : '');
   }).join('') + (grouped ? folded.filter((f) => lastWhy === null || WHY_RANK[f] > WHY_RANK[lastWhy]).map(head).join('') : '') || `<tr><td colspan="8" class="empty">${grouped ? 'ไม่มีใบที่ต้องตามวันนี้ 🎉' : 'ไม่มีรายการ'}</td></tr>`;
   document.querySelectorAll('#wl [data-grp]').forEach((b) => b.onclick = () => { const k = b.dataset.grp; if (COLL.has(k)) COLL.delete(k); else COLL.add(k); render(); });
   $('more').innerHTML = shown.length > SHOW ? `<button class="btn btn-g btn-sm" onclick="SHOW+=100;render()">แสดงเพิ่ม (${shown.length - SHOW} รายการ)</button>` : `<span class="small">${xs.length} รายการ</span>`;
@@ -495,7 +503,7 @@ function render() {
       <td>${esc(r.dueDate)}<div class="sub">${st(r.state)}${r.awaitCash ? ' <span class="st blue">ออกใบเสร็จแล้ว รอเงินเข้า</span>' : ''}${r.partial ? ' <span class="st warn">รับบางส่วน</span>' : ''}</div></td>
       <td class="num">${d ? `<span class="days ${d > 90 ? 'd90' : d > 30 ? 'd30' : ''}">${d}</span>` : ''}</td>
       <td class="num">${fmt(r.state === 'Paid' ? (toNum(r.paidAmount) || r.expected) : r.expected)}${r.partial ? `<div class="sub" style="white-space:nowrap">รับแล้ว ${fmt(r.received)} จาก ${fmt(r.expectedFull)}</div>` : ''}${r.fee ? `<div class="sub" style="white-space:nowrap">+ ค่าธรรมเนียม ${fmt(r.fee)}</div>` : ''}</td>
-      <td>${esc(r.followStatus || '')}${needDate(r) ? (CAN_EDIT ? `<div class="sub"><button type="button" class="addc" onclick="event.stopPropagation();openFollow('${esc(r.ivNo)}')" data-tip="ยังไม่มีวันนัดจ่ายจากลูกค้า ติดต่อลูกค้าแล้วกดเพื่อบันทึกวันที่ลูกค้าบอก · ระบบใช้วันครบกำหนด ${esc(r.dueDate)} คาดการณ์เงินเข้าไปก่อน">＋ ใส่วันนัดจ่าย</button></div>` : '<div class="sub faint">ยังไม่มีวันนัดจ่าย</div>') : r.commitDate ? `<div class="sub">นัดจ่าย ${esc(r.commitDate)}</div>` : ''}${remindTag(r)}${whyTag(r)}</td>
+      <td>${esc(r.followStatus || '')}${needDate(r) ? (CAN_EDIT ? `<div class="sub"><button type="button" class="addc${QD === r.ivNo ? ' on' : ''}" onclick="event.stopPropagation();qdOpen('${esc(r.ivNo)}')" aria-expanded="${QD === r.ivNo}" data-tip="ยังไม่มีวันนัดจ่ายจากลูกค้า กดเพื่อใส่วันที่ลูกค้าบอกได้ทันที · ระบบใช้วันครบกำหนด ${esc(r.dueDate)} คาดการณ์เงินเข้าไปก่อน">＋ ใส่วันนัดจ่าย</button></div>` : '<div class="sub faint">ยังไม่มีวันนัดจ่าย</div>') : r.commitDate ? `<div class="sub">นัดจ่าย ${esc(r.commitDate)}</div>` : ''}${remindTag(r)}${whyTag(r)}</td>
       <td>${esc(r.nextActionDate || '')}</td></tr>${open ? detail(r) : ''}`;
   }
 }
@@ -503,6 +511,7 @@ function render() {
 // Why the INV sits where it sits: the reason it needs work today, or what it is waiting for.
 function whyTag(r) {
   const t = T(r);
+  if (t.why === 'fill' && CAN_EDIT) return ''; // the "＋ ใส่วันนัดจ่าย" button already says it
   if (t.key === 'todo') return `<div class="sub"><span class="st ${t.cls}" data-tip="${esc((WHY.find((w) => w[0] === t.why) || [])[2] || '')}">${esc(t.label)}</span></div>`;
   if (t.key === 'wait') return `<div class="sub"><span class="st blue" data-tip="ยังไม่ต้องทำอะไร พอเลยวันนี้แล้วเงินยังไม่เข้า ใบจะกลับไปอยู่ใน ต้องตาม เอง">${esc(t.label)}</span></div>`;
   return noCF(r) ? '<div class="sub"><span class="st warn" data-tip="วันนัดจ่ายยังเป็นวันครบกำหนดที่ระบบใส่ให้ และยังไม่มีบันทึกการติดตาม ยังไม่ถึงเวลาต้องตาม (เหลือเกิน 7 วัน)">ยังไม่ยืนยันวันจ่าย</span></div>' : '';
@@ -513,6 +522,49 @@ function remindTag(r) {
   const xs = reminds(r); if (!xs.length) return '';
   const last = xs[xs.length - 1], day = String(last.loggedAt || '').slice(0, 5);
   return `<div class="sub"><span class="st ok" title="${esc(xs.map((f) => `${f.loggedAt} · ${f.channel} · ${f.by}`).join('\n'))}">📧 เตือนแล้ว ${xs.length > 1 ? `${xs.length} ครั้ง · ล่าสุด ` : ''}${esc(day)}</span></div>`;
+}
+// ── Quick entry of the customer's promised date, in the list ────────────────────────────────────────────────
+// One INV at a time: type the date, Enter, and the next INV that still has no date opens. The follow-up is logged
+// as "ระบุวันจ่ายได้แล้ว"; any other outcome (no answer, hold…) goes through the full follow-up form.
+let QD = null, QD_DIRTY = false;
+const SAID = 'ระบุวันจ่ายได้แล้ว';
+const qdCh = () => { try { return localStorage.getItem('ar:qdch') || 'Call'; } catch { return 'Call'; } };
+const isoDay = (ms) => new Date(ms).toISOString().slice(0, 10);
+function qdHtml(r, xs) {
+  const due = pd(r.dueDate), left = xs.filter(needDate).length, id = esc(r.ivNo);
+  return `<tr class="qd"><td colspan="8" onclick="event.stopPropagation()"><form onsubmit="return qdSave(event,'${id}')" onkeydown="if(event.key==='Escape')qdClose()">
+    <label for="qd-dt">${esc(r.company)} นัดจ่ายวันที่</label><input type="date" id="qd-dt" min="${isoDay(TODAY)}" required>
+    ${due !== null && due >= TODAY ? `<button type="button" class="chip" onclick="qdSet('${isoDay(due)}')" data-tip="ลูกค้ายืนยันว่าจะจ่ายตามวันครบกำหนด">ตามครบกำหนด ${esc(String(r.dueDate).slice(0, 5))}</button>` : ''}
+    <label for="qd-ch">ทราบจาก</label><select id="qd-ch">${opt(D.lists.channels, qdCh())}</select>
+    <button class="btn btn-p btn-sm" type="submit" id="qd-ok">บันทึก ↵</button>
+    <button type="button" class="lnk" onclick="qdClose()">ยกเลิก</button>
+    <button type="button" class="lnk" onclick="qdClose();openFollow('${id}')" data-tip="ติดต่อไม่ได้ ยังไม่มีกำหนด รอเอกสาร หรือต้องการใส่หมายเหตุ / วันติดตามครั้งถัดไป">ลูกค้ายังไม่ให้วัน / ผลอื่น…</button>
+    <span class="left">เหลือ ${left} ใบที่ยังไม่มีวันนัดจ่าย</span><div class="err-line" id="qd-err" role="alert"></div></form></td></tr>`;
+}
+function qdFocus() { const el = $('qd-dt'); if (el) { el.focus(); el.closest('tr').previousElementSibling.scrollIntoView({ block: 'nearest' }); } }
+function qdOpen(iv) { $('tip').hidden = true; QD = QD === iv ? null : iv; render(); qdFocus(); if (!QD) qdSync(); }
+function qdClose() { QD = null; render(); qdSync(); }
+function qdSet(v) { $('qd-dt').value = v; $('qd-ok').focus(); }
+// Totals, forecast and tab counts come from the server: refresh them once the run of quick entries ends.
+function qdSync() { if (QD_DIRTY) { QD_DIRTY = false; load(); } }
+function qdSave(ev, iv) {
+  ev.preventDefault();
+  const r = find(iv), dt = val('qd-dt'), ch = val('qd-ch'), err = (t) => { $('qd-err').textContent = t; };
+  if (!dt) { err('ใส่วันที่ลูกค้านัดจ่าย'); return false; }
+  if (pd(dt.split('-').reverse().join('/')) < TODAY) { err('วันนัดจ่ายเลยมาแล้ว ใส่วันที่ยังไม่ถึง'); return false; }
+  const btn = $('qd-ok'); btn.disabled = true; btn.textContent = 'กำลังบันทึก…'; err('');
+  // the INV after this one, in the order on screen, that still needs a date
+  const xs = rowsFor().filter((x) => !(document.querySelector('#f-state button.on').dataset.v === 'due' && COLL.has(T(x).why)));
+  const at = xs.findIndex((x) => x.ivNo === iv), rest = xs.filter((x, i) => x.ivNo !== iv && needDate(x)), next = xs.slice(at + 1).find(needDate) || rest[0];
+  api('/api/invoice-requests', { method: 'PATCH', body: JSON.stringify({ action: 'ar_followup', ivNo: iv, channel: ch, result: SAID, commitDate: dt }) }).then(() => {
+    try { localStorage.setItem('ar:qdch', ch); } catch {}
+    const th = dt.split('-').reverse().join('/');
+    Object.assign(r, { commitDate: th, followStatus: SAID, needCommit: false, nextActionDate: '', followUps: [...(r.followUps || []), { channel: ch, result: SAID, commitDate: th, loggedAt: 'เมื่อสักครู่', by: '' }] });
+    delete r._t; QD_DIRTY = true; QD = next ? next.ivNo : null;
+    $('msg').innerHTML = `<div class="msg ok">บันทึกวันนัดจ่าย ${esc(iv)} · ${esc(th)} แล้ว${rest.length ? ` · เหลืออีก ${rest.length} ใบ` : ' · ใส่ครบทุกใบแล้ว'}</div>`;
+    render(); qdFocus(); if (!QD) qdSync();
+  }).catch((e) => { btn.disabled = false; btn.textContent = 'บันทึก ↵'; err(e.message); });
+  return false;
 }
 async function quickRemind(iv) {
   try { await patch({ action: 'ar_followup', ivNo: iv, channel: 'Email', result: D.lists.remind }); await done(`บันทึกว่าส่งเมลเตือน ${iv} แล้ว`); }

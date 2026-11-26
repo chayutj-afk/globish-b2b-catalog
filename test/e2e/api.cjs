@@ -887,7 +887,7 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
     ok(Object.keys(P).sort().join() === '1,2,3,4,6,7', 'drafts are left out of the pipeline: ' + Object.keys(P).sort().join());
     ok(P[1].st === 'won' && P[1].inv === 1000 && P[1].paid === 1000, `fully invoiced and paid in PEAK (${[P[1].st, P[1].inv, P[1].paid]})`);
     ok(P[2].st === 'part' && P[2].inv === 800 && P[2].paid === 300, `partly invoiced: 800 of 2,000, 300 collected (${[P[2].st, P[2].inv, P[2].paid]})`);
-    ok(P[3].st === 'lost' && P[3].inv === 0 && P[4].st === 'open' && P[4].inv === 0, 'expired = lost, accepted = still open');
+    ok(P[3].st === 'lost' && P[3].inv === 0 && P[4].st === 'lost' && P[4].stale === true && P[4].inv === 0, 'expired = lost; accepted in March and never invoiced = not closed either');
     ok(P[6].st === 'won' && P[6].inv === 500 && P[6].unk === 500 && P[6].paid === 0 && P[6].seg === 'B2C', `fully invoiced without a known INV: counted as invoiced, payment unknown; a person buying a WH package reads as B2C (${[P[6].unk, P[6].seg]})`);
     ok(P[1].seg === 'B2B' && P[7].date === '05/03/2025', 'a company reads as B2B; last year is kept');
     ok(j.reports && j.reports.qt && j.reports.qt.count === 7 && j.reports.inv.count === 4 && j.canUpload === true, 'the page is told what was uploaded');
@@ -897,6 +897,21 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
       cur.Invoices.push(T.Invoices.map((h) => v[h] ?? '')); fsx.writeFileSync(F, JSON.stringify(cur)); }
     [s, j] = await call(ACCT, 'GET', '/api/invoice-requests?view=pipeline'); const p2 = (j.pipeline || []).find((q) => q.qtNo === 'QO-20260300002');
     ok(p2 && p2.paid === 550 && p2.sales === 'Bee' && p2.seg === 'B2G', `the AR book adds the part payment (300 + half of 500), the seller and the customer group (${p2 && [p2.paid, p2.sales, p2.seg]})`);
+    // Criteria for old data: re-quotes count once, a QT accepted long ago without an INV is not closed.
+    const far = '05/01/2020', D2 = (o) => Q('x', 'พ้นกำหนด', 3333, { taxId: '0105540008888', company: 'บริษัท ส่งซ้ำ จำกัด', ...o });
+    [s, j] = await post(ACCT, { kind: 'qt', rows: [D2({ no: 'QO-20260400001', issue: '01/04/2026' }), D2({ no: 'QO-20260400002', issue: '10/04/2026' }), D2({ no: 'QO-20260400003', issue: '20/04/2026', status: 'ออกครบแล้ว' }), D2({ no: 'QO-20260400004', issue: '25/04/2026', status: 'รอตอบรับ' }),
+      D2({ no: 'QO-20260700001', issue: '20/07/2026' }), D2({ no: 'QO-20260700002', issue: '25/07/2026' }),
+      Q('QO-20200100001', 'ยอมรับแล้ว', 5555, { issue: far, until: '20/01/2020', taxId: '0105540007777' }), Q('QO-20991200001', 'ยอมรับแล้ว', 6666, { issue: '01/12/2099', until: '31/12/2099', taxId: '0105540007777' })] });
+    ok(s === 200, 'more quotations stored ' + (j.error || ''));
+    [s, j] = await call(ACCT, 'GET', '/api/invoice-requests?view=pipeline'); const X = Object.fromEntries((j.pipeline || []).map((q) => [q.qtNo, q]));
+    ok(X['QO-20260400001'].dup === 'QO-20260400003' && X['QO-20260400002'].dup === 'QO-20260400003' && !X['QO-20260400003'].dup, 'expired re-quotes of a QT that was sold are counted with it');
+    ok(!X['QO-20260400004'].dup, 'a re-quote still waiting for the customer stays (it may be a new order)');
+    ok(X['QO-20260700001'].dup === 'QO-20260700002' && !X['QO-20260700002'].dup, 'months later, never sold: only the latest quote counts');
+    ok(X['QO-20200100001'].st === 'lost' && X['QO-20200100001'].stale === true && X['QO-20991200001'].st === 'open', 'accepted long ago without an INV = not closed; a recent one stays open');
+    ok(j.rules && j.rules.staleDays === 90 && j.rules.dupDays === 30, 'the page is told the rules');
+    const ck = j.checks || {}, nos = (k) => (ck[k] || []).map((r) => r.ivNo).join();
+    ok(/IV-20260300001/.test(nos('peakOnly')) && /IV-20260300003/.test(nos('peakOnly')) && !/IV-20260300002/.test(nos('peakOnly')), 'checks: INVs in PEAK that the AR book does not have: ' + nos('peakOnly'));
+    [s, j] = await call(LEAD, 'GET', '/api/invoice-requests?view=pipeline'); ok(s === 200 && j.checks === undefined && j.canUpload === false, 'the checks are for accounting and admins only');
   }
   done();
 })().catch((e) => { console.error('CRASH', e); ok(false, 'CRASH: the run stopped early: ' + e.message); done(); process.exitCode = 1; });

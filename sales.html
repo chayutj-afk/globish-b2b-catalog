@@ -33,6 +33,8 @@ table.sum tr.tot td{font-weight:500;color:var(--head)}
 .up{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}.up input[type=file]{font:inherit;font-size:13px;max-width:100%}
 .upinfo{font-size:13px;color:var(--ink);line-height:1.8;margin:6px 0 10px}.upinfo b{font-weight:500;color:var(--head)}
 #up-log{font-size:13px;line-height:1.7;margin-top:8px}#up-log .bad{color:var(--bad-ink)}#up-log .good{color:var(--ok-ink)}
+details.ck{border-top:1px solid var(--line);padding:8px 0}details.ck summary{cursor:pointer;font-size:13.5px;color:var(--head)}details.ck summary b{color:var(--warn-ink);font-weight:600;margin-left:6px}
+.pctl select{max-width:100%}
 details.how{font-size:12.5px;color:var(--muted);margin-top:8px}details.how summary{cursor:pointer}details.how ol{margin:6px 0 0 18px;line-height:1.8}
 </style>
 </head>
@@ -45,9 +47,10 @@ details.how{font-size:12.5px;color:var(--muted);margin-top:8px}details.how summa
   <div class="card" id="pipe-card" hidden><h2>QT → INV → เงินเข้า</h2>
     <p class="hint" id="pipe-hint"></p>
     <div class="pctl"><label for="pipe-m" class="small">QT ที่ออกใน</label><select id="pipe-m"></select><select id="pipe-g" aria-label="กลุ่มลูกค้า"></select>
+      <select id="pipe-x" aria-label="ขนาด QT"><option value="0">QT ทุกขนาด</option><option value="1000000">ไม่รวม QT เกิน 1 ล้าน</option><option value="3000000">ไม่รวม QT เกิน 3 ล้าน</option><option value="5000000">ไม่รวม QT เกิน 5 ล้าน</option><option value="10000000">ไม่รวม QT เกิน 10 ล้าน</option></select>
       <div class="seg" id="pipe-by" role="group" aria-label="แยกตาม"><button type="button" data-v="month" class="on">แยกตามเดือน</button><button type="button" data-v="sales">ตามเซล</button><button type="button" data-v="seg">ตามกลุ่มลูกค้า</button></div></div>
     <div id="pipe-fun"></div><div class="wrap" id="pipe-tab"></div>
-    <details id="pipe-list"><summary>รายการ QT</summary><div class="pctl" style="margin:4px 0 8px"><div class="seg" id="pipe-l" role="group" aria-label="กรองรายการ QT"><button type="button" data-v="all" class="on">ทั้งหมด</button><button type="button" data-v="open">ยังเปิดอยู่</button><button type="button" data-v="wait">ออก INV แล้ว รอเงิน</button><button type="button" data-v="lost">ไม่ได้ปิด</button></div></div><div class="wrap" id="pipe-rows"></div></details>
+    <details id="pipe-list"><summary>รายการ QT</summary><div class="pctl" style="margin:4px 0 8px"><div class="seg" id="pipe-l" role="group" aria-label="กรองรายการ QT"><button type="button" data-v="all" class="on">ทั้งหมด</button><button type="button" data-v="open">ยังเปิดอยู่</button><button type="button" data-v="wait">ออก INV แล้ว รอเงิน</button><button type="button" data-v="lost">ไม่ได้ปิด</button><button type="button" data-v="dup">QT ซ้ำ (ไม่นับ)</button></div></div><div class="wrap" id="pipe-rows"></div></details>
   </div>
   <div class="card" id="im-card" hidden><h2>INV → เงินเข้า (ตามเดือนที่ออก INV)</h2>
     <p class="hint">INV ทุกใบที่ออกในเดือนนั้น ไม่ว่าจะมาจาก QT เดือนไหน แล้วดูว่าเก็บเงินได้แล้วเท่าไหร่ · ยอดก่อน VAT ไม่นับใบที่ยกเลิกหรือถูกแทน</p>
@@ -56,6 +59,9 @@ details.how{font-size:12.5px;color:var(--muted);margin-top:8px}details.how summa
     <div class="wrap" id="im-tab" style="margin-top:12px"></div>
   </div>
   <div class="card" id="pipe-none" hidden><div class="empty">ยังไม่มีข้อมูล QT</div></div>
+  <div class="card" id="ck-card" hidden><h2>ตรวจข้อมูล: รายงานใบแจ้งหนี้ของ PEAK เทียบกับหน้าตามหนี้</h2>
+    <p class="hint" id="ck-hint"></p><div id="ck-body"></div>
+  </div>
   <div class="card" id="up-card" hidden><h2>ข้อมูลจาก PEAK</h2>
     <p class="hint">ตาราง QT ใช้รายงานใบเสนอราคาและรายงานใบแจ้งหนี้ที่ export จาก PEAK เป็น Excel อัปโหลดใหม่ได้ทุกเมื่อเพื่อให้ตัวเลขเป็นปัจจุบัน ไม่ใช้โควตา PEAK API</p>
     <div class="upinfo" id="up-info"></div>
@@ -81,7 +87,7 @@ const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0), wd = (a, b) => (b ? M
 
 // ── Quotations → invoiced → collected (pre-VAT), by the month the QT was issued ────────────────────────────────────
 // Each QT: total, inv (invoiced), paid (collected), unk (invoiced, payment not known), st: won | part | open | lost.
-let PIPE_M = '', PIPE_BY = 'month', PIPE_L = 'all', PIPE_G = '';
+let PIPE_M = '', PIPE_BY = 'month', PIPE_L = 'all', PIPE_G = '', PIPE_X = 0;
 const ST_LABEL = { won: 'ออก INV ครบ', part: 'ออก INV บางส่วน', open: 'รอลูกค้า / ยังไม่ออก INV', lost: 'พ้นกำหนด / ปฏิเสธ' };
 function renderPipe() {
   const every = D.pipeline || [];
@@ -90,7 +96,7 @@ function renderPipe() {
   const fromPeak = !!(D.reports && D.reports.qt);
   $('pipe-hint').innerHTML = (fromPeak ? 'QT ทุกใบที่ออกใน PEAK (ไม่นับใบร่าง) นับตามเดือนที่ออก QT' : 'QT ที่อนุมัติผ่านระบบ นับตามเดือนที่อนุมัติ')
     + ' แล้วดูว่า QT ชุดนั้นออก INV และเก็บเงินได้แล้วเท่าไหร่ · ทุกยอดเป็นยอดก่อน VAT เพื่อให้เทียบกันได้'
-    + (fromPeak ? '<br>กลุ่มลูกค้าของ QT ที่ยังไม่เคยออก INV ประมาณจากชื่อลูกค้าและชื่อสินค้า และไม่มีชื่อเซล (PEAK ไม่ได้ส่งมาในรายงาน)' : '<br>ยังไม่ได้อัปโหลดรายงานจาก PEAK จึงเห็นเฉพาะ QT ที่อยู่ในระบบ');
+    + (fromPeak ? `<br>เกณฑ์: QT ที่ส่งซ้ำ (ลูกค้าเดียวกัน ยอดเท่ากัน ห่างกันไม่เกิน ${(D.rules || {}).dupDays || 30} วัน) นับใบเดียว · QT ที่ลูกค้ายอมรับแล้วแต่ไม่ออก INV เกิน ${(D.rules || {}).staleDays || 90} วันหลังวันหมดอายุ นับเป็นไม่ได้ปิด<br>กลุ่มลูกค้าของ QT ที่ยังไม่เคยออก INV ประมาณจากชื่อลูกค้าและชื่อสินค้า และไม่มีชื่อเซล (PEAK ไม่ได้ส่งมาในรายงาน)` : '<br>ยังไม่ได้อัปโหลดรายงานจาก PEAK จึงเห็นเฉพาะ QT ที่อยู่ในระบบ');
   const mk = (q) => q.date.slice(3), yr = (q) => q.date.slice(6);
   const segs = [...new Set(every.map((q) => q.seg))].sort();
   if (PIPE_G && !segs.includes(PIPE_G)) PIPE_G = '';
@@ -102,7 +108,11 @@ function renderPipe() {
   $('pipe-m').innerHTML = years.map((y) => o('y:' + y, 'ปี ' + y)).join('') + (years.length > 1 ? o('all', 'ทุกปี') : '') + `<optgroup label="รายเดือน">${months.map((m) => o(m, monLabel(m))).join('')}</optgroup>`;
   document.querySelectorAll('#pipe-by button').forEach((b) => b.classList.toggle('on', b.dataset.v === PIPE_BY));
   document.querySelectorAll('#pipe-l button').forEach((b) => b.classList.toggle('on', b.dataset.v === PIPE_L));
-  const xs = PIPE_M === 'all' ? all : PIPE_M.startsWith('y:') ? all.filter((q) => yr(q) === PIPE_M.slice(2)) : all.filter((q) => mk(q) === PIPE_M);
+  const inPeriod = PIPE_M === 'all' ? all : PIPE_M.startsWith('y:') ? all.filter((q) => yr(q) === PIPE_M.slice(2)) : all.filter((q) => mk(q) === PIPE_M);
+  // Left out of every figure: re-quotes (counted once) and, when asked, QTs above the size limit.
+  const dups = inPeriod.filter((q) => q.dup), big = PIPE_X ? inPeriod.filter((q) => !q.dup && q.total > PIPE_X) : [];
+  const xs = inPeriod.filter((q) => !q.dup && !(PIPE_X && q.total > PIPE_X));
+  const sumOf = (ys) => ys.reduce((a, q) => a + q.total, 0);
   const zero = () => ({ n: 0, nInv: 0, total: 0, inv: 0, paid: 0, unk: 0, open: 0, lost: 0, nOpen: 0, nLost: 0 });
   const add = (ys) => ys.reduce((t, q) => { const rest = Math.max(0, q.total - q.inv), lost = q.st === 'lost';
     t.n++; t.total += q.total; t.inv += q.inv; t.paid += q.paid; t.unk += q.unk || 0; if (q.inv > 0.009) t.nInv++;
@@ -111,25 +121,26 @@ function renderPipe() {
   const row = (l, cls, v, note) => `<div class="r"><span class="l">${l}</span><div class="t"><i class="${cls}" style="width:${wd(v, t.total)}%"></i></div><span class="v">${fmt0(v)}</span><span class="n">${note}</span></div>`;
   $('pipe-fun').innerHTML = `<div class="pf" role="img" aria-label="QT ${fmt0(t.total)} บาท ออก INV แล้ว ${fmt0(t.inv)} บาท เงินเข้าแล้ว ${fmt0(t.paid)} บาท">
       ${row('1. QT ที่ออก', 'pc-q', t.total, `${fmt0(t.n)} ใบ`)}
-      ${row('2. ออก INV แล้ว', 'pc-i', t.inv, `${pct(t.inv, t.total)}% ของยอด QT · ${fmt0(t.nInv)} ใบ (${pct(t.nInv, t.n)}%)`)}
+      ${row('2. ออก INV แล้ว', 'pc-i', t.inv, `ปิดได้ ${fmt0(t.nInv)} จาก ${fmt0(t.n)} ใบ (${pct(t.nInv, t.n)}%) · ${pct(t.inv, t.total)}% ของยอด QT`)}
       ${row('3. เงินเข้าแล้ว', 'pc-p', t.paid, `${pct(t.paid, t.total)}% ของ QT · ${pct(t.paid, t.inv)}% ของ INV`)}</div>
     <div class="pgap four"><div><b>${fmt0(t.open)}</b>ยังเปิดอยู่ · ${fmt0(t.nOpen)} ใบ (รอลูกค้าตอบ หรือยังออก INV ไม่ครบ)</div><div><b>${fmt0(t.lost)}</b>ไม่ได้ปิด · ${fmt0(t.nLost)} ใบ (พ้นกำหนด หรือลูกค้าปฏิเสธ)</div>
-      <div><b>${fmt0(t.inv - t.paid - t.unk)}</b>ออก INV แล้ว รอเงินเข้า</div>${t.unk > 1 ? `<div><b>${fmt0(t.unk)}</b>ออก INV แล้ว แต่ไม่ทราบสถานะเงิน (ไม่มีรายงานใบแจ้งหนี้ของช่วงนั้น)</div>` : ''}</div>`;
+      <div><b>${fmt0(t.inv - t.paid - t.unk)}</b>ออก INV แล้ว รอเงินเข้า</div>${t.unk > 1 ? `<div><b>${fmt0(t.unk)}</b>ออก INV แล้ว แต่ไม่ทราบสถานะเงิน (ไม่มีรายงานใบแจ้งหนี้ของช่วงนั้น)</div>` : ''}</div>
+    ${dups.length || big.length ? `<p class="small" style="margin:-8px 0 12px">ไม่นับในตัวเลขข้างบน: ${[dups.length ? `QT ซ้ำ ${fmt0(dups.length)} ใบ (${fmt0(sumOf(dups))} บาท)` : '', big.length ? `QT ยอดเกิน ${fmt0(PIPE_X)} บาท ${fmt0(big.length)} ใบ (${fmt0(sumOf(big))} บาท)` : ''].filter(Boolean).join(' · ')}</p>` : ''}`;
   // breakdown
   const key = PIPE_BY === 'month' ? mk : PIPE_BY === 'sales' ? (q) => q.sales : (q) => q.seg;
   const groups = [...new Set(xs.map(key))].map((k) => ({ k, ...add(xs.filter((q) => key(q) === k)) }));
   if (PIPE_BY === 'month') groups.sort((a, b) => monSort(b.k).localeCompare(monSort(a.k))); else groups.sort((a, b) => b.total - a.total);
   const max = Math.max(1, ...groups.map((g) => g.total));
   const name = (k) => (PIPE_BY === 'month' ? monLabel(k) : PIPE_BY === 'sales' ? `<span title="${esc(k)}">${esc(shortName(k))}</span>` : esc(k));
-  const line = (g, lab, bar) => `<td>${lab}</td><td>${fmt0(g.n)}</td><td>${fmt0(g.total)}</td><td>${fmt0(g.inv)}</td><td class="small">${pct(g.inv, g.total)}%</td><td>${fmt0(g.paid)}</td><td class="small">${pct(g.paid, g.inv)}%</td><td>${fmt0(g.open)}</td><td>${fmt0(g.lost)}</td><td>${bar}</td>`;
-  $('pipe-tab').innerHTML = `<table class="sum"><tr><th>${PIPE_BY === 'month' ? 'เดือนที่ออก QT' : PIPE_BY === 'sales' ? 'เซล' : 'กลุ่มลูกค้า'}</th><th>QT (ใบ)</th><th>ยอด QT</th><th>ออก INV แล้ว</th><th title="ของยอด QT">%</th><th>เงินเข้าแล้ว</th><th title="ของยอด INV">%</th><th>ยังเปิดอยู่</th><th>ไม่ได้ปิด</th><th style="width:20%"></th></tr>
+  const line = (g, lab, bar) => `<td>${lab}</td><td>${fmt0(g.n)}</td><td>${fmt0(g.nInv)} <span class="small">(${pct(g.nInv, g.n)}%)</span></td><td>${fmt0(g.total)}</td><td>${fmt0(g.inv)}</td><td class="small">${pct(g.inv, g.total)}%</td><td>${fmt0(g.paid)}</td><td class="small">${pct(g.paid, g.inv)}%</td><td>${fmt0(g.open)}</td><td>${fmt0(g.lost)}</td><td>${bar}</td>`;
+  $('pipe-tab').innerHTML = `<table class="sum"><tr><th>${PIPE_BY === 'month' ? 'เดือนที่ออก QT' : PIPE_BY === 'sales' ? 'เซล' : 'กลุ่มลูกค้า'}</th><th>QT (ใบ)</th><th title="จำนวน QT ที่ออก INV แล้ว และสัดส่วนต่อจำนวน QT ทั้งหมด">ปิดได้ (ใบ)</th><th>ยอด QT</th><th>ออก INV แล้ว</th><th title="ของยอด QT">%</th><th>เงินเข้าแล้ว</th><th title="ของยอด INV">%</th><th>ยังเปิดอยู่</th><th>ไม่ได้ปิด</th><th style="width:20%"></th></tr>
     ${groups.map((g) => `<tr>${line(g, name(g.k), `<div class="pstk" style="width:${wd(g.total, max)}%"><i class="pc-p" style="width:${wd(g.paid, g.total)}%"></i><i class="pc-i" style="width:${wd(g.inv - g.paid, g.total)}%"></i><i class="pc-o" style="width:${wd(g.open, g.total)}%"></i><i class="pc-l" style="width:${wd(g.lost, g.total)}%"></i></div>`)}</tr>`).join('')}
     ${groups.length > 1 ? `<tr class="tot">${line(t, 'รวม', '')}</tr>` : ''}</table>
     <div class="pleg"><span><i class="pc-p"></i>เงินเข้าแล้ว</span><span><i class="pc-i"></i>ออก INV แล้ว รอเงิน</span><span><i class="pc-o"></i>ยังเปิดอยู่</span><span><i class="pc-l"></i>ไม่ได้ปิด</span></div>`;
   // the QTs behind the figures
-  const st = (q) => (q.st === 'lost' ? ['พ้นกำหนด / ปฏิเสธ', ''] : q.inv < q.total - 1 ? (q.inv > 0.009 ? ['ออก INV บางส่วน', 'warn'] : ['รอลูกค้า / ยังไม่ออก INV', 'blue'])
+  const st = (q) => (q.dup ? [`ซ้ำกับ ${q.dup}`, ''] : q.stale ? ['ยอมรับแล้ว แต่ค้างนาน', ''] : q.st === 'lost' ? ['พ้นกำหนด / ปฏิเสธ', ''] : q.inv < q.total - 1 ? (q.inv > 0.009 ? ['ออก INV บางส่วน', 'warn'] : ['รอลูกค้า / ยังไม่ออก INV', 'blue'])
     : q.unk ? ['ออก INV แล้ว (ไม่ทราบสถานะเงิน)', ''] : q.paid < q.inv - 1 ? ['รอเงินเข้า', 'warn'] : ['เงินเข้าครบ', 'green']);
-  const ls = xs.filter((q) => (PIPE_L === 'open' ? q.st !== 'lost' && q.inv < q.total - 1 : PIPE_L === 'wait' ? q.inv - q.paid - (q.unk || 0) > 1 : PIPE_L === 'lost' ? q.st === 'lost' : true))
+  const ls = (PIPE_L === 'dup' ? dups : xs).filter((q) => (PIPE_L === 'dup' ? true : PIPE_L === 'open' ? q.st !== 'lost' && q.inv < q.total - 1 : PIPE_L === 'wait' ? q.inv - q.paid - (q.unk || 0) > 1 : PIPE_L === 'lost' ? q.st === 'lost' : true))
     .sort((a, b) => (PIPE_L === 'wait' ? (b.inv - b.paid) - (a.inv - a.paid) : PIPE_L === 'open' ? (b.total - b.inv) - (a.total - a.inv) : b.total - a.total));
   document.querySelector('#pipe-list summary').textContent = `รายการ QT (${fmt0(xs.length)} ใบ)`;
   $('pipe-rows').innerHTML = ls.length ? `<table class="sum"><tr><th>QT</th><th style="text-align:left">ลูกค้า</th><th style="text-align:left">เซล</th><th>วันที่ออก</th><th>ยอด QT</th><th>ออก INV แล้ว</th><th>เงินเข้าแล้ว</th><th style="text-align:left">สถานะ</th></tr>
@@ -137,6 +148,7 @@ function renderPipe() {
 }
 $('pipe-m').onchange = (e) => { PIPE_M = e.target.value; renderPipe(); };
 $('pipe-g').onchange = (e) => { PIPE_G = e.target.value; renderPipe(); };
+$('pipe-x').onchange = (e) => { PIPE_X = Number(e.target.value); renderPipe(); };
 document.querySelectorAll('#pipe-by button').forEach((b) => b.onclick = () => { PIPE_BY = b.dataset.v; renderPipe(); });
 document.querySelectorAll('#pipe-l button').forEach((b) => b.onclick = () => { PIPE_L = b.dataset.v; renderPipe(); });
 
@@ -219,6 +231,28 @@ function reportRows(grid) {
   if (!rows.length) throw new Error('ไม่พบรายการเอกสารในรายงาน');
   return { kind, rows };
 }
+// PEAK's invoice report against the AR book (accounting / admins): each group is a list to look into.
+function renderChecks() {
+  const c = D.checks;
+  $('ck-card').hidden = !c;
+  if (!c) return;
+  $('ck-hint').textContent = `เทียบ INV ที่ออกช่วง ${c.from} ถึง ${c.to} (ช่วงของรายงานที่อัปโหลดล่าสุด) · รายการด้านล่างคือจุดที่สองระบบไม่ตรงกัน ให้ฝ่ายบัญชีตรวจ`;
+  const G = [
+    ['peakOnly', 'อยู่ใน PEAK แต่ไม่อยู่ในหน้าตามหนี้', 'INV ยังใช้งานใน PEAK แต่ไม่มี (หรือถูกยกเลิก) ในหน้าตามหนี้ ถ้ายังไม่จ่าย อาจเป็นหนี้ที่ไม่มีใครตาม หรือเป็นใบที่ควร void ใน PEAK'],
+    ['bookOnly', 'อยู่ในหน้าตามหนี้ แต่ไม่อยู่ในรายงาน PEAK', 'มักเป็นใบที่ถูก void ใน PEAK แล้ว แต่หน้าตามหนี้ยังนับอยู่ หรือเป็นใบร่างที่ยังไม่อนุมัติ'],
+    ['paidInPeak', 'PEAK รับชำระแล้ว แต่หน้าตามหนี้ยังค้าง', 'ยอดค้างรับในหน้าตามหนี้สูงเกินจริง บันทึกรับเงินในหน้าตามหนี้ หรือกด "อัปเดตจาก PEAK"'],
+    ['paidInBook', 'หน้าตามหนี้รับเงินแล้ว แต่ PEAK ยังไม่รับชำระ', 'ยังไม่ได้บันทึกรับชำระหรือออกใบเสร็จใน PEAK'],
+    ['amount', 'ยอดก่อน VAT ไม่เท่ากัน', 'ตรวจว่าใบไหนถูกแก้หลังนำเข้า'],
+    ['badNo', 'เลข INV ในหน้าตามหนี้ไม่ใช่เลขใบแจ้งหนี้', 'ข้อมูลนำเข้าลงผิดช่อง'],
+  ];
+  const cell = (x) => (x ? `${fmt0(x.preVat)}` : '–');
+  const all = G.reduce((t, [k]) => t + c[k].length, 0);
+  $('ck-body').innerHTML = all ? G.filter(([k]) => c[k].length).map(([k, title, tip]) => `<details class="ck"${k === 'peakOnly' || k === 'paidInPeak' ? ' open' : ''}><summary>${esc(title)} <b>${c[k].length} ใบ</b></summary><p class="small">${esc(tip)}</p>
+    <div class="wrap"><table class="sum"><tr><th>INV</th><th style="text-align:left">ลูกค้า</th><th>วันที่ออก</th><th>สถานะใน PEAK</th><th>ยอดใน PEAK</th><th>สถานะในหน้าตามหนี้</th><th>ยอดในหน้าตามหนี้</th></tr>
+    ${c[k].slice(0, 60).map((r) => `<tr><td class="mono">${esc(r.ivNo)}</td><td style="text-align:left;white-space:normal">${esc(r.company)}</td><td>${esc(r.date)}</td><td>${r.peak ? esc(r.peak.status) : '–'}</td><td>${cell(r.peak)}</td><td>${r.book ? esc(BOOK_ST[r.book.state] || r.book.state) + (r.cancelledInBook ? '' : r.book.paidDate ? ' ' + esc(r.book.paidDate) : '') : 'ไม่มี'}</td><td>${cell(r.book)}</td></tr>`).join('')}</table></div>${c[k].length > 60 ? `<p class="small">แสดง 60 จาก ${c[k].length} ใบ</p>` : ''}</details>`).join('')
+    : '<p class="small">ไม่พบจุดที่ไม่ตรงกัน</p>';
+}
+const BOOK_ST = { Paid: 'รับเงินแล้ว', Outstanding: 'ค้างรับ', Overdue: 'เกินกำหนด', Closed: 'ยกเลิก' };
 function renderUp() {
   const r = D.reports || {}, one = (x, t) => (x ? `<b>${t}:</b> ${fmt0(x.count)} ใบ · เอกสารวันที่ ${esc(x.from)} ถึง ${esc(x.to)} · อัปโหลดล่าสุด ${esc(x.at)}` : `<b>${t}:</b> ยังไม่ได้อัปโหลด`);
   $('up-card').hidden = !(D.canUpload || r.qt || r.inv);
@@ -250,7 +284,7 @@ async function load(fresh) {
     if (r.status === 401) { location.href = '/signin.html?next=/sales'; return; }
     const d = await r.json().catch(() => null);
     if (!r.ok || !d || !d.ok) throw new Error((d && d.error) || `HTTP ${r.status}`);
-    D = d; renderPipe(); renderInv(); renderUp();
+    D = d; renderPipe(); renderInv(); renderChecks(); renderUp();
   } catch (e) { $('msg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
   $('pipe-load').hidden = true;
 }

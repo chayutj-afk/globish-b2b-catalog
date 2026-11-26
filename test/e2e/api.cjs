@@ -911,6 +911,13 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
     ok(j.rules && j.rules.staleDays === 90 && j.rules.dupDays === 30, 'the page is told the rules');
     const ck = j.checks || {}, nos = (k) => (ck[k] || []).map((r) => r.ivNo).join();
     ok(/IV-20260300001/.test(nos('peakOnly')) && /IV-20260300003/.test(nos('peakOnly')) && !/IV-20260300002/.test(nos('peakOnly')), 'checks: INVs in PEAK that the AR book does not have: ' + nos('peakOnly'));
+    ok(/IV-20260300004/.test(nos('noQt')) && !/IV-20260300001/.test(nos('noQt')), 'checks: INVs without a QT number: ' + nos('noQt'));
+    [s, j] = await post(ACCT, { kind: 'inv', rows: [I('IV-20260300009', 'QO-20260300001', 'รอชำระ', 250)] });
+    [s, j] = await call(ACCT, 'GET', '/api/invoice-requests?view=pipeline'); const qa = ((j.checks || {}).qtAmount || []).find((r) => r.qtNo === 'QO-20260300001');
+    ok(qa && qa.total === 1000 && qa.invoiced === 1250, `checks: a fully invoiced QT whose INVs add up to more (${qa && [qa.total, qa.invoiced]})`);
+    // Which QTs were made through the app: flagged, with the day the app started.
+    const appQ = (j.pipeline || []).filter((q) => q.app), plQ = (j.pipeline || []).find((q) => q.qtNo === 'QO-PL-1'), lgQ = (j.pipeline || []).find((q) => /^QO-202611000/.test(q.qtNo) && !q.app);
+    ok(appQ.length > 0 && plQ && plQ.app === true && !X['QO-20260400003'].app && /^\d\d\/\d\d\/\d{4}$/.test(j.appSince || ''), `QTs asked for through the app are marked, the rest are not; the app started ${j.appSince}`);
     [s, j] = await call(LEAD, 'GET', '/api/invoice-requests?view=pipeline'); ok(s === 200 && j.checks === undefined && j.canUpload === false, 'the checks are for accounting and admins only');
   }
   done();

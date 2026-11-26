@@ -715,7 +715,7 @@ async function pipelineView(req, res, user) {
   res.status(200).json({ ok: true, pipeline: sp.pipeline({ reqs, invs, pq, pi, sees, today }), invMonths: sp.invoiceMonths(invs.filter(sees), today),
     reports: { qt: sp.reportInfo(pq, 'qtNo'), inv: sp.reportInfo(pi, 'ivNo') }, canUpload, rules: { staleDays: sp.STALE_DAYS, dupDays: sp.DUP_DAYS },
     // PEAK's invoice report against the AR book: for the people who keep both (accounting, admins).
-    checks: canUpload ? sp.checks(invs, pi) : undefined });
+    checks: canUpload ? sp.checks(invs, pi, pq) : undefined, appSince: sp.appSince(reqs) });
 }
 
 // PEAK's quotation / invoice report (Excel), read in the browser and sent as rows: stored on the PeakQuotes / PeakInvoices

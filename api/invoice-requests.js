@@ -702,55 +702,38 @@ function drillRows(all, today, key, events = cashEvents(all)) {
   return { rows, total: Math.round(rows.reduce((t, r) => t + (Number(r.amount) || 0), 0) * 100) / 100, basis: preVat ? 'prevat' : paid ? 'paid' : 'expected' };
 }
 
-// Sales pipeline: every approved QT of the last 12 months with how much of it has been invoiced and how much of that
-// has been collected, all before VAT so the three figures compare. One row per QT; the page adds them up.
-const QT_LIVE = ['qt_approved', 'accepted', 'iv_requested', 'iv_issued'];
-// Share of an INV's pre-VAT amount that has been collected (bank charges the company absorbed count as collected).
-const paidShare = (r) => (r.state === 'Paid' ? 1 : r.received > 0 && r.expectedFull > 0 ? Math.min(1, (r.received + (r.fee || 0)) / r.expectedFull) : 0);
-// The same question starting from the INV: INVs issued in a month (every INV, with or without a QT in the app) and how
-// much of them has been collected, pre-VAT. One row per month × seller × customer group, 36 months back.
-function invoiceMonths(invs, today) {
-  const from = Date.UTC(new Date(today).getUTCFullYear(), new Date(today).getUTCMonth() - 35, 1);
-  const g = new Map();
-  for (const r of invs) {
-    if (r.state === 'Closed' || r.issueMs === null || r.issueMs < from || !(r.preVatN > 0)) continue;
-    const m = ar.fmt(r.issueMs).slice(3), sales = r.salesName || r.salesEmail || '(ไม่ระบุ)', seg = r.segment || 'Others', k = [m, sales, seg].join('|');
-    const o = g.get(k) || g.set(k, { m, sales, seg, n: 0, inv: 0, paid: 0 }).get(k);
-    o.n++; o.inv += r.preVatN; o.paid += r.preVatN * paidShare(r);
-  }
-  return [...g.values()].map((o) => ({ ...o, inv: round2(o.inv), paid: round2(o.paid) }));
-}
-function pipeline(reqs, invs, today, keep) {
-  const up = (v) => String(v || '').trim().toUpperCase();
-  const byReq = new Map(), byQt = new Map();
-  const put = (m, k, r) => { if (k) { if (!m.has(k)) m.set(k, []); m.get(k).push(r); } };
-  for (const r of invs) { if (r.state === 'Closed') continue; if (r.requestId) put(byReq, r.requestId, r); else put(byQt, up(r.qtNo), r); }
-  const got = paidShare;
-  const from = Date.UTC(new Date(today).getUTCFullYear(), new Date(today).getUTCMonth() - 11, 1);
-  const out = [];
-  for (const q of reqs) {
-    if (!q.peakQtNo || !QT_LIVE.includes(q.status) || !keep(q)) continue;
-    const ms = ar.parseDate(q.qtApprovedAt) ?? ar.parseDate(q.createdAt);
-    if (ms === null || ms < from) continue;
-    const total = round2(ar.num(q.totalPreVat));
-    if (!(total > 0)) continue;
-    const ivs = [...(byReq.get(q.requestId) || []), ...(byQt.get(up(q.peakQtNo)) || [])];
-    const linked = ivs.reduce((t, r) => t + (r.preVatN || 0), 0);
-    // An INV issued from this QT before the app existed is only known as an amount (openingInvoiced / the sheet's total).
-    const inv = round2(Math.min(total, Math.max(linked, ar.num(q._invoicedPreVat), ar.num(q.openingInvoiced))));
-    const paid = round2(Math.min(inv, ivs.reduce((t, r) => t + (r.preVatN || 0) * got(r), 0)));
-    out.push({ qtNo: q.peakQtNo, company: q.company, sales: q.salesName || q.requestedBy || '(ไม่ระบุ)', seg: q.segment || 'Others', date: ar.fmt(ms), total, inv, paid, link: q.peakDocLink || undefined });
-  }
-  return out;
-}
-
-// The "ยอดขาย" page: same people and same visibility as the AR page.
+// The "ยอดขาย" page: same people and same visibility as the AR page. The figures are built in lib/salespipe.js.
 async function pipelineView(req, res, user) {
   if (!can(user, 'ar_view')) throw bad('ไม่มีสิทธิ์ดูหน้ายอดขาย', 403);
-  const [rows, reqs, sees] = await Promise.all([hub.readTable('Invoices', { cache: 20e3 }), hub.readTable('Requests', { cache: 20e3 }), arSees(user)]);
+  const sp = require('../lib/salespipe');
+  const rd = { cache: 20e3 };
+  const [rows, reqs, pq, pi, sees] = await Promise.all([hub.readTable('Invoices', rd), hub.readTable('Requests', rd),
+    hub.readTable('PeakQuotes', rd).catch(() => []), hub.readTable('PeakInvoices', rd).catch(() => []), arSees(user)]);
   const today = ar.todayMs();
-  const invs = rows.filter((r) => r.ivNo && sees(r)).map((r) => ({ ...ar.enrich(r, today), preVatN: ar.num(r.preVat) }));
-  res.status(200).json({ ok: true, pipeline: pipeline(reqs, invs, today, (q) => sees({ salesEmail: q.requestedBy, segment: q.segment })), invMonths: invoiceMonths(invs, today) });
+  const invs = rows.filter((r) => r.ivNo).map((r) => ({ ...ar.enrich(r, today), preVatN: ar.num(r.preVat) }));
+  res.status(200).json({ ok: true, pipeline: sp.pipeline({ reqs, invs, pq, pi, sees }), invMonths: sp.invoiceMonths(invs.filter(sees), today),
+    reports: { qt: sp.reportInfo(pq, 'qtNo'), inv: sp.reportInfo(pi, 'ivNo') }, canUpload: isOp(user) || can(user, 'users') });
+}
+
+// PEAK's quotation / invoice report (Excel), read in the browser and sent as rows: stored on the PeakQuotes / PeakInvoices
+// tabs for the "ยอดขาย" page. Accounting and admins. A document in the upload replaces the stored one; the rest stay.
+async function peakReport(req, res, user) {
+  checkOrigin(req);
+  if (!(isOp(user) || can(user, 'users'))) throw bad('เฉพาะฝ่ายบัญชีหรือผู้ดูแลระบบ', 403);
+  const sp = require('../lib/salespipe');
+  const b = req.body || {}, kind = b.kind === 'qt' ? 'qt' : b.kind === 'inv' ? 'inv' : '';
+  if (!kind) throw bad('ไม่รู้จักชนิดรายงาน');
+  if (!Array.isArray(b.rows) || !b.rows.length) throw bad('ไม่พบรายการเอกสารในไฟล์');
+  if (b.rows.length > 6000) throw bad('ไฟล์มีมากกว่า 6,000 รายการ แบ่งช่วงวันที่แล้วอัปโหลดทีละไฟล์');
+  const at = hub.sheetDateTime(), table = kind === 'qt' ? 'PeakQuotes' : 'PeakInvoices';
+  let rows;
+  try { rows = b.rows.map((r) => sp.reportRow(kind, r, at)); } catch (e) { throw bad(e.message); }
+  const drafts = rows.filter((r) => r.status === sp.DRAFT).length;
+  const m = sp.mergeReport(kind, await hub.readTable(table).catch(() => []), rows);
+  await hub.replaceTable(table, m.rows);
+  await hub.log('catalog', 'peak_report', table, `${user.email} · ${rows.length} รายการ (ใหม่ ${m.added} · แทนที่ ${m.updated}) · รวม ${m.rows.length}`);
+  res.status(200).json({ ok: true, kind, received: rows.length, added: m.added, updated: m.updated, total: m.rows.length, drafts,
+    linked: kind === 'inv' ? rows.filter((r) => r.qtNo).length : undefined });
 }
 
 async function arList(req, res, user) {
@@ -1816,7 +1799,7 @@ async function inner(req, res) {
   try {
     const user = await requireUser(req);
     const act = String((req.body || {}).action || '');
-    if (req.method === 'POST') return await ({ legacy_import: importLegacy, receipt: createReceipt, edit: createEdit, pay_notice: createPayNotice }[act] || create)(req, res, user);
+    if (req.method === 'POST') return await ({ legacy_import: importLegacy, peak_report: peakReport, receipt: createReceipt, edit: createEdit, pay_notice: createPayNotice }[act] || create)(req, res, user);
     if (req.method === 'PATCH' && act === 'qt_adopt') return await adoptQt(req, res, user);
     if (req.method === 'PATCH' && act === 'rt_find') { checkOrigin(req); return await rtFind(req, res, user); }
     if (req.method === 'PATCH') return await (act.startsWith('ar_') ? arUpdate : act.startsWith('rt_') ? updateReceipt : act.startsWith('edit_') ? updateEdit : act.startsWith('pay_') ? updatePayNotice : update)(req, res, user);

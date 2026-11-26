@@ -834,7 +834,7 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
     ].map((r) => T.Invoices.map((h) => r[h] ?? '')));
     fsx.writeFileSync(F, JSON.stringify(raw));
     [s, j] = await call(ACCT, 'GET', '/api/invoice-requests?view=pipeline'); const pl = Object.fromEntries((j.pipeline || []).filter((q) => /^QO-PL-/.test(q.qtNo)).map((q) => [q.qtNo.slice(6), q]));
-    ok(s === 200 && Object.keys(pl).sort().join() === '1,2,3', 'only approved QTs of the last 12 months are listed: ' + Object.keys(pl).sort().join());
+    ok(s === 200 && Object.keys(pl).sort().join() === '1,2,3,6', 'approved QTs are listed, rejected and draft ones are not: ' + Object.keys(pl).sort().join());
     ok(pl[1] && pl[1].total === 100000 && pl[1].inv === 80000 && pl[1].paid === 60000, `QT 1: invoiced 80,000 (cancelled INV left out), collected 40,000 + half of 40,000 (${pl[1] && [pl[1].inv, pl[1].paid]})`);
     ok(pl[2] && pl[2].inv === 100000 && pl[2].paid === 0, `QT 2: INV matched by QT number, invoiced capped at the QT total (${pl[2] && [pl[2].inv, pl[2].paid]})`);
     ok(pl[3] && pl[3].total === 50000 && pl[3].inv === 20000 && pl[3].paid === 0, `QT 3: amount invoiced before the app counts as invoiced (${pl[3] && [pl[3].total, pl[3].inv]})`);
@@ -869,6 +869,34 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
     ok(await left() === 0, 'the amount is back on the QT');
     [s, j] = await call(BEE, 'GET', '/api/invoice-requests'); const mineIv = (j.requests || j.invoiceRequests || []).find((x) => x.ivRequestId === 'IVR-RI-1');
     ok(mineIv && /^รอขอ INV ใหม่/.test(mineIv.accountNote || ''), 'the flag reaches the Sales page');
+  }
+
+  console.log('── 37. PEAK quotation / invoice reports uploaded for the sales page');
+  { const Q = (no, status, pre, o) => ({ no, issue: '05/03/2026', until: '20/03/2026', ref: '', status, company: 'บริษัท รายงาน จำกัด', taxId: '0105540009999', branch: '00000', product: 'Package01 English Training Course', novat: '0', vat0: '0', vat7: String(pre), total: String(pre * 1.07), ...o });
+    const I = (no, qt, status, pre, o) => ({ no, issue: '10/03/2026', until: '09/04/2026', ref: qt, sysRef: qt, status, company: 'บริษัท รายงาน จำกัด', taxId: '0105540009999', branch: '00000', product: 'Package01', novat: '0', vat0: '0', vat7: String(pre), total: String(pre * 1.07), ...o });
+    const post = (who, b) => call(who, 'POST', '/api/invoice-requests', { action: 'peak_report', ...b });
+    const qts = [Q('QO-20260300001', 'ออกครบแล้ว', 1000), Q('QO-20260300002', 'ออกบางส่วน', 2000), Q('QO-20260300003', 'พ้นกำหนด', 4000), Q('QO-20260300004', 'รอตอบรับ', 8000), Q('QO-20260300005', 'ร่าง', 999999),
+      Q('QO-20260300006', 'ออกครบแล้ว', 500, { company: 'สมชาย ใจดี', product: '5280 - (Xtra Plus) General English' }), Q('QO-20250300007', 'ออกครบแล้ว', 700, { issue: '05/03/2025' })];
+    [s, j] = await post(BEE, { kind: 'qt', rows: qts }); ok(s === 403, 'sales cannot upload ' + s);
+    [s, j] = await post(ACCT, { kind: 'qt', rows: [{ no: 'hello', issue: '05/03/2026' }] }); ok(s === 400, 'a row that is not a document is refused: ' + j.error);
+    [s, j] = await post(ACCT, { kind: 'qt', rows: qts }); ok(s === 200 && j.added === 7 && j.drafts === 1, `quotation report stored (${j.added} new, ${j.drafts} draft) ` + (j.error || ''));
+    [s, j] = await post(ACCT, { kind: 'qt', rows: [Q('QO-20260300004', 'ยอมรับแล้ว', 8000)] }); ok(s === 200 && j.added === 0 && j.updated === 1 && j.total === 7, 'a second upload replaces the same document and keeps the others');
+    [s, j] = await post(ACCT, { kind: 'inv', rows: [I('IV-20260300001', 'QO-20260300001', 'รับชำระแล้ว', 1000), I('IV-20260300002', ' qo-20260300002', 'รอชำระ', 500), I('IV-20260300003', 'QO-20260300002', 'รับชำระแล้ว', 300), I('IV-20260300004', '', 'รอชำระ', 100)] });
+    ok(s === 200 && j.added === 4 && j.linked === 3, `invoice report stored, 3 of 4 carry a QT number (${j.linked}) ` + (j.error || ''));
+    [s, j] = await call(ACCT, 'GET', '/api/invoice-requests?view=pipeline'); const P = Object.fromEntries((j.pipeline || []).filter((q) => /^QO-202[56]0300/.test(q.qtNo)).map((q) => [q.qtNo.slice(-1), q]));
+    ok(Object.keys(P).sort().join() === '1,2,3,4,6,7', 'drafts are left out of the pipeline: ' + Object.keys(P).sort().join());
+    ok(P[1].st === 'won' && P[1].inv === 1000 && P[1].paid === 1000, `fully invoiced and paid in PEAK (${[P[1].st, P[1].inv, P[1].paid]})`);
+    ok(P[2].st === 'part' && P[2].inv === 800 && P[2].paid === 300, `partly invoiced: 800 of 2,000, 300 collected (${[P[2].st, P[2].inv, P[2].paid]})`);
+    ok(P[3].st === 'lost' && P[3].inv === 0 && P[4].st === 'open' && P[4].inv === 0, 'expired = lost, accepted = still open');
+    ok(P[6].st === 'won' && P[6].inv === 500 && P[6].unk === 500 && P[6].paid === 0 && P[6].seg === 'B2C', `fully invoiced without a known INV: counted as invoiced, payment unknown; a person buying a WH package reads as B2C (${[P[6].unk, P[6].seg]})`);
+    ok(P[1].seg === 'B2B' && P[7].date === '05/03/2025', 'a company reads as B2B; last year is kept');
+    ok(j.reports && j.reports.qt && j.reports.qt.count === 7 && j.reports.inv.count === 4 && j.canUpload === true, 'the page is told what was uploaded');
+    // An INV in the AR book for the same number adds what PEAK's report does not say: a part payment and the seller.
+    { const fsx = require('fs'), F = '/tmp/sales-desk-e2e/db.json', T = require('./lib.cjs').T, cur = JSON.parse(fsx.readFileSync(F, 'utf8'));
+      const v = { ivNo: 'IV-20260300002', issueDate: '10/03/2026', segment: 'B2G', salesEmail: BEE, salesName: 'Bee', company: 'บริษัท รายงาน จำกัด', preVat: 500, creditTermDays: 30, whtRate: '0', docStatus: 'Active', commitDate: '28/12/2099', dueDate: '28/12/2099', paidAmount: 267.5 };
+      cur.Invoices.push(T.Invoices.map((h) => v[h] ?? '')); fsx.writeFileSync(F, JSON.stringify(cur)); }
+    [s, j] = await call(ACCT, 'GET', '/api/invoice-requests?view=pipeline'); const p2 = (j.pipeline || []).find((q) => q.qtNo === 'QO-20260300002');
+    ok(p2 && p2.paid === 550 && p2.sales === 'Bee' && p2.seg === 'B2G', `the AR book adds the part payment (300 + half of 500), the seller and the customer group (${p2 && [p2.paid, p2.sales, p2.seg]})`);
   }
   done();
 })().catch((e) => { console.error('CRASH', e); ok(false, 'CRASH: the run stopped early: ' + e.message); done(); process.exitCode = 1; });

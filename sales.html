@@ -28,6 +28,12 @@ table.sum tr.tot td{font-weight:500;color:var(--head)}
 .pctl{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}.pctl .seg{margin:0}.pctl select{font:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);color:inherit;min-height:34px}
 #pipe-list summary{cursor:pointer;font-size:13px;color:var(--head);padding:8px 0;font-weight:500}
 @media (max-width:640px){.pf .r{grid-template-columns:1fr max-content}.pf .t{grid-column:1/-1;grid-row:2}.pf .n{grid-column:1/-1}}
+.pgap.four div{flex:1 1 180px}
+.pc-l{background:var(--muted);opacity:.28}.pc-o{background:var(--primary);opacity:.38}
+.up{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}.up input[type=file]{font:inherit;font-size:13px;max-width:100%}
+.upinfo{font-size:13px;color:var(--ink);line-height:1.8;margin:6px 0 10px}.upinfo b{font-weight:500;color:var(--head)}
+#up-log{font-size:13px;line-height:1.7;margin-top:8px}#up-log .bad{color:var(--bad-ink)}#up-log .good{color:var(--ok-ink)}
+details.how{font-size:12.5px;color:var(--muted);margin-top:8px}details.how summary{cursor:pointer}details.how ol{margin:6px 0 0 18px;line-height:1.8}
 </style>
 </head>
 <body data-page="sales">
@@ -37,19 +43,28 @@ table.sum tr.tot td{font-weight:500;color:var(--head)}
 <main>
   <div id="msg"></div>
   <div class="card" id="pipe-card" hidden><h2>QT → INV → เงินเข้า</h2>
-      <p class="hint">QT ที่อนุมัติแล้ว นับตามเดือนที่อนุมัติ แล้วดูว่า QT ชุดนั้นออก INV และเก็บเงินได้แล้วเท่าไหร่ · ทุกยอดเป็นยอดก่อน VAT เพื่อให้เทียบกันได้<br>ระบบรู้ว่า INV ใบไหนมาจาก QT ใบไหน เฉพาะ INV ที่ขอผ่านระบบ (ตั้งแต่กลาง พ.ย. 2026) QT ก่อนหน้านั้นจึงแสดงเป็น "ยังไม่ออก INV" แม้จะออกไปแล้ว ดูยอด INV และเงินเข้าที่ครบกว่าได้ในตารางถัดไป</p>
-      <div class="pctl"><label for="pipe-m" class="small">QT ที่อนุมัติใน</label><select id="pipe-m"></select><select id="pipe-g" aria-label="กลุ่มลูกค้า"></select>
-        <div class="seg" id="pipe-by" role="group" aria-label="แยกตาม"><button type="button" data-v="month" class="on">แยกตามเดือน</button><button type="button" data-v="sales">ตามเซล</button><button type="button" data-v="seg">ตามกลุ่มลูกค้า</button></div></div>
-      <div id="pipe-fun"></div><div class="wrap" id="pipe-tab"></div>
-      <details id="pipe-list"><summary>รายการ QT</summary><div class="pctl" style="margin:4px 0 8px"><div class="seg" id="pipe-l" role="group" aria-label="กรองรายการ QT"><button type="button" data-v="all" class="on">ทั้งหมด</button><button type="button" data-v="noinv">ยังออก INV ไม่ครบ</button><button type="button" data-v="wait">ออก INV แล้ว รอเงิน</button></div></div><div class="wrap" id="pipe-rows"></div></details>
-    </div>
+    <p class="hint" id="pipe-hint"></p>
+    <div class="pctl"><label for="pipe-m" class="small">QT ที่ออกใน</label><select id="pipe-m"></select><select id="pipe-g" aria-label="กลุ่มลูกค้า"></select>
+      <div class="seg" id="pipe-by" role="group" aria-label="แยกตาม"><button type="button" data-v="month" class="on">แยกตามเดือน</button><button type="button" data-v="sales">ตามเซล</button><button type="button" data-v="seg">ตามกลุ่มลูกค้า</button></div></div>
+    <div id="pipe-fun"></div><div class="wrap" id="pipe-tab"></div>
+    <details id="pipe-list"><summary>รายการ QT</summary><div class="pctl" style="margin:4px 0 8px"><div class="seg" id="pipe-l" role="group" aria-label="กรองรายการ QT"><button type="button" data-v="all" class="on">ทั้งหมด</button><button type="button" data-v="open">ยังเปิดอยู่</button><button type="button" data-v="wait">ออก INV แล้ว รอเงิน</button><button type="button" data-v="lost">ไม่ได้ปิด</button></div></div><div class="wrap" id="pipe-rows"></div></details>
+  </div>
   <div class="card" id="im-card" hidden><h2>INV → เงินเข้า (ตามเดือนที่ออก INV)</h2>
     <p class="hint">INV ทุกใบที่ออกในเดือนนั้น ไม่ว่าจะมาจาก QT เดือนไหน แล้วดูว่าเก็บเงินได้แล้วเท่าไหร่ · ยอดก่อน VAT ไม่นับใบที่ยกเลิกหรือถูกแทน</p>
     <div class="pctl"><label for="im-n" class="small">ย้อนหลัง</label><select id="im-n"><option value="12">12 เดือน</option><option value="24">24 เดือน</option><option value="36">36 เดือน</option></select><select id="im-g" aria-label="กลุ่มลูกค้า"></select>
       <div class="seg" id="im-by" role="group" aria-label="แยกตาม"><button type="button" data-v="month" class="on">แยกตามเดือน</button><button type="button" data-v="sales">ตามเซล</button><button type="button" data-v="seg">ตามกลุ่มลูกค้า</button></div></div>
     <div class="wrap" id="im-tab" style="margin-top:12px"></div>
   </div>
-  <div class="card" id="pipe-none" hidden><div class="empty">ยังไม่มี QT ที่อนุมัติแล้วในช่วง 12 เดือนล่าสุด</div></div>
+  <div class="card" id="pipe-none" hidden><div class="empty">ยังไม่มีข้อมูล QT</div></div>
+  <div class="card" id="up-card" hidden><h2>ข้อมูลจาก PEAK</h2>
+    <p class="hint">ตาราง QT ใช้รายงานใบเสนอราคาและรายงานใบแจ้งหนี้ที่ export จาก PEAK เป็น Excel อัปโหลดใหม่ได้ทุกเมื่อเพื่อให้ตัวเลขเป็นปัจจุบัน ไม่ใช้โควตา PEAK API</p>
+    <div class="upinfo" id="up-info"></div>
+    <div id="up-box" hidden>
+      <div class="up"><label for="up-file" class="small">เลือกไฟล์รายงาน (.xlsx) เลือกหลายไฟล์พร้อมกันได้</label><input type="file" id="up-file" accept=".xlsx" multiple></div>
+      <div id="up-log" role="status" aria-live="polite"></div>
+      <details class="how"><summary>วิธี export จาก PEAK</summary><ol><li>PEAK › รายรับ › ใบเสนอราคา (หรือใบแจ้งหนี้) › พิมพ์รายงาน</li><li>เลือกช่วงวันที่ เช่น 01/01 ถึงวันนี้ ประเภท "แสดงข้อมูลพื้นฐาน" แล้วดาวน์โหลดเป็น Excel</li><li>อัปโหลดทั้งสองไฟล์ที่นี่ ระบบแยกชนิดรายงานให้เอง เอกสารเลขเดิมจะถูกแทนด้วยข้อมูลใหม่ ส่วนเอกสารช่วงอื่นที่เคยอัปโหลดไว้ยังอยู่</li></ol></details>
+    </div>
+  </div>
   <div class="empty" id="pipe-load">กำลังโหลด...</div>
 </main>
 </div></div>
@@ -58,59 +73,73 @@ const $ = (id) => document.getElementById(id);
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 const fmt0 = (n) => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 });
 let D = {};
-// ── Sales pipeline: approved QTs → invoiced → collected (pre-VAT), by the month the QT was approved ───────────────
-let PIPE_M = 'all', PIPE_BY = 'month', PIPE_L = 'all', PIPE_G = '';
 const TH_MON = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
 const monLabel = (k) => `${TH_MON[+k.slice(0, 2) - 1]} ${k.slice(3)}`; // "11/2026" → "พ.ย. 2026"
 const monSort = (k) => k.slice(3) + k.slice(0, 2);
 const shortName = (n) => { const m = /\(([^)]+)\)/.exec(n); return m ? m[1] : String(n).split('@')[0]; };
+const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0), wd = (a, b) => (b ? Math.max(0, Math.min(100, (a / b) * 100)) : 0);
+
+// ── Quotations → invoiced → collected (pre-VAT), by the month the QT was issued ────────────────────────────────────
+// Each QT: total, inv (invoiced), paid (collected), unk (invoiced, payment not known), st: won | part | open | lost.
+let PIPE_M = '', PIPE_BY = 'month', PIPE_L = 'all', PIPE_G = '';
+const ST_LABEL = { won: 'ออก INV ครบ', part: 'ออก INV บางส่วน', open: 'รอลูกค้า / ยังไม่ออก INV', lost: 'พ้นกำหนด / ปฏิเสธ' };
 function renderPipe() {
   const every = D.pipeline || [];
   $('pipe-card').hidden = !every.length; $('pipe-none').hidden = !!every.length || !!(D.invMonths || []).length;
   if (!every.length) return;
+  const fromPeak = !!(D.reports && D.reports.qt);
+  $('pipe-hint').innerHTML = (fromPeak ? 'QT ทุกใบที่ออกใน PEAK (ไม่นับใบร่าง) นับตามเดือนที่ออก QT' : 'QT ที่อนุมัติผ่านระบบ นับตามเดือนที่อนุมัติ')
+    + ' แล้วดูว่า QT ชุดนั้นออก INV และเก็บเงินได้แล้วเท่าไหร่ · ทุกยอดเป็นยอดก่อน VAT เพื่อให้เทียบกันได้'
+    + (fromPeak ? '<br>กลุ่มลูกค้าของ QT ที่ยังไม่เคยออก INV ประมาณจากชื่อลูกค้าและชื่อสินค้า และไม่มีชื่อเซล (PEAK ไม่ได้ส่งมาในรายงาน)' : '<br>ยังไม่ได้อัปโหลดรายงานจาก PEAK จึงเห็นเฉพาะ QT ที่อยู่ในระบบ');
+  const mk = (q) => q.date.slice(3), yr = (q) => q.date.slice(6);
   const segs = [...new Set(every.map((q) => q.seg))].sort();
   if (PIPE_G && !segs.includes(PIPE_G)) PIPE_G = '';
   $('pipe-g').innerHTML = '<option value="">ทุกกลุ่มลูกค้า</option>' + segs.map((g) => `<option${g === PIPE_G ? ' selected' : ''}>${esc(g)}</option>`).join('');
   const all = PIPE_G ? every.filter((q) => q.seg === PIPE_G) : every;
-  const mk = (q) => q.date.slice(3);
-  const months = [...new Set(all.map(mk))].sort((a, b) => monSort(b).localeCompare(monSort(a)));
-  if (PIPE_M !== 'all' && !months.includes(PIPE_M)) PIPE_M = 'all';
-  $('pipe-m').innerHTML = `<option value="all">ทุกเดือน (${months.length} เดือนล่าสุด)</option>` + months.map((m) => `<option value="${m}"${m === PIPE_M ? ' selected' : ''}>${monLabel(m)}</option>`).join('');
+  const years = [...new Set(every.map(yr))].sort().reverse(), months = [...new Set(every.map(mk))].sort((a, b) => monSort(b).localeCompare(monSort(a)));
+  if (!PIPE_M || (PIPE_M !== 'all' && !years.includes(PIPE_M.slice(2)) && !months.includes(PIPE_M))) PIPE_M = 'y:' + years[0];
+  const o = (v, t) => `<option value="${v}"${v === PIPE_M ? ' selected' : ''}>${t}</option>`;
+  $('pipe-m').innerHTML = years.map((y) => o('y:' + y, 'ปี ' + y)).join('') + (years.length > 1 ? o('all', 'ทุกปี') : '') + `<optgroup label="รายเดือน">${months.map((m) => o(m, monLabel(m))).join('')}</optgroup>`;
   document.querySelectorAll('#pipe-by button').forEach((b) => b.classList.toggle('on', b.dataset.v === PIPE_BY));
   document.querySelectorAll('#pipe-l button').forEach((b) => b.classList.toggle('on', b.dataset.v === PIPE_L));
-  const xs = PIPE_M === 'all' ? all : all.filter((q) => mk(q) === PIPE_M);
-  const add = (ys) => ys.reduce((t, q) => ({ n: t.n + 1, total: t.total + q.total, inv: t.inv + q.inv, paid: t.paid + q.paid, open: t.open + (q.inv < q.total - 1 ? 1 : 0) }), { n: 0, total: 0, inv: 0, paid: 0, open: 0 });
-  const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0), w = (a, b) => (b ? Math.max(0, Math.min(100, (a / b) * 100)) : 0);
+  const xs = PIPE_M === 'all' ? all : PIPE_M.startsWith('y:') ? all.filter((q) => yr(q) === PIPE_M.slice(2)) : all.filter((q) => mk(q) === PIPE_M);
+  const zero = () => ({ n: 0, nInv: 0, total: 0, inv: 0, paid: 0, unk: 0, open: 0, lost: 0, nOpen: 0, nLost: 0 });
+  const add = (ys) => ys.reduce((t, q) => { const rest = Math.max(0, q.total - q.inv), lost = q.st === 'lost';
+    t.n++; t.total += q.total; t.inv += q.inv; t.paid += q.paid; t.unk += q.unk || 0; if (q.inv > 0.009) t.nInv++;
+    if (lost) { t.lost += rest; t.nLost++; } else { t.open += rest; if (rest > 1) t.nOpen++; } return t; }, zero());
   const t = add(xs);
-  const row = (l, cls, v, note) => `<div class="r"><span class="l">${l}</span><div class="t"><i class="${cls}" style="width:${w(v, t.total)}%"></i></div><span class="v">${fmt0(v)}</span><span class="n">${note}</span></div>`;
-  $('pipe-fun').innerHTML = `<div class="pf" role="img" aria-label="QT อนุมัติ ${fmt0(t.total)} บาท ออก INV แล้ว ${fmt0(t.inv)} บาท เงินเข้าแล้ว ${fmt0(t.paid)} บาท">
-      ${row('1. QT อนุมัติ', 'pc-q', t.total, `${t.n} ใบ`)}
-      ${row('2. ออก INV แล้ว', 'pc-i', t.inv, `${pct(t.inv, t.total)}% ของ QT`)}
+  const row = (l, cls, v, note) => `<div class="r"><span class="l">${l}</span><div class="t"><i class="${cls}" style="width:${wd(v, t.total)}%"></i></div><span class="v">${fmt0(v)}</span><span class="n">${note}</span></div>`;
+  $('pipe-fun').innerHTML = `<div class="pf" role="img" aria-label="QT ${fmt0(t.total)} บาท ออก INV แล้ว ${fmt0(t.inv)} บาท เงินเข้าแล้ว ${fmt0(t.paid)} บาท">
+      ${row('1. QT ที่ออก', 'pc-q', t.total, `${fmt0(t.n)} ใบ`)}
+      ${row('2. ออก INV แล้ว', 'pc-i', t.inv, `${pct(t.inv, t.total)}% ของยอด QT · ${fmt0(t.nInv)} ใบ (${pct(t.nInv, t.n)}%)`)}
       ${row('3. เงินเข้าแล้ว', 'pc-p', t.paid, `${pct(t.paid, t.total)}% ของ QT · ${pct(t.paid, t.inv)}% ของ INV`)}</div>
-    <div class="pgap"><div><b>${fmt0(t.total - t.inv)}</b>ยังไม่ออก INV · ${t.open} ใบ (QT → INV)</div><div><b>${fmt0(t.inv - t.paid)}</b>ออก INV แล้ว รอเงินเข้า (INV → เงินเข้า)</div></div>`;
+    <div class="pgap four"><div><b>${fmt0(t.open)}</b>ยังเปิดอยู่ · ${fmt0(t.nOpen)} ใบ (รอลูกค้าตอบ หรือยังออก INV ไม่ครบ)</div><div><b>${fmt0(t.lost)}</b>ไม่ได้ปิด · ${fmt0(t.nLost)} ใบ (พ้นกำหนด หรือลูกค้าปฏิเสธ)</div>
+      <div><b>${fmt0(t.inv - t.paid - t.unk)}</b>ออก INV แล้ว รอเงินเข้า</div>${t.unk > 1 ? `<div><b>${fmt0(t.unk)}</b>ออก INV แล้ว แต่ไม่ทราบสถานะเงิน (ไม่มีรายงานใบแจ้งหนี้ของช่วงนั้น)</div>` : ''}</div>`;
   // breakdown
   const key = PIPE_BY === 'month' ? mk : PIPE_BY === 'sales' ? (q) => q.sales : (q) => q.seg;
   const groups = [...new Set(xs.map(key))].map((k) => ({ k, ...add(xs.filter((q) => key(q) === k)) }));
   if (PIPE_BY === 'month') groups.sort((a, b) => monSort(b.k).localeCompare(monSort(a.k))); else groups.sort((a, b) => b.total - a.total);
   const max = Math.max(1, ...groups.map((g) => g.total));
   const name = (k) => (PIPE_BY === 'month' ? monLabel(k) : PIPE_BY === 'sales' ? `<span title="${esc(k)}">${esc(shortName(k))}</span>` : esc(k));
-  const line = (g, lab, bar) => `<td>${lab}</td><td>${g.n}</td><td>${fmt0(g.total)}</td><td>${fmt0(g.inv)}</td><td class="small">${pct(g.inv, g.total)}%</td><td>${fmt0(g.paid)}</td><td class="small">${pct(g.paid, g.total)}%</td><td>${bar}</td>`;
-  $('pipe-tab').innerHTML = `<table class="sum"><tr><th>${PIPE_BY === 'month' ? 'เดือนที่อนุมัติ QT' : PIPE_BY === 'sales' ? 'เซล' : 'กลุ่มลูกค้า'}</th><th>QT (ใบ)</th><th>ยอด QT</th><th>ออก INV แล้ว</th><th></th><th>เงินเข้าแล้ว</th><th></th><th style="width:24%"></th></tr>
-    ${groups.map((g) => `<tr>${line(g, name(g.k), `<div class="pstk" style="width:${w(g.total, max)}%"><i class="pc-p" style="width:${w(g.paid, g.total)}%"></i><i class="pc-i" style="width:${w(g.inv - g.paid, g.total)}%"></i><i class="pc-0" style="width:${w(g.total - g.inv, g.total)}%"></i></div>`)}</tr>`).join('')}
+  const line = (g, lab, bar) => `<td>${lab}</td><td>${fmt0(g.n)}</td><td>${fmt0(g.total)}</td><td>${fmt0(g.inv)}</td><td class="small">${pct(g.inv, g.total)}%</td><td>${fmt0(g.paid)}</td><td class="small">${pct(g.paid, g.inv)}%</td><td>${fmt0(g.open)}</td><td>${fmt0(g.lost)}</td><td>${bar}</td>`;
+  $('pipe-tab').innerHTML = `<table class="sum"><tr><th>${PIPE_BY === 'month' ? 'เดือนที่ออก QT' : PIPE_BY === 'sales' ? 'เซล' : 'กลุ่มลูกค้า'}</th><th>QT (ใบ)</th><th>ยอด QT</th><th>ออก INV แล้ว</th><th title="ของยอด QT">%</th><th>เงินเข้าแล้ว</th><th title="ของยอด INV">%</th><th>ยังเปิดอยู่</th><th>ไม่ได้ปิด</th><th style="width:20%"></th></tr>
+    ${groups.map((g) => `<tr>${line(g, name(g.k), `<div class="pstk" style="width:${wd(g.total, max)}%"><i class="pc-p" style="width:${wd(g.paid, g.total)}%"></i><i class="pc-i" style="width:${wd(g.inv - g.paid, g.total)}%"></i><i class="pc-o" style="width:${wd(g.open, g.total)}%"></i><i class="pc-l" style="width:${wd(g.lost, g.total)}%"></i></div>`)}</tr>`).join('')}
     ${groups.length > 1 ? `<tr class="tot">${line(t, 'รวม', '')}</tr>` : ''}</table>
-    <div class="pleg"><span><i class="pc-p"></i>เงินเข้าแล้ว</span><span><i class="pc-i"></i>ออก INV แล้ว รอเงิน</span><span><i class="pc-0"></i>ยังไม่ออก INV</span></div>`;
+    <div class="pleg"><span><i class="pc-p"></i>เงินเข้าแล้ว</span><span><i class="pc-i"></i>ออก INV แล้ว รอเงิน</span><span><i class="pc-o"></i>ยังเปิดอยู่</span><span><i class="pc-l"></i>ไม่ได้ปิด</span></div>`;
   // the QTs behind the figures
-  const st = (q) => (q.inv < q.total - 1 ? (q.inv > 0 ? ['ออก INV บางส่วน', 'warn'] : ['ยังไม่ออก INV', '']) : q.paid < q.inv - 1 ? ['รอเงินเข้า', 'warn'] : ['เงินเข้าครบ', 'green']);
-  const ls = xs.filter((q) => (PIPE_L === 'noinv' ? q.inv < q.total - 1 : PIPE_L === 'wait' ? q.inv - q.paid > 1 : true))
-    .sort((a, b) => (PIPE_L === 'wait' ? (b.inv - b.paid) - (a.inv - a.paid) : PIPE_L === 'noinv' ? (b.total - b.inv) - (a.total - a.inv) : b.total - a.total));
-  document.querySelector('#pipe-list summary').textContent = `รายการ QT (${xs.length} ใบ)`;
-  $('pipe-rows').innerHTML = ls.length ? `<table class="sum"><tr><th>QT</th><th style="text-align:left">บริษัท</th><th style="text-align:left">เซล</th><th>อนุมัติ</th><th>ยอด QT</th><th>ออก INV แล้ว</th><th>เงินเข้าแล้ว</th><th style="text-align:left">สถานะ</th></tr>
-    ${ls.slice(0, 100).map((q) => { const [lab, c] = st(q); return `<tr><td class="mono">${q.link ? `<a class="doc" href="${esc(q.link)}" target="_blank" rel="noopener">${esc(q.qtNo)}</a>` : esc(q.qtNo)}</td><td style="text-align:left;white-space:normal">${esc(q.company)}</td><td style="text-align:left">${esc(shortName(q.sales))}</td><td>${esc(q.date)}</td><td>${fmt0(q.total)}</td><td>${fmt0(q.inv)}</td><td>${fmt0(q.paid)}</td><td style="text-align:left"><span class="st ${c}">${lab}</span></td></tr>`; }).join('')}</table>${ls.length > 100 ? `<p class="small">แสดง 100 จาก ${ls.length} ใบ เลือกเดือนเพื่อดูให้แคบลง</p>` : ''}` : '<p class="small">ไม่มี QT ในเงื่อนไขนี้</p>';
+  const st = (q) => (q.st === 'lost' ? ['พ้นกำหนด / ปฏิเสธ', ''] : q.inv < q.total - 1 ? (q.inv > 0.009 ? ['ออก INV บางส่วน', 'warn'] : ['รอลูกค้า / ยังไม่ออก INV', 'blue'])
+    : q.unk ? ['ออก INV แล้ว (ไม่ทราบสถานะเงิน)', ''] : q.paid < q.inv - 1 ? ['รอเงินเข้า', 'warn'] : ['เงินเข้าครบ', 'green']);
+  const ls = xs.filter((q) => (PIPE_L === 'open' ? q.st !== 'lost' && q.inv < q.total - 1 : PIPE_L === 'wait' ? q.inv - q.paid - (q.unk || 0) > 1 : PIPE_L === 'lost' ? q.st === 'lost' : true))
+    .sort((a, b) => (PIPE_L === 'wait' ? (b.inv - b.paid) - (a.inv - a.paid) : PIPE_L === 'open' ? (b.total - b.inv) - (a.total - a.inv) : b.total - a.total));
+  document.querySelector('#pipe-list summary').textContent = `รายการ QT (${fmt0(xs.length)} ใบ)`;
+  $('pipe-rows').innerHTML = ls.length ? `<table class="sum"><tr><th>QT</th><th style="text-align:left">ลูกค้า</th><th style="text-align:left">เซล</th><th>วันที่ออก</th><th>ยอด QT</th><th>ออก INV แล้ว</th><th>เงินเข้าแล้ว</th><th style="text-align:left">สถานะ</th></tr>
+    ${ls.slice(0, 100).map((q) => { const [lab, c] = st(q); return `<tr><td class="mono">${q.link ? `<a class="doc" href="${esc(q.link)}" target="_blank" rel="noopener">${esc(q.qtNo)}</a>` : esc(q.qtNo)}</td><td style="text-align:left;white-space:normal">${esc(q.company)}</td><td style="text-align:left">${esc(shortName(q.sales))}</td><td>${esc(q.date)}</td><td>${fmt0(q.total)}</td><td>${fmt0(q.inv)}</td><td>${q.unk ? '<span class="small">ไม่ทราบ</span>' : fmt0(q.paid)}</td><td style="text-align:left"><span class="st ${c}">${lab}</span></td></tr>`; }).join('')}</table>${ls.length > 100 ? `<p class="small">แสดง 100 ใบที่ยอดสูงสุด จาก ${fmt0(ls.length)} ใบ เลือกเดือนหรือกลุ่มลูกค้าเพื่อดูให้แคบลง</p>` : ''}` : '<p class="small">ไม่มี QT ในเงื่อนไขนี้</p>';
 }
 $('pipe-m').onchange = (e) => { PIPE_M = e.target.value; renderPipe(); };
 $('pipe-g').onchange = (e) => { PIPE_G = e.target.value; renderPipe(); };
 document.querySelectorAll('#pipe-by button').forEach((b) => b.onclick = () => { PIPE_BY = b.dataset.v; renderPipe(); });
 document.querySelectorAll('#pipe-l button').forEach((b) => b.onclick = () => { PIPE_L = b.dataset.v; renderPipe(); });
+
 // ── INVs by the month they were issued → collected ─────────────────────────────────────────────────────────────
 let IM_N = 12, IM_BY = 'month', IM_G = '';
 function renderInv() {
@@ -141,16 +170,91 @@ function renderInv() {
 $('im-n').onchange = (e) => { IM_N = Number(e.target.value); renderInv(); };
 $('im-g').onchange = (e) => { IM_G = e.target.value; renderInv(); };
 document.querySelectorAll('#im-by button').forEach((b) => b.onclick = () => { IM_BY = b.dataset.v; renderInv(); });
-(async () => {
+// ── PEAK reports (Excel) ────────────────────────────────────────────────────────────────────────────────────────────
+// An .xlsx is a zip of XML files. PEAK's report is one sheet of shared strings and numbers, so it is read here without
+// a library: unzip (DecompressionStream), then the two XML parts.
+async function unzip(buf) {
+  const u8 = new Uint8Array(buf), dv = new DataView(buf), td = new TextDecoder();
+  let e = u8.length - 22; while (e >= 0 && dv.getUint32(e, true) !== 0x06054b50) e--;
+  if (e < 0) throw new Error('ไฟล์นี้ไม่ใช่ไฟล์ Excel (.xlsx)');
+  const n = dv.getUint16(e + 10, true), files = new Map(); let p = dv.getUint32(e + 16, true);
+  for (let i = 0; i < n; i++) {
+    const method = dv.getUint16(p + 10, true), size = dv.getUint32(p + 20, true), nl = dv.getUint16(p + 28, true), xl = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), at = dv.getUint32(p + 42, true);
+    const name = td.decode(u8.subarray(p + 46, p + 46 + nl));
+    const start = at + 30 + dv.getUint16(at + 26, true) + dv.getUint16(at + 28, true);
+    files.set(name, { method, data: u8.subarray(start, start + size) });
+    p += 46 + nl + xl + cl;
+  }
+  return async (name) => {
+    const f = files.get(name); if (!f) return null;
+    if (f.method === 0) return td.decode(f.data);
+    if (f.method !== 8 || typeof DecompressionStream === 'undefined') throw new Error('เบราว์เซอร์นี้อ่านไฟล์ Excel ไม่ได้ ลองใช้ Chrome รุ่นใหม่');
+    return new Response(new Blob([f.data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text();
+  };
+}
+async function readSheet(file) {
+  const get = await unzip(await file.arrayBuffer());
+  const xml = (t) => new DOMParser().parseFromString(t, 'application/xml');
+  const ssT = await get('xl/sharedStrings.xml'), shT = await get('xl/worksheets/sheet1.xml');
+  if (!shT) throw new Error('ไม่พบแผ่นงานในไฟล์');
+  const ss = ssT ? [...xml(ssT).getElementsByTagName('si')].map((si) => [...si.getElementsByTagName('t')].map((x) => x.textContent).join('')) : [];
+  const colOf = (ref) => { let c = 0; for (const ch of ref.replace(/\d+/g, '')) c = c * 26 + ch.charCodeAt(0) - 64; return c - 1; };
+  return [...xml(shT).getElementsByTagName('row')].map((r) => { const out = [];
+    for (const c of r.getElementsByTagName('c')) { const t = c.getAttribute('t'), v = c.getElementsByTagName('v')[0];
+      out[colOf(c.getAttribute('r'))] = t === 's' ? ss[Number(v && v.textContent)] ?? '' : t === 'inlineStr' ? [...c.getElementsByTagName('t')].map((x) => x.textContent).join('') : v ? v.textContent : ''; }
+    return out; });
+}
+// PEAK's report → the rows the server stores. The report type is told from its column names.
+function reportRows(grid) {
+  const hi = grid.findIndex((r) => r && r.includes('เลขที่เอกสาร'));
+  if (hi < 0) throw new Error('ไม่พบหัวตาราง "เลขที่เอกสาร" ไฟล์นี้ไม่ใช่รายงานใบเสนอราคาหรือใบแจ้งหนี้ของ PEAK');
+  const h = grid[hi], ix = (n) => h.indexOf(n), kind = ix('วันที่ใช้ได้ถึง') >= 0 ? 'qt' : ix('วันที่ครบกำหนด') >= 0 ? 'inv' : '';
+  if (!kind) throw new Error('ไม่รู้จักชนิดรายงาน (ต้องเป็นรายงานใบเสนอราคา หรือรายงานใบแจ้งหนี้)');
+  const need = ['เลขที่เอกสาร', 'วันที่ออก', 'สถานะ', 'ชื่อลูกค้า', 'ไม่มี VAT', 'VAT 0%', 'VAT 7%', 'ทั้งหมด'].filter((n) => ix(n) < 0);
+  if (need.length) throw new Error('รายงานขาดคอลัมน์: ' + need.join(', '));
+  const g = (r, n) => { const i = ix(n); return i < 0 || r[i] === undefined ? '' : String(r[i]).trim(); };
+  const rows = grid.slice(hi + 1).filter((r) => r && g(r, 'เลขที่เอกสาร')).map((r) => ({ no: g(r, 'เลขที่เอกสาร'), issue: g(r, 'วันที่ออก'), until: g(r, kind === 'qt' ? 'วันที่ใช้ได้ถึง' : 'วันที่ครบกำหนด'),
+    ref: g(r, 'อ้างอิง'), sysRef: g(r, 'อ้างอิงจากระบบ'), status: g(r, 'สถานะ'), company: g(r, 'ชื่อลูกค้า'), taxId: g(r, 'เลขที่ 13 หลัก'), branch: g(r, 'สาขา'), product: g(r, 'ชื่อสินค้า/บริการ').slice(0, 120),
+    novat: g(r, 'ไม่มี VAT'), vat0: g(r, 'VAT 0%'), vat7: g(r, 'VAT 7%'), total: g(r, 'ทั้งหมด') }));
+  if (!rows.length) throw new Error('ไม่พบรายการเอกสารในรายงาน');
+  return { kind, rows };
+}
+function renderUp() {
+  const r = D.reports || {}, one = (x, t) => (x ? `<b>${t}:</b> ${fmt0(x.count)} ใบ · เอกสารวันที่ ${esc(x.from)} ถึง ${esc(x.to)} · อัปโหลดล่าสุด ${esc(x.at)}` : `<b>${t}:</b> ยังไม่ได้อัปโหลด`);
+  $('up-card').hidden = !(D.canUpload || r.qt || r.inv);
+  $('up-info').innerHTML = one(r.qt, 'รายงานใบเสนอราคา') + '<br>' + one(r.inv, 'รายงานใบแจ้งหนี้');
+  $('up-box').hidden = !D.canUpload;
+}
+$('up-file').onchange = async (e) => {
+  const files = [...e.target.files]; if (!files.length) return;
+  const log = $('up-log'), say = (cls, t) => { log.insertAdjacentHTML('beforeend', `<div class="${cls}">${t}</div>`); };
+  log.innerHTML = ''; e.target.disabled = true;
+  let okAny = false;
+  for (const f of files) {
+    try {
+      say('', `กำลังอ่าน ${esc(f.name)} …`);
+      const { kind, rows } = reportRows(await readSheet(f));
+      const r = await fetch('/api/invoice-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'peak_report', kind, rows }) });
+      const d = await r.json().catch(() => null);
+      if (!r.ok || !d || !d.ok) throw new Error((d && d.error) || `HTTP ${r.status}`);
+      okAny = true;
+      say('good', `✓ ${kind === 'qt' ? 'รายงานใบเสนอราคา' : 'รายงานใบแจ้งหนี้'}: ${fmt0(d.received)} ใบ (ใหม่ ${fmt0(d.added)} · แทนที่ ${fmt0(d.updated)})${kind === 'qt' && d.drafts ? ` · ใบร่าง ${d.drafts} ใบไม่นับในตาราง` : ''}${kind === 'inv' ? ` · มีเลข QT อ้างอิง ${fmt0(d.linked)} ใบ` : ''} · ในระบบรวม ${fmt0(d.total)} ใบ`);
+    } catch (err) { say('bad', `✕ ${esc(f.name)}: ${esc(err.message)}`); }
+  }
+  e.target.value = ''; e.target.disabled = false;
+  if (okAny) await load(true);
+};
+async function load(fresh) {
   try {
-    const r = await fetch('/api/invoice-requests?view=pipeline', { cache: 'no-store' });
+    const r = await fetch('/api/invoice-requests?view=pipeline', { cache: 'no-store', headers: fresh ? { 'x-fresh': '1' } : {} });
     if (r.status === 401) { location.href = '/signin.html?next=/sales'; return; }
     const d = await r.json().catch(() => null);
     if (!r.ok || !d || !d.ok) throw new Error((d && d.error) || `HTTP ${r.status}`);
-    D = d; renderPipe(); renderInv();
+    D = d; renderPipe(); renderInv(); renderUp();
   } catch (e) { $('msg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
   $('pipe-load').hidden = true;
-})();
+}
+load();
 </script>
 </body>
 </html>

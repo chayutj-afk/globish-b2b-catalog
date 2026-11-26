@@ -25,6 +25,10 @@
       "destination": "/ar.html"
     },
     {
+      "source": "/sales",
+      "destination": "/sales.html"
+    },
+    {
       "source": "/api/peak-webhook/:type",
       "destination": "/api/users?view=peak-hook&type=:type"
     }

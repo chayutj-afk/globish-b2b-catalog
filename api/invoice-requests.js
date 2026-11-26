@@ -730,6 +730,15 @@ function pipeline(reqs, invs, today, keep) {
   return out;
 }
 
+// The "ยอดขาย" page: same people and same visibility as the AR page.
+async function pipelineView(req, res, user) {
+  if (!can(user, 'ar_view')) throw bad('ไม่มีสิทธิ์ดูหน้ายอดขาย', 403);
+  const [rows, reqs, sees] = await Promise.all([hub.readTable('Invoices', { cache: 20e3 }), hub.readTable('Requests', { cache: 20e3 }), arSees(user)]);
+  const today = ar.todayMs();
+  const invs = rows.filter((r) => r.ivNo && sees(r)).map((r) => ({ ...ar.enrich(r, today), preVatN: ar.num(r.preVat) }));
+  res.status(200).json({ ok: true, pipeline: pipeline(reqs, invs, today, (q) => sees({ salesEmail: q.requestedBy, segment: q.segment })) });
+}
+
 async function arList(req, res, user) {
   if (!can(user, 'ar_view')) throw bad('ไม่มีสิทธิ์ดูหน้าติดตามหนี้', 403);
   // The home dashboard (?brief=1) may share a read for a few seconds; the work page always reads fresh.
@@ -761,7 +770,6 @@ async function arList(req, res, user) {
   // Customer contact from the INV request, to prefill where the receipt goes.
   const contact = new Map(ivreqs.map((v) => [v.ivRequestId, { financeEmail: v.financeEmail || '', deliveryAddress: v.originalAddress || v.deliveryAddress || '' }]));
   const sees = await arSees(user);
-  const reqs = lite ? [] : await hub.readTable('Requests', { cache: 20e3 }).catch(() => []);
   const mine = rows.filter((r) => r.ivNo && sees(r)).map((r) => ({ ...ar.enrich(r, today), preVatN: ar.num(r.preVat) }));
   // ?seg= narrows the summary to one customer group; ?brief=1 returns the summary only (home dashboard).
   const seg = text(req.query.seg, 20);
@@ -781,7 +789,6 @@ async function arList(req, res, user) {
   const canOwner = isOp(user) || can(user, 'team_view');
   const owners = canOwner ? (await users.list()).filter((u) => ['sales', 'lead'].includes(u.role)).map((u) => ({ email: u.email, name: u.name || u.email })) : [];
   res.status(200).json({ ok: true, peakLive: require('../lib/peak').mode() !== 'off', summary: summarise(all, today, events), segments, seg, invoices: out, total: all.length, canOwner, owners,
-    pipeline: pipeline(reqs, mine, today, (q) => sees({ salesEmail: q.requestedBy, segment: q.segment }) && (!seg || (q.segment || 'Others') === seg)),
     lists: { docStatus: ar.DOC_STATUS, payMethods: ar.PAY_METHODS, channels: ar.CHANNELS, follow: ar.FOLLOW, remind: ar.REMIND, delay: ar.DELAY } });
 }
 
@@ -1735,6 +1742,7 @@ async function importLegacy(req, res, user) {
 
 async function list(req, res, user) {
   if (req.query && req.query.view === 'ar') return arList(req, res, user);
+  if (req.query && req.query.view === 'pipeline') return pipelineView(req, res, user);
   if (req.query && req.query.view === 'receipts') return listReceipts(req, res, user);
   // Work log of the debt page (accounting / collectors / admin): follow-ups, commit dates, money in. Read only.
   if (req.query && req.query.view === 'arlog') {

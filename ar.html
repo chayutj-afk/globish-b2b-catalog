@@ -126,18 +126,6 @@ table.sum tr.now td{background:var(--primary-soft)}
 .qd .chip{font:inherit;font-size:12.5px;border:1px solid var(--line);background:var(--panel);color:inherit;border-radius:999px;padding:4px 11px;cursor:pointer;min-height:30px}.qd .chip:hover{border-color:var(--primary);color:var(--primary)}
 .qd .lnk{font:inherit;font-size:12.5px;background:none;border:0;color:var(--muted);text-decoration:underline;cursor:pointer;padding:4px 2px;min-height:30px}
 .qd .left{font-size:12.5px;color:var(--muted);margin-left:auto}.qd .err-line{flex-basis:100%;margin:0}
-.pf{margin:14px 0 6px;display:grid;gap:10px}.pf .r{display:grid;grid-template-columns:118px minmax(80px,1fr) 104px 196px;gap:4px 14px;align-items:center}
-.pf .l{font-size:13.5px;color:var(--head);font-weight:500}.pf .t{height:22px;border-radius:6px;background:var(--line2,var(--line));overflow:hidden}
-.pf .t i{display:block;height:100%;border-radius:6px;min-width:2px;transition:width .25s}.pf .v{font-size:16px;font-weight:600;color:var(--head);text-align:right;font-variant-numeric:tabular-nums}
-.pf .n{font-size:12.5px;color:var(--muted);white-space:nowrap}
-.pc-q{background:var(--head)}.pc-i{background:var(--primary)}.pc-p{background:var(--ok-ink)}.pc-0{background:var(--muted);opacity:.35}
-.pgap{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0 16px}.pgap div{flex:1 1 220px;border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px;font-size:12.5px;color:var(--muted)}
-.pgap b{display:block;font-size:17px;color:var(--head);font-variant-numeric:tabular-nums}
-.pstk{display:flex;height:10px;border-radius:5px;overflow:hidden;min-width:2px}.pstk i{display:block;height:100%}
-.pleg{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--muted);margin:8px 0 2px}.pleg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
-.pctl{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}.pctl .seg{margin:0}.pctl select{font:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);color:inherit;min-height:34px}
-#pipe-list summary{cursor:pointer;font-size:13px;color:var(--head);padding:8px 0;font-weight:500}
-@media (max-width:640px){.pf .r{grid-template-columns:1fr max-content}.pf .t{grid-column:1/-1;grid-row:2}.pf .n{grid-column:1/-1}}
 .addc.on{background:color-mix(in srgb,var(--primary) 12%,transparent);border-style:solid}
 .addc{font:inherit;font-size:12.5px;background:none;border:1px dashed var(--primary);color:var(--primary);border-radius:999px;padding:3px 10px;cursor:pointer;min-height:28px}.addc:hover{background:color-mix(in srgb,var(--primary) 10%,transparent)}
 .why{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;margin:0 0 12px}
@@ -237,13 +225,6 @@ table.sum tr.now td{background:var(--primary-soft)}
     <div class="two">
       <div class="card"><h2>Forecast Cash-In คาดการณ์เงินเข้ารายสัปดาห์</h2><p class="hint">ตามวันที่ลูกค้านัดจ่าย (Date Commit) · ใบที่จ่ายแล้วนับในสัปดาห์ที่รับเงิน</p><div id="fc"></div></div>
       <div class="card"><h2>Actual Cash-In เงินเข้าจริงรายสัปดาห์</h2><p class="hint">ตามวันที่รับเงิน (Date Paid)</p><div id="cash"></div></div>
-    </div>
-    <div class="card" id="pipe-card" hidden><h2>ยอดขาย: QT → INV → เงินเข้า</h2>
-      <p class="hint">QT ที่อนุมัติแล้ว นับตามเดือนที่อนุมัติ แล้วดูว่า QT ชุดนั้นออก INV และเก็บเงินได้แล้วเท่าไหร่ · ทุกยอดเป็นยอดก่อน VAT เพื่อให้เทียบกันได้</p>
-      <div class="pctl"><label for="pipe-m" class="small">QT ที่อนุมัติใน</label><select id="pipe-m"></select>
-        <div class="seg" id="pipe-by" role="group" aria-label="แยกตาม"><button type="button" data-v="month" class="on">แยกตามเดือน</button><button type="button" data-v="sales">ตามเซล</button><button type="button" data-v="seg">ตามกลุ่มลูกค้า</button></div></div>
-      <div id="pipe-fun"></div><div class="wrap" id="pipe-tab"></div>
-      <details id="pipe-list"><summary>รายการ QT</summary><div class="pctl" style="margin:4px 0 8px"><div class="seg" id="pipe-l" role="group" aria-label="กรองรายการ QT"><button type="button" data-v="all" class="on">ทั้งหมด</button><button type="button" data-v="noinv">ยังออก INV ไม่ครบ</button><button type="button" data-v="wait">ออก INV แล้ว รอเงิน</button></div></div><div class="wrap" id="pipe-rows"></div></details>
     </div>
     <div class="card"><h2>ออก INV และเงินเข้ารายเดือน (12 เดือน)</h2><p class="hint" id="months-hint">ยอด INV ก่อน VAT ไม่นับเอกสารยกเลิก / เปลี่ยนเอกสาร</p><div class="seg" id="months-by" role="group" aria-label="มุมมองรายเดือน"><button class="on" type="button" data-v="seg">ตามกลุ่มลูกค้า</button><button type="button" data-v="inv">ออก INV ตามเซล</button><button type="button" data-v="cash">เงินเข้าตามเซล</button></div><div class="wrap" id="months"></div></div>
 <div class="sum-wide">
@@ -905,54 +886,6 @@ let confirmDoc = false;
 
 // ---- drill-down: the companies / invoices behind a figure
 // Monthly table: by customer group (issued), or per seller (issued / cash in) so sellers can be compared.
-// ── Sales pipeline: approved QTs → invoiced → collected (pre-VAT), by the month the QT was approved ───────────────
-let PIPE_M = 'all', PIPE_BY = 'month', PIPE_L = 'all';
-const TH_MON = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
-const monLabel = (k) => `${TH_MON[+k.slice(0, 2) - 1]} ${k.slice(3)}`; // "11/2026" → "พ.ย. 2026"
-const monSort = (k) => k.slice(3) + k.slice(0, 2);
-const shortName = (n) => { const m = /\(([^)]+)\)/.exec(n); return m ? m[1] : String(n).split('@')[0]; };
-function renderPipe() {
-  const all = D.pipeline || [];
-  $('pipe-card').hidden = !all.length;
-  if (!all.length) return;
-  const mk = (q) => q.date.slice(3);
-  const months = [...new Set(all.map(mk))].sort((a, b) => monSort(b).localeCompare(monSort(a)));
-  if (PIPE_M !== 'all' && !months.includes(PIPE_M)) PIPE_M = 'all';
-  $('pipe-m').innerHTML = `<option value="all">ทุกเดือน (${months.length} เดือนล่าสุด)</option>` + months.map((m) => `<option value="${m}"${m === PIPE_M ? ' selected' : ''}>${monLabel(m)}</option>`).join('');
-  document.querySelectorAll('#pipe-by button').forEach((b) => b.classList.toggle('on', b.dataset.v === PIPE_BY));
-  document.querySelectorAll('#pipe-l button').forEach((b) => b.classList.toggle('on', b.dataset.v === PIPE_L));
-  const xs = PIPE_M === 'all' ? all : all.filter((q) => mk(q) === PIPE_M);
-  const add = (ys) => ys.reduce((t, q) => ({ n: t.n + 1, total: t.total + q.total, inv: t.inv + q.inv, paid: t.paid + q.paid, open: t.open + (q.inv < q.total - 1 ? 1 : 0) }), { n: 0, total: 0, inv: 0, paid: 0, open: 0 });
-  const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0), w = (a, b) => (b ? Math.max(0, Math.min(100, (a / b) * 100)) : 0);
-  const t = add(xs);
-  const row = (l, cls, v, note) => `<div class="r"><span class="l">${l}</span><div class="t"><i class="${cls}" style="width:${w(v, t.total)}%"></i></div><span class="v">${fmt0(v)}</span><span class="n">${note}</span></div>`;
-  $('pipe-fun').innerHTML = `<div class="pf" role="img" aria-label="QT อนุมัติ ${fmt0(t.total)} บาท ออก INV แล้ว ${fmt0(t.inv)} บาท เงินเข้าแล้ว ${fmt0(t.paid)} บาท">
-      ${row('1. QT อนุมัติ', 'pc-q', t.total, `${t.n} ใบ`)}
-      ${row('2. ออก INV แล้ว', 'pc-i', t.inv, `${pct(t.inv, t.total)}% ของ QT`)}
-      ${row('3. เงินเข้าแล้ว', 'pc-p', t.paid, `${pct(t.paid, t.total)}% ของ QT · ${pct(t.paid, t.inv)}% ของ INV`)}</div>
-    <div class="pgap"><div><b>${fmt0(t.total - t.inv)}</b>ยังไม่ออก INV · ${t.open} ใบ (QT → INV)</div><div><b>${fmt0(t.inv - t.paid)}</b>ออก INV แล้ว รอเงินเข้า (INV → เงินเข้า)</div></div>`;
-  // breakdown
-  const key = PIPE_BY === 'month' ? mk : PIPE_BY === 'sales' ? (q) => q.sales : (q) => q.seg;
-  const groups = [...new Set(xs.map(key))].map((k) => ({ k, ...add(xs.filter((q) => key(q) === k)) }));
-  if (PIPE_BY === 'month') groups.sort((a, b) => monSort(b.k).localeCompare(monSort(a.k))); else groups.sort((a, b) => b.total - a.total);
-  const max = Math.max(1, ...groups.map((g) => g.total));
-  const name = (k) => (PIPE_BY === 'month' ? monLabel(k) : PIPE_BY === 'sales' ? `<span title="${esc(k)}">${esc(shortName(k))}</span>` : esc(k));
-  const line = (g, lab, bar) => `<td>${lab}</td><td>${g.n}</td><td>${fmt0(g.total)}</td><td>${fmt0(g.inv)}</td><td class="small">${pct(g.inv, g.total)}%</td><td>${fmt0(g.paid)}</td><td class="small">${pct(g.paid, g.total)}%</td><td>${bar}</td>`;
-  $('pipe-tab').innerHTML = `<table class="sum"><tr><th>${PIPE_BY === 'month' ? 'เดือนที่อนุมัติ QT' : PIPE_BY === 'sales' ? 'เซล' : 'กลุ่มลูกค้า'}</th><th>QT (ใบ)</th><th>ยอด QT</th><th>ออก INV แล้ว</th><th></th><th>เงินเข้าแล้ว</th><th></th><th style="width:24%"></th></tr>
-    ${groups.map((g) => `<tr>${line(g, name(g.k), `<div class="pstk" style="width:${w(g.total, max)}%"><i class="pc-p" style="width:${w(g.paid, g.total)}%"></i><i class="pc-i" style="width:${w(g.inv - g.paid, g.total)}%"></i><i class="pc-0" style="width:${w(g.total - g.inv, g.total)}%"></i></div>`)}</tr>`).join('')}
-    ${groups.length > 1 ? `<tr class="tot">${line(t, 'รวม', '')}</tr>` : ''}</table>
-    <div class="pleg"><span><i class="pc-p"></i>เงินเข้าแล้ว</span><span><i class="pc-i"></i>ออก INV แล้ว รอเงิน</span><span><i class="pc-0"></i>ยังไม่ออก INV</span></div>`;
-  // the QTs behind the figures
-  const st = (q) => (q.inv < q.total - 1 ? (q.inv > 0 ? ['ออก INV บางส่วน', 'warn'] : ['ยังไม่ออก INV', '']) : q.paid < q.inv - 1 ? ['รอเงินเข้า', 'warn'] : ['เงินเข้าครบ', 'green']);
-  const ls = xs.filter((q) => (PIPE_L === 'noinv' ? q.inv < q.total - 1 : PIPE_L === 'wait' ? q.inv - q.paid > 1 : true))
-    .sort((a, b) => (PIPE_L === 'wait' ? (b.inv - b.paid) - (a.inv - a.paid) : PIPE_L === 'noinv' ? (b.total - b.inv) - (a.total - a.inv) : b.total - a.total));
-  document.querySelector('#pipe-list summary').textContent = `รายการ QT (${xs.length} ใบ)`;
-  $('pipe-rows').innerHTML = ls.length ? `<table class="sum"><tr><th>QT</th><th style="text-align:left">บริษัท</th><th style="text-align:left">เซล</th><th>อนุมัติ</th><th>ยอด QT</th><th>ออก INV แล้ว</th><th>เงินเข้าแล้ว</th><th style="text-align:left">สถานะ</th></tr>
-    ${ls.slice(0, 100).map((q) => { const [lab, c] = st(q); return `<tr><td class="mono">${q.link ? `<a class="doc" href="${esc(q.link)}" target="_blank" rel="noopener">${esc(q.qtNo)}</a>` : esc(q.qtNo)}</td><td style="text-align:left;white-space:normal">${esc(q.company)}</td><td style="text-align:left">${esc(shortName(q.sales))}</td><td>${esc(q.date)}</td><td>${fmt0(q.total)}</td><td>${fmt0(q.inv)}</td><td>${fmt0(q.paid)}</td><td style="text-align:left"><span class="st ${c}">${lab}</span></td></tr>`; }).join('')}</table>${ls.length > 100 ? `<p class="small">แสดง 100 จาก ${ls.length} ใบ เลือกเดือนเพื่อดูให้แคบลง</p>` : ''}` : '<p class="small">ไม่มี QT ในเงื่อนไขนี้</p>';
-}
-$('pipe-m').onchange = (e) => { PIPE_M = e.target.value; renderPipe(); };
-document.querySelectorAll('#pipe-by button').forEach((b) => b.onclick = () => { PIPE_BY = b.dataset.v; renderPipe(); });
-document.querySelectorAll('#pipe-l button').forEach((b) => b.onclick = () => { PIPE_L = b.dataset.v; renderPipe(); });
 let MONTHS_BY = 'seg', MONTHS_S = null, MONTHS_D = null;
 function renderMonths(s, d) {
   if (s) { MONTHS_S = s; MONTHS_D = d; } else { s = MONTHS_S; d = MONTHS_D; }
@@ -1191,7 +1124,6 @@ function renderSum() {
     ${c.awaitCashCount ? `<div class="chk ok"><b>ออกใบเสร็จแล้ว รอเงินเข้า</b><span>${d('await', 'ออกใบเสร็จแล้ว รอเงินเข้า', c.awaitCash)} บาท · ${c.awaitCashCount} ใบ</span><small>ยังนับเป็นยอดค้างรับจนกว่าบัญชียืนยันเงินเข้า</small></div>` : ''}
     ${s.oldCount ? `<div class="chk ok"><b>ค้างเก่าก่อนปี 2026 (แยกไว้)</b><span>${d('old', 'ค้างเก่าก่อนปี 2026', s.old)} บาท · ${s.oldCount} ใบ</span><small>ไม่รวมในยอดค้างรับ คาดการณ์เงินเข้า และตัวเช็ก</small></div>` : ''}
     <div class="chk ok"><b>จ่ายเทียบวันนัด (90 วัน)</b><span>ก่อนนัด ${drBtn('vs|early', 'จ่ายก่อนวันนัด (90 วัน)', String(v.early), v.early)} · ตรงนัด ${drBtn('vs|ontime', 'จ่ายตรงวันนัด (90 วัน)', String(v.onTime), v.onTime)} · ช้า ${drBtn('vs|late', 'จ่ายช้ากว่าวันนัด (90 วัน)', String(v.late), v.late)}</span><small>นับใบที่รับเงินใน 90 วันล่าสุด</small></div>`;
-  renderPipe();
   const maxF = Math.max(1, ...s.forecast.weeks.map((w) => w.expected + w.paid)), paidF = s.forecast.weeks.reduce((t, w) => t + (w.paid || 0), 0);
   $('fc').innerHTML = `<table class="sum"><tr><th>สัปดาห์ถึง</th><th>รอชำระ</th><th>ใบ</th><th>ชำระแล้ว</th><th data-tip="รอชำระ + ชำระแล้ว ของสัปดาห์นั้น">ทั้งหมด</th><th style="width:22%"></th></tr>
     <tr><td>เลยวันนัดแล้ว (ต้องหาวันใหม่)</td><td>${d('fc-earlier', 'เลยวันนัดแล้ว (ต้องหาวันใหม่)', s.forecast.earlier)}</td><td>${s.forecast.earlierCount}</td><td></td><td>${fmt0(s.forecast.earlier)}</td><td></td></tr>

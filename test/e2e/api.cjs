@@ -833,13 +833,12 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
       iv(4, { qtNo: 'qo-pl-2', preVat: 120000 }),                                    // linked by QT no., capped at the QT
     ].map((r) => T.Invoices.map((h) => r[h] ?? '')));
     fsx.writeFileSync(F, JSON.stringify(raw));
-    [s, j] = await call(ACCT, 'GET', '/api/invoice-requests?view=ar'); const pl = Object.fromEntries((j.pipeline || []).filter((q) => /^QO-PL-/.test(q.qtNo)).map((q) => [q.qtNo.slice(6), q]));
+    [s, j] = await call(ACCT, 'GET', '/api/invoice-requests?view=pipeline'); const pl = Object.fromEntries((j.pipeline || []).filter((q) => /^QO-PL-/.test(q.qtNo)).map((q) => [q.qtNo.slice(6), q]));
     ok(s === 200 && Object.keys(pl).sort().join() === '1,2,3', 'only approved QTs of the last 12 months are listed: ' + Object.keys(pl).sort().join());
     ok(pl[1] && pl[1].total === 100000 && pl[1].inv === 80000 && pl[1].paid === 60000, `QT 1: invoiced 80,000 (cancelled INV left out), collected 40,000 + half of 40,000 (${pl[1] && [pl[1].inv, pl[1].paid]})`);
     ok(pl[2] && pl[2].inv === 100000 && pl[2].paid === 0, `QT 2: INV matched by QT number, invoiced capped at the QT total (${pl[2] && [pl[2].inv, pl[2].paid]})`);
     ok(pl[3] && pl[3].total === 50000 && pl[3].inv === 20000 && pl[3].paid === 0, `QT 3: amount invoiced before the app counts as invoiced (${pl[3] && [pl[3].total, pl[3].inv]})`);
-    [s, j] = await call(ACCT, 'GET', '/api/invoice-requests?view=ar&seg=B2C'); ok(!(j.pipeline || []).some((q) => /^QO-PL-/.test(q.qtNo)), 'the customer-group filter applies to the pipeline');
-    [s, j] = await call(ACCT, 'GET', '/api/invoice-requests?view=ar&brief=1'); ok(j.pipeline === undefined, 'the home summary does not read the QTs');
+    [s, j] = await call(ACCT, 'GET', '/api/invoice-requests?view=ar'); ok(s === 200 && j.pipeline === undefined, 'the AR page no longer carries the pipeline');
   }
   done();
 })().catch((e) => { console.error('CRASH', e); ok(false, 'CRASH: the run stopped early: ' + e.message); done(); process.exitCode = 1; });

@@ -82,7 +82,7 @@ const modal = async (p, accept = true) => { await p.waitForSelector('#ov-modal:n
   const rseg = await sp.$eval('#r-seg', (e) => [...e.options].map((o) => o.value + '=' + o.textContent.trim()).join('|'));
   await sp.selectOption('#r-seg', { label: await sp.$eval('#r-seg', (e) => [...e.options].find((o) => /B2C/.test(o.textContent)).textContent) }).catch(() => {});
   await sp.selectOption('#r-kind', 'person'); await sp.fill('#r-tax', '1999999990037'); await sp.fill('#r-name', 'คุณ ฟอร์ม'); await sp.fill('#r-addr', '9 ถนนทดสอบ'); await sp.fill('#r-stu', 'WH-999'); await sp.fill('#r-pkg', '5136');
-  await sp.fill('#r-price', '12345'); await sp.selectOption('#r-wht', '0'); await sp.fill('#r-paid', '2026-11-14');
+  await sp.fill('#r-price', '12345'); await sp.selectOption('#r-wht', '0'); await sp.selectOption('#r-oldhas', 'no'); await sp.fill('#r-paid', '2026-11-14');
   await sp.click('#r-submit'); await sp.waitForTimeout(500);
   if (!(await sp.isVisible('#ov-modal:not([hidden])'))) console.log('   RT form message: ' + (await sp.textContent('#r-msg')).trim().slice(0, 160) + ' | types: ' + rseg);
   await modal(sp, true).catch(() => {}); await sp.waitForSelector('#r-msg .done-card', { timeout: 8000 }).catch(() => {});

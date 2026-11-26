@@ -253,9 +253,10 @@ details.more{margin-top:8px}details.more>summary{cursor:pointer;font-size:12.5px
       <div class="fg"><label>Order ID ใน WH / เอกสารอ้างอิง (ถ้ามี)</label><input id="r-ref" type="text" maxlength="60" placeholder="เช่น 76754"></div>
     </div>
     <div class="row c3">
-      <div class="fg" style="grid-column:span 2"><label>เลขใบเสร็จเดิมจาก Whitehouse (ถ้า WH ออกใบเสร็จไปแล้ว)</label><input id="r-oldrt" type="text" maxlength="40" placeholder="เช่น 202611A00053" oninput="$('r-oldrt-h').hidden=!this.value.trim()">
-        <div class="sub">ใช้เมื่อลูกค้าจ่ายเองแล้ว WH ออกใบเสร็จชื่อบุคคลไปแล้ว แต่ลูกค้าขอเป็นชื่อบริษัท ดูเลขได้ที่คอลัมน์ Receipt Number ในหน้า e-payment ของ WH</div>
-        <div class="sub" id="r-oldrt-h" hidden style="color:var(--warn-ink)">ฝ่ายบัญชีจะยกเลิกใบเสร็จเดิม แล้วออกใบใหม่เลขเดิมตามชื่อและที่อยู่ที่กรอกด้านบน</div></div>
+      <div class="fg"><label for="r-oldhas">WH ออกใบเสร็จให้ลูกค้าไปแล้วหรือยัง *</label><select id="r-oldhas" onchange="oldRtPick()"><option value="">— เลือก —</option><option value="no">ยังไม่ออก</option><option value="yes">ออกแล้ว (ขอออกใหม่แทนใบเดิม)</option></select>
+        <div class="sub">ดูได้ที่คอลัมน์ Receipt Number ในหน้า e-payment ของ WH ถ้ามีเลข แปลว่าออกแล้ว</div></div>
+      <div class="fg" id="r-oldrt-box" hidden style="grid-column:span 2"><label for="r-oldrt">เลขใบเสร็จเดิมจาก Whitehouse *</label><input id="r-oldrt" type="text" maxlength="40" placeholder="เช่น 202611A00053" autocomplete="off">
+        <div class="sub" style="color:var(--warn-ink)">ฝ่ายบัญชีจะยกเลิกใบเสร็จเดิม แล้วออกใบใหม่เลขเดิมตามชื่อและที่อยู่ที่กรอกด้านบน</div></div>
     </div>
     <div class="row c1"><div class="fg"><label>ชื่อคอร์ส / รายละเอียดที่ให้ขึ้นในเอกสาร</label><textarea id="r-desc" rows="2" maxlength="1500"></textarea></div></div>
     <div class="row c4">
@@ -1514,6 +1515,8 @@ async function rtTax() {
     $('r-tax-hint').textContent = m.length ? `พบใน PEAK: ${m.map((x) => x.code + ' สาขา ' + x.branch).join(', ')}` : 'ยังไม่มีลูกค้านี้ใน PEAK ฝ่ายบัญชีจะสร้างให้'; } catch {}
 }
 function taxHintEl(el, t) { el.textContent = t.length === 13 && !validTax(t) ? '⚠️ หลักสุดท้ายไม่ตรง ตรวจเลขอีกครั้ง' : ''; }
+// "Has WH already issued a receipt?" must be answered; the number is asked for (and required) only on "yes".
+function oldRtPick() { const yes = $('r-oldhas').value === 'yes'; $('r-oldrt-box').hidden = !yes; if (!yes) $('r-oldrt').value = ''; else $('r-oldrt').focus(); }
 async function submitRT() {
   const v = (id) => $(id).value.trim();
   const body = { action: 'receipt', segment: v('r-seg'), customerType: ($('r-seg').selectedOptions[0] || { dataset: {} }).dataset.code || '', classPicks: Object.fromEntries((CLS || []).map((g) => [g.code, ($('rcls-' + g.code) || {}).value || ''])), docKind: v('r-kind'), docLang: v('r-lang'), taxId: v('r-tax'), branch: v('r-kind') === 'person' ? '00000' : v('r-branch').padStart(5, '0'),
@@ -1521,7 +1524,7 @@ async function submitRT() {
     price: v('r-price'), discount: v('r-disc'), whtRate: v('r-wht'), paidDate: v('r-paid'), deliveryChannel: v('r-ch'), email: v('r-email'), deliveryAddress: v('r-dlv'), note: v('r-note') };
   const need = [[body.taxId.length === 13, 'กรอกเลข 13 หลัก'], [body.billName, 'ใส่ชื่อที่ออกในเอกสาร'], [body.address, 'ใส่ที่อยู่ตามเอกสาร'],
     [!whNeeded(body.segment) || body.whStudent, 'ใส่ชื่อ / ID ผู้เรียนใน Whitehouse'], [!whNeeded(body.segment) || body.packages, 'ใส่ Package ID / รหัสคอร์ส'], [body.packages || body.description, 'ใส่ชื่อคอร์ส / รายละเอียดที่ให้ขึ้นในเอกสาร'],
-    [toNum(body.price) > 0, 'ใส่ราคาขาย'], [body.whtRate !== '', 'เลือกหัก ณ ที่จ่าย'], [body.paidDate, 'ใส่วันที่ลูกค้าชำระ'],
+    [toNum(body.price) > 0, 'ใส่ราคาขาย'], [body.whtRate !== '', 'เลือกหัก ณ ที่จ่าย'], [v('r-oldhas'), 'เลือกว่า WH ออกใบเสร็จให้ลูกค้าไปแล้วหรือยัง'], [v('r-oldhas') !== 'yes' || v('r-oldrt'), 'ใส่เลขใบเสร็จเดิมจาก Whitehouse'], [body.paidDate, 'ใส่วันที่ลูกค้าชำระ'],
     [!/email/.test(body.deliveryChannel) || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email), 'ใส่อีเมลลูกค้าให้ถูกต้อง']];
   need.push([$('r-qt').value !== '__ext' || rtQtNo(), 'ใส่เลขที่ QT นอกระบบ']);
   const miss = need.find((x) => !x[0]); if (miss) return msg('r-msg', 'err', miss[1]);
@@ -1535,7 +1538,7 @@ async function submitRT() {
     if (!d) { msg('r-msg', 'info', 'ยังไม่ได้ส่ง'); return; }
     $('r-msg').innerHTML = `<div class="done-card"><b>✓ ส่งคำขอ ${esc(d.rtRequestId)} แล้ว</b><div style="margin:6px 0 10px">${esc(d.message)}</div><button class="btn btn-o btn-sm" onclick="go('mine');setMine('rt',document.querySelectorAll('#mine-seg button')[2])">ดูในคำขอของฉัน</button></div>`;
     $('r-qt').value = ''; $('r-qtno-wrap').hidden = true;
-    ['r-qtno', 'r-tax', 'r-branch', 'r-name', 'r-addr', 'r-stu', 'r-pkg', 'r-ref', 'r-oldrt', 'r-desc', 'r-price', 'r-disc', 'r-wht', 'r-paid', 'r-email', 'r-dlv', 'r-note'].forEach((id) => { $(id).value = ''; }); $('r-file').value = ''; $('r-tax-hint').textContent = '';
+    ['r-qtno', 'r-tax', 'r-branch', 'r-name', 'r-addr', 'r-stu', 'r-pkg', 'r-ref', 'r-oldhas', 'r-oldrt', 'r-desc', 'r-price', 'r-disc', 'r-wht', 'r-paid', 'r-email', 'r-dlv', 'r-note'].forEach((id) => { $(id).value = ''; }); $('r-file').value = ''; $('r-oldrt-box').hidden = true; $('r-tax-hint').textContent = '';
     loadAll();
   } catch (e) { msg('r-msg', 'err', e.message); } finally { btn.disabled = false; }
 }

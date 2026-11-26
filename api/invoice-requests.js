@@ -702,6 +702,34 @@ function drillRows(all, today, key, events = cashEvents(all)) {
   return { rows, total: Math.round(rows.reduce((t, r) => t + (Number(r.amount) || 0), 0) * 100) / 100, basis: preVat ? 'prevat' : paid ? 'paid' : 'expected' };
 }
 
+// Sales pipeline: every approved QT of the last 12 months with how much of it has been invoiced and how much of that
+// has been collected, all before VAT so the three figures compare. One row per QT; the page adds them up.
+const QT_LIVE = ['qt_approved', 'accepted', 'iv_requested', 'iv_issued'];
+function pipeline(reqs, invs, today, keep) {
+  const up = (v) => String(v || '').trim().toUpperCase();
+  const byReq = new Map(), byQt = new Map();
+  const put = (m, k, r) => { if (k) { if (!m.has(k)) m.set(k, []); m.get(k).push(r); } };
+  for (const r of invs) { if (r.state === 'Closed') continue; if (r.requestId) put(byReq, r.requestId, r); else put(byQt, up(r.qtNo), r); }
+  // Share of an INV's pre-VAT amount that has been collected (bank charges the company absorbed count as collected).
+  const got = (r) => (r.state === 'Paid' ? 1 : r.received > 0 && r.expectedFull > 0 ? Math.min(1, (r.received + (r.fee || 0)) / r.expectedFull) : 0);
+  const from = Date.UTC(new Date(today).getUTCFullYear(), new Date(today).getUTCMonth() - 11, 1);
+  const out = [];
+  for (const q of reqs) {
+    if (!q.peakQtNo || !QT_LIVE.includes(q.status) || !keep(q)) continue;
+    const ms = ar.parseDate(q.qtApprovedAt) ?? ar.parseDate(q.createdAt);
+    if (ms === null || ms < from) continue;
+    const total = round2(ar.num(q.totalPreVat));
+    if (!(total > 0)) continue;
+    const ivs = [...(byReq.get(q.requestId) || []), ...(byQt.get(up(q.peakQtNo)) || [])];
+    const linked = ivs.reduce((t, r) => t + (r.preVatN || 0), 0);
+    // An INV issued from this QT before the app existed is only known as an amount (openingInvoiced / the sheet's total).
+    const inv = round2(Math.min(total, Math.max(linked, ar.num(q._invoicedPreVat), ar.num(q.openingInvoiced))));
+    const paid = round2(Math.min(inv, ivs.reduce((t, r) => t + (r.preVatN || 0) * got(r), 0)));
+    out.push({ qtNo: q.peakQtNo, company: q.company, sales: q.salesName || q.requestedBy || '(ไม่ระบุ)', seg: q.segment || 'Others', date: ar.fmt(ms), total, inv, paid, link: q.peakDocLink || undefined });
+  }
+  return out;
+}
+
 async function arList(req, res, user) {
   if (!can(user, 'ar_view')) throw bad('ไม่มีสิทธิ์ดูหน้าติดตามหนี้', 403);
   // The home dashboard (?brief=1) may share a read for a few seconds; the work page always reads fresh.
@@ -733,6 +761,7 @@ async function arList(req, res, user) {
   // Customer contact from the INV request, to prefill where the receipt goes.
   const contact = new Map(ivreqs.map((v) => [v.ivRequestId, { financeEmail: v.financeEmail || '', deliveryAddress: v.originalAddress || v.deliveryAddress || '' }]));
   const sees = await arSees(user);
+  const reqs = lite ? [] : await hub.readTable('Requests', { cache: 20e3 }).catch(() => []);
   const mine = rows.filter((r) => r.ivNo && sees(r)).map((r) => ({ ...ar.enrich(r, today), preVatN: ar.num(r.preVat) }));
   // ?seg= narrows the summary to one customer group; ?brief=1 returns the summary only (home dashboard).
   const seg = text(req.query.seg, 20);
@@ -752,6 +781,7 @@ async function arList(req, res, user) {
   const canOwner = isOp(user) || can(user, 'team_view');
   const owners = canOwner ? (await users.list()).filter((u) => ['sales', 'lead'].includes(u.role)).map((u) => ({ email: u.email, name: u.name || u.email })) : [];
   res.status(200).json({ ok: true, peakLive: require('../lib/peak').mode() !== 'off', summary: summarise(all, today, events), segments, seg, invoices: out, total: all.length, canOwner, owners,
+    pipeline: pipeline(reqs, mine, today, (q) => sees({ salesEmail: q.requestedBy, segment: q.segment }) && (!seg || (q.segment || 'Others') === seg)),
     lists: { docStatus: ar.DOC_STATUS, payMethods: ar.PAY_METHODS, channels: ar.CHANNELS, follow: ar.FOLLOW, remind: ar.REMIND, delay: ar.DELAY } });
 }
 

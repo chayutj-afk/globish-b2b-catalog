@@ -1,8 +1,8 @@
 const { chromium } = require('playwright'); const { sign, B } = require('./lib.cjs');
 (async () => {
   const b = await chromium.launch(); let bad = 0;
-  const pages = ['/', '/request#qt', '/request#inv', '/request#rt', '/request#edit', '/request#mine', '/request#pend', '/ar', '/users', '/import-wh', '/catalog'];
-  const allow = { 'bee@globish.co.th': ['/ar', '/users', '/import-wh', '/request#pend'], 'benz@globish.co.th': ['/ar', '/users', '/import-wh', '/catalog', '/request#pend'], 'lead@globish.co.th': ['/users', '/import-wh', '/request#pend'], 'col@globish.co.th': ['/users', '/import-wh', '/catalog', '/request#qt', '/request#inv', '/request#rt', '/request#edit', '/request#mine', '/request#pend'], 'oper@globish.co.th': ['/ar', '/users', '/request#pend'], 'acct@globish.co.th': ['/users'], 'admin@globish.co.th': [] };
+  const pages = ['/', '/request#qt', '/request#inv', '/request#rt', '/request#edit', '/request#mine', '/request#pend', '/ar', '/sales', '/users', '/import-wh', '/catalog'];
+  const allow = { 'bee@globish.co.th': ['/ar', '/sales', '/users', '/import-wh', '/request#pend'], 'benz@globish.co.th': ['/ar', '/sales', '/users', '/import-wh', '/catalog', '/request#pend'], 'lead@globish.co.th': ['/users', '/import-wh', '/request#pend'], 'col@globish.co.th': ['/users', '/import-wh', '/catalog', '/request#qt', '/request#inv', '/request#rt', '/request#edit', '/request#mine', '/request#pend'], 'oper@globish.co.th': ['/ar', '/sales', '/users', '/request#pend'], 'acct@globish.co.th': ['/users'], 'admin@globish.co.th': [] };
   for (const [w, h, tag] of [[1366, 900, 'd'], [390, 844, 'm']]) for (const theme of tag === 'd' ? ['light', 'dark'] : ['light']) for (const who of Object.keys(allow)) {
     const c = await b.newContext({ viewport: { width: w, height: h } });
     await c.addCookies([{ name: 'gc_session', value: sign({ email: who, name: who.split('@')[0], exp: Date.now() + 3600e3 }), domain: 'localhost', path: '/' }]);

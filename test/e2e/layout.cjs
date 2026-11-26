@@ -44,7 +44,7 @@ const detect = () => {
     const state = async (label) => { await p.waitForTimeout(250); report(`${tag2} · ${label}`, await p.evaluate(detect)); };
     const openAll = async () => { await p.evaluate(() => document.querySelectorAll('details').forEach((d) => { d.open = true; })); };
     const closeModal = async () => { await p.evaluate(() => document.querySelectorAll('.ov').forEach((o) => { if (!o.hidden && o.id !== 'ov-load') { const x = o.querySelector('#m-cancel, button'); o.hidden = true; } })); };
-    for (const u of ['/', '/request#qt', '/request#inv', '/request#rt', '/request#mine', '/request#pend', '/ar', '/users', '/import-wh', '/catalog']) {
+    for (const u of ['/', '/request#qt', '/request#inv', '/request#rt', '/request#mine', '/request#pend', '/ar', '/sales', '/users', '/import-wh', '/catalog']) {
       await p.goto(B + u, { waitUntil: 'load' }).catch(() => {}); await p.waitForTimeout(1300);
       if (await p.evaluate(() => !!window.SHELL_PENDING || /ไม่มีสิทธิ์ใช้หน้านี้/.test(document.body.innerText))) continue;
       await state(u);

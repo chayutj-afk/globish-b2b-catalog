@@ -330,7 +330,7 @@ async function runAct(act, no, value, cell) {
   cell.querySelectorAll('button,input').forEach((x) => { x.disabled = true; });
   try {
     const d = A.refresh ? await post('PATCH', { action: 'ar_refresh', ivNo: no }) : await post('POST', { action: 'sales_fix', ...A.send(no, value) });
-    say('ok', `${no}: ${A.done}${d.changes && d.changes.length ? ' · ' + d.changes.join(', ') : ''}`);
+    say(d.warn ? 'err' : 'ok', `${no}: ${A.done}${d.changes && d.changes.length ? ' · ' + d.changes.join(', ') : ''}${d.warn ? ' — ' + d.warn : ''}`);
     await load(true);
   } catch (e) { say('err', `${no}: ${e.message}`); cell.querySelectorAll('button,input').forEach((x) => { x.disabled = false; }); }
 }

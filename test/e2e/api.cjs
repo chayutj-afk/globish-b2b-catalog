@@ -963,6 +963,9 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
     ok(qv.st === 'lost' && !qv.stale && qv.rv === 'lost', 'or confirms it is not closed');
     // cancel in the AR book what PEAK no longer has
     setPeak((p) => { p.invoices.find((x) => x.id === 'ck91').status = 'Draft'; });
+    setPeak((p) => { p.fail = 'GET /Invoices'; });
+    [s, j] = await fix(ACCT, { kind: 'cancel_book', ivNo: 'IV-20260500091', note: 'x' }); ok(s >= 400 && arRow('IV-20260500091').docStatus === 'Active', 'PEAK does not answer → nothing is cancelled in the AR book (' + s + ')');
+    setPeak((p) => { delete p.fail; });
     [s, j] = await fix(ACCT, { kind: 'cancel_book', ivNo: 'IV-20260500091', note: 'void ใน PEAK แล้ว' }); ok(s === 200 && arRow('IV-20260500091').docStatus === 'Cancelled', 'no longer approved in PEAK → cancelled in the AR book ' + (j.error || ''));
     [s, j] = await fix(ACCT, { kind: 'import_book', ivNo: 'IV-20260500093' }); ok(s === 200, 'another INV added to the AR book ' + (j.error || ''));
     [s, j] = await fix(ACCT, { kind: 'cancel_book', ivNo: 'IV-20260500093' }); ok(s === 409 && /PEAK/.test(j.error), 'an INV still approved in PEAK is not cancelled in the AR book: ' + j.error);

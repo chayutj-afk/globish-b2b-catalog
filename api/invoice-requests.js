@@ -732,7 +732,8 @@ async function peakReport(req, res, user) {
   let rows;
   try { rows = b.rows.map((r) => sp.reportRow(kind, r, at)); } catch (e) { throw bad(e.message); }
   const drafts = rows.filter((r) => r.status === sp.DRAFT).length;
-  const m = sp.mergeReport(kind, await hub.readTable(table).catch(() => []), rows);
+  // A failed read must not pass as an empty tab: the write below would drop the other years and every verdict.
+  const m = sp.mergeReport(kind, await hub.readTable(table), rows);
   await hub.replaceTable(table, m.rows);
   await hub.log('catalog', 'peak_report', table, `${user.email} · ${rows.length} รายการ (ใหม่ ${m.added} · แทนที่ ${m.updated}) · รวม ${m.rows.length}`);
   res.status(200).json({ ok: true, kind, received: rows.length, added: m.added, updated: m.updated, total: m.rows.length, drafts,
@@ -774,7 +775,8 @@ async function salesFix(req, res, user) {
     if (closed(a)) throw bad(`${ivNo} ถูกยกเลิกในหน้าติดตามหนี้ไปแล้ว`, 409);
     if (a.paidDate || a.rtNo || ar.num(a.paidAmount) > 0) throw bad(`${ivNo} มีการรับเงินหรือใบเสร็จแล้ว ยกเลิกจากตรงนี้ไม่ได้`, 409);
     live();
-    const iv = await (a.peakIvId ? peak.getInvoice(a.peakIvId) : peak.findInvoiceByCode(ivNo)).catch(() => null);
+    // A PEAK failure stops here: "could not ask" must never pass as "not approved".
+    const iv = await (a.peakIvId ? peak.getInvoice(a.peakIvId) : peak.findInvoiceByCode(ivNo));
     if (ps.isApproved(iv)) throw bad(`${ivNo} ยังเป็นใบที่อนุมัติอยู่ใน PEAK จึงยกเลิกในหน้าติดตามหนี้ไม่ได้ (ถ้ารายงานที่อัปโหลดเก่า ให้ export ใหม่)`, 409);
     await hub.updateRow('Invoices', a._row, { docStatus: 'Cancelled', note: [a.note, `ยกเลิกจากหน้าตรวจข้อมูล: ไม่ใช่ใบที่อนุมัติใน PEAK แล้ว (${at}) — ${who}${note ? ' · ' + note : ''}`].filter(Boolean).join(' · ').slice(0, 500) });
     const r = a.ivRequestId ? (await hub.readTable('InvoiceRequests')).find((x) => x.ivRequestId === a.ivRequestId) : null;
@@ -828,10 +830,13 @@ async function salesFix(req, res, user) {
     if (ar.num(iv.paymentAmount) > 0 || (iv.paidPayments || []).length) throw bad(`${ivNo} มีการรับชำระใน PEAK แล้ว void จากตรงนี้ไม่ได้ ให้จัดการการรับชำระใน PEAK ก่อน`, 409);
     await peak.voidInvoice(iv.id);
     // The INV is gone from PEAK's live documents: take it off the stored report so the check stops listing it.
-    await hub.replaceTable('PeakInvoices', pi.filter((x) => x !== p));
-    await Promise.all([hub.log('catalog', 'peak_void', ivNo, `${user.email} · void INV ใน PEAK จากหน้าตรวจข้อมูล · ${note}`),
-      notify.finance(`🗑️ Void INV ${ivNo} ใน PEAK แล้ว (จากหน้าตรวจข้อมูล) · ${notify.co(p.company)} · ยอดก่อน VAT ${money(ar.num(p.preVat))} · โดย ${who}\nเหตุผล: ${notify.why(note)}`)]);
-    return res.status(200).json({ ok: true, kind, voided: ivNo });
+    // The void is done and cannot be undone: the log and the chat message come first and never depend on the tab rewrite.
+    await Promise.all([hub.log('catalog', 'peak_void', ivNo, `${user.email} · void INV ใน PEAK จากหน้าตรวจข้อมูล · ${note}`).catch(() => null),
+      notify.finance(`🗑️ Void INV ${ivNo} ใน PEAK แล้ว (จากหน้าตรวจข้อมูล) · ${notify.co(p.company)} · ยอดก่อน VAT ${money(ar.num(p.preVat))} · โดย ${who}\nเหตุผล: ${notify.why(note)}`).catch(() => null)]);
+    let warn = '';
+    try { await hub.replaceTable('PeakInvoices', pi.filter((x) => x !== p)); }
+    catch (e) { warn = `void ใน PEAK สำเร็จแล้ว แต่ลบ ${ivNo} ออกจากรายงานที่เก็บไว้ไม่ได้ — อัปโหลดรายงานใบแจ้งหนี้ใหม่ หรือกด "ตรวจแล้ว" ที่ใบนี้`; console.error('void_peak: stored report not updated', e.message); }
+    return res.status(200).json({ ok: true, kind, voided: ivNo, warn: warn || undefined });
   }
   throw bad('ไม่รู้จักคำสั่ง');
 }
@@ -1800,7 +1805,8 @@ async function editReplaced(res, user, row, by, note, at, who) {
   if (a && (a.paidDate || a.rtNo || Number(String(a.paidAmount || '').replace(/,/g, '')) > 0)) throw bad(`${row.docNo} มีการรับเงินหรือใบเสร็จแล้ว ยกเลิกจากตรงนี้ไม่ได้ จัดการใบเสร็จและการรับเงินก่อน`, 409);
   const peak = require('../lib/peak'), ps = require('../lib/peaksync');
   if (peak.mode() !== 'off') {
-    const iv = await (a && a.peakIvId ? peak.getInvoice(a.peakIvId) : peak.findInvoiceByCode(row.docNo)).catch(() => null);
+    // A PEAK failure stops here: "could not ask" must never pass as "already voided".
+    const iv = await (a && a.peakIvId ? peak.getInvoice(a.peakIvId) : peak.findInvoiceByCode(row.docNo));
     if (ps.isApproved(iv)) throw bad(`${row.docNo} ยังเป็นใบที่อนุมัติอยู่ใน PEAK ให้ void ใน PEAK ก่อน แล้วกดอีกครั้ง`, 409);
   }
   const mark = by ? `ยกเลิก ใช้ ${by} แทน (${row.editId}) — ${who}` : `${REISSUE}: ยกเลิกตามคำขอแก้ไข (${row.editId}) — ${who}`;

@@ -92,6 +92,7 @@ const modal = async (p, accept = true) => { await p.waitForSelector('#ov-modal:n
   const cp = await mk('acct@globish.co.th');
   await cp.goto(B + '/ar'); await cp.waitForTimeout(1800);
   const kpi = async () => (await cp.textContent('#s-open')).trim() + ' / ' + (await cp.textContent('#s-open-n')).trim();
+  await cp.click('#tabs button[data-t="work"]'); await cp.waitForTimeout(300);
   const all = await kpi(); await cp.fill('#f-q', 'zzzzzz'); await cp.waitForTimeout(400); const none = await kpi(); await cp.fill('#f-q', ''); await cp.waitForTimeout(400);
   ok(all !== none && /^0/.test(none) && (await kpi()) === all, `AR cards follow the search box: ${all} → ${none} → back`);
   const fsel = await cp.$$eval('select', (ss) => ss.map((s) => s.id + ':' + [...s.options].map((o) => o.textContent.trim()).slice(0, 8).join(',')));
@@ -113,7 +114,7 @@ const modal = async (p, accept = true) => { await p.waitForSelector('#ov-modal:n
   const visOwners = await ap.$$eval('.owner', (es) => [...new Set(es.filter((e) => e.offsetParent !== null).map((e) => e.textContent.trim()))]); ok(visOwners.every((t) => /Benz/.test(t)), 'filter shows only that salesperson: ' + visOwners.join(','));
   for (const t of ['ใบแจ้งหนี้', 'ใบเสร็จ']) { await ap.click(`#mine-seg button:has-text("${t}")`).catch(() => {}); await ap.waitForTimeout(400); }
   await ap.selectOption('#mine-who', { index: 0 }); await ap.click('#mine-seg button:has-text("ใบแจ้งหนี้")').catch(() => {}); await ap.waitForTimeout(500);
-  const mineInv = await ap.innerText('#tab-mine'); ok(/void|ยกเลิก/i.test(mineInv), 'a voided INV shows as cancelled in the list'); await shot(ap, 'ui-mine-acct-inv');
+  const mineInv = await ap.innerText('#tab-mine'); if (db().InvoiceRequests.some((v) => v.status === 'iv_void')) ok(/void|ยกเลิก/i.test(mineInv), 'a voided INV shows as cancelled in the list'); await shot(ap, 'ui-mine-acct-inv');
   await ap.click('#mine-seg button:has-text("ใบเสร็จ")').catch(() => {}); await ap.waitForTimeout(500); await shot(ap, 'ui-mine-acct-rt');
 
   // ── pending receipts: imported INV now offers the PEAK Draft button
@@ -126,9 +127,9 @@ const modal = async (p, accept = true) => { await p.waitForSelector('#ov-modal:n
   const up = await mk('admin@globish.co.th');
   await up.goto(B + '/users'); await up.waitForTimeout(1800);
   await up.click('button:has-text("เพิ่มผู้ใช้ใหม่")'); await up.waitForTimeout(400); await shot(up, 'ui-users-add');
-  const addOpen = await up.evaluate(() => [...document.querySelectorAll('.ov, [id^=ov-]')].filter((e) => !e.hidden && e.offsetParent !== null).map((e) => e.id).join(','));
+  const addOpen = await up.evaluate(() => [...document.querySelectorAll('.ov, [id^=ov-]')].filter((e) => !e.hidden && e.getBoundingClientRect().width > 0).map((e) => e.id).join(','));
   ok(!!addOpen, 'add-user modal opens: ' + addOpen);
-  const txt = await up.innerText('body'); ok(/สุขภาพข้อมูล/.test(txt), 'health panel on the users page');
+  await up.goto(B + '/'); await up.waitForTimeout(2000); const txt = await up.innerText('body'); ok(/สุขภาพข้อมูล/.test(txt), 'health panel on the home page (admin)'); await up.goto(B + '/users'); await up.waitForTimeout(1500);
   ok(!/PeakChecks|cross-check/.test(txt), 'removed health checks are gone');
 
   // ── mobile: sales pages

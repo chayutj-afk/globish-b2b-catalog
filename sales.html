@@ -37,12 +37,18 @@ table.sum tr.tot td{font-weight:500;color:var(--head)}
 <main>
   <div id="msg"></div>
   <div class="card" id="pipe-card" hidden><h2>QT → INV → เงินเข้า</h2>
-      <p class="hint">QT ที่อนุมัติแล้ว นับตามเดือนที่อนุมัติ แล้วดูว่า QT ชุดนั้นออก INV และเก็บเงินได้แล้วเท่าไหร่ · ทุกยอดเป็นยอดก่อน VAT เพื่อให้เทียบกันได้</p>
+      <p class="hint">QT ที่อนุมัติแล้ว นับตามเดือนที่อนุมัติ แล้วดูว่า QT ชุดนั้นออก INV และเก็บเงินได้แล้วเท่าไหร่ · ทุกยอดเป็นยอดก่อน VAT เพื่อให้เทียบกันได้<br>ระบบรู้ว่า INV ใบไหนมาจาก QT ใบไหน เฉพาะ INV ที่ขอผ่านระบบ (ตั้งแต่กลาง พ.ย. 2026) QT ก่อนหน้านั้นจึงแสดงเป็น "ยังไม่ออก INV" แม้จะออกไปแล้ว ดูยอด INV และเงินเข้าที่ครบกว่าได้ในตารางถัดไป</p>
       <div class="pctl"><label for="pipe-m" class="small">QT ที่อนุมัติใน</label><select id="pipe-m"></select><select id="pipe-g" aria-label="กลุ่มลูกค้า"></select>
         <div class="seg" id="pipe-by" role="group" aria-label="แยกตาม"><button type="button" data-v="month" class="on">แยกตามเดือน</button><button type="button" data-v="sales">ตามเซล</button><button type="button" data-v="seg">ตามกลุ่มลูกค้า</button></div></div>
       <div id="pipe-fun"></div><div class="wrap" id="pipe-tab"></div>
       <details id="pipe-list"><summary>รายการ QT</summary><div class="pctl" style="margin:4px 0 8px"><div class="seg" id="pipe-l" role="group" aria-label="กรองรายการ QT"><button type="button" data-v="all" class="on">ทั้งหมด</button><button type="button" data-v="noinv">ยังออก INV ไม่ครบ</button><button type="button" data-v="wait">ออก INV แล้ว รอเงิน</button></div></div><div class="wrap" id="pipe-rows"></div></details>
     </div>
+  <div class="card" id="im-card" hidden><h2>INV → เงินเข้า (ตามเดือนที่ออก INV)</h2>
+    <p class="hint">INV ทุกใบที่ออกในเดือนนั้น ไม่ว่าจะมาจาก QT เดือนไหน แล้วดูว่าเก็บเงินได้แล้วเท่าไหร่ · ยอดก่อน VAT ไม่นับใบที่ยกเลิกหรือถูกแทน</p>
+    <div class="pctl"><label for="im-n" class="small">ย้อนหลัง</label><select id="im-n"><option value="12">12 เดือน</option><option value="24">24 เดือน</option><option value="36">36 เดือน</option></select><select id="im-g" aria-label="กลุ่มลูกค้า"></select>
+      <div class="seg" id="im-by" role="group" aria-label="แยกตาม"><button type="button" data-v="month" class="on">แยกตามเดือน</button><button type="button" data-v="sales">ตามเซล</button><button type="button" data-v="seg">ตามกลุ่มลูกค้า</button></div></div>
+    <div class="wrap" id="im-tab" style="margin-top:12px"></div>
+  </div>
   <div class="card" id="pipe-none" hidden><div class="empty">ยังไม่มี QT ที่อนุมัติแล้วในช่วง 12 เดือนล่าสุด</div></div>
   <div class="empty" id="pipe-load">กำลังโหลด...</div>
 </main>
@@ -60,7 +66,7 @@ const monSort = (k) => k.slice(3) + k.slice(0, 2);
 const shortName = (n) => { const m = /\(([^)]+)\)/.exec(n); return m ? m[1] : String(n).split('@')[0]; };
 function renderPipe() {
   const every = D.pipeline || [];
-  $('pipe-card').hidden = !every.length; $('pipe-none').hidden = !!every.length;
+  $('pipe-card').hidden = !every.length; $('pipe-none').hidden = !!every.length || !!(D.invMonths || []).length;
   if (!every.length) return;
   const segs = [...new Set(every.map((q) => q.seg))].sort();
   if (PIPE_G && !segs.includes(PIPE_G)) PIPE_G = '';
@@ -105,13 +111,43 @@ $('pipe-m').onchange = (e) => { PIPE_M = e.target.value; renderPipe(); };
 $('pipe-g').onchange = (e) => { PIPE_G = e.target.value; renderPipe(); };
 document.querySelectorAll('#pipe-by button').forEach((b) => b.onclick = () => { PIPE_BY = b.dataset.v; renderPipe(); });
 document.querySelectorAll('#pipe-l button').forEach((b) => b.onclick = () => { PIPE_L = b.dataset.v; renderPipe(); });
+// ── INVs by the month they were issued → collected ─────────────────────────────────────────────────────────────
+let IM_N = 12, IM_BY = 'month', IM_G = '';
+function renderInv() {
+  const every = D.invMonths || [];
+  $('im-card').hidden = !every.length;
+  if (!every.length) return;
+  const segs = [...new Set(every.map((q) => q.seg))].sort();
+  if (IM_G && !segs.includes(IM_G)) IM_G = '';
+  $('im-g').innerHTML = '<option value="">ทุกกลุ่มลูกค้า</option>' + segs.map((g) => `<option${g === IM_G ? ' selected' : ''}>${esc(g)}</option>`).join('');
+  document.querySelectorAll('#im-by button').forEach((b) => b.classList.toggle('on', b.dataset.v === IM_BY));
+  // the last N calendar months, this month included
+  const now = new Date(), keep = new Set();
+  for (let i = 0; i < IM_N; i++) { const d = new Date(Date.UTC(now.getFullYear(), now.getMonth() - i, 1)); keep.add(String(d.getUTCMonth() + 1).padStart(2, '0') + '/' + d.getUTCFullYear()); }
+  const xs = every.filter((q) => keep.has(q.m) && (!IM_G || q.seg === IM_G));
+  const add = (ys) => ys.reduce((t, q) => ({ n: t.n + q.n, inv: t.inv + q.inv, paid: t.paid + q.paid }), { n: 0, inv: 0, paid: 0 });
+  const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0), w = (a, b) => (b ? Math.max(0, Math.min(100, (a / b) * 100)) : 0);
+  const key = IM_BY === 'month' ? (q) => q.m : IM_BY === 'sales' ? (q) => q.sales : (q) => q.seg;
+  const groups = [...new Set(xs.map(key))].map((k) => ({ k, ...add(xs.filter((q) => key(q) === k)) }));
+  if (IM_BY === 'month') groups.sort((a, b) => monSort(b.k).localeCompare(monSort(a.k))); else groups.sort((a, b) => b.inv - a.inv);
+  const max = Math.max(1, ...groups.map((g) => g.inv)), t = add(xs);
+  const name = (k) => (IM_BY === 'month' ? monLabel(k) : IM_BY === 'sales' ? `<span title="${esc(k)}">${esc(shortName(k))}</span>` : esc(k));
+  const line = (g, lab, bar) => `<td>${lab}</td><td>${g.n}</td><td>${fmt0(g.inv)}</td><td>${fmt0(g.paid)}</td><td class="small">${pct(g.paid, g.inv)}%</td><td>${fmt0(g.inv - g.paid)}</td><td>${bar}</td>`;
+  $('im-tab').innerHTML = groups.length ? `<table class="sum"><tr><th>${IM_BY === 'month' ? 'เดือนที่ออก INV' : IM_BY === 'sales' ? 'เซล' : 'กลุ่มลูกค้า'}</th><th>INV (ใบ)</th><th>ยอด INV</th><th>เงินเข้าแล้ว</th><th></th><th>รอเงินเข้า</th><th style="width:26%"></th></tr>
+    ${groups.map((g) => `<tr>${line(g, name(g.k), `<div class="pstk" style="width:${w(g.inv, max)}%"><i class="pc-p" style="width:${w(g.paid, g.inv)}%"></i><i class="pc-i" style="width:${w(g.inv - g.paid, g.inv)}%"></i></div>`)}</tr>`).join('')}
+    ${groups.length > 1 ? `<tr class="tot">${line(t, 'รวม', '')}</tr>` : ''}</table>
+    <div class="pleg"><span><i class="pc-p"></i>เงินเข้าแล้ว</span><span><i class="pc-i"></i>รอเงินเข้า</span></div>` : '<p class="small">ไม่มี INV ในช่วงนี้</p>';
+}
+$('im-n').onchange = (e) => { IM_N = Number(e.target.value); renderInv(); };
+$('im-g').onchange = (e) => { IM_G = e.target.value; renderInv(); };
+document.querySelectorAll('#im-by button').forEach((b) => b.onclick = () => { IM_BY = b.dataset.v; renderInv(); });
 (async () => {
   try {
     const r = await fetch('/api/invoice-requests?view=pipeline', { cache: 'no-store' });
     if (r.status === 401) { location.href = '/signin.html?next=/sales'; return; }
     const d = await r.json().catch(() => null);
     if (!r.ok || !d || !d.ok) throw new Error((d && d.error) || `HTTP ${r.status}`);
-    D = d; renderPipe();
+    D = d; renderPipe(); renderInv();
   } catch (e) { $('msg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
   $('pipe-load').hidden = true;
 })();

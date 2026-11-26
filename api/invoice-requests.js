@@ -705,13 +705,27 @@ function drillRows(all, today, key, events = cashEvents(all)) {
 // Sales pipeline: every approved QT of the last 12 months with how much of it has been invoiced and how much of that
 // has been collected, all before VAT so the three figures compare. One row per QT; the page adds them up.
 const QT_LIVE = ['qt_approved', 'accepted', 'iv_requested', 'iv_issued'];
+// Share of an INV's pre-VAT amount that has been collected (bank charges the company absorbed count as collected).
+const paidShare = (r) => (r.state === 'Paid' ? 1 : r.received > 0 && r.expectedFull > 0 ? Math.min(1, (r.received + (r.fee || 0)) / r.expectedFull) : 0);
+// The same question starting from the INV: INVs issued in a month (every INV, with or without a QT in the app) and how
+// much of them has been collected, pre-VAT. One row per month × seller × customer group, 36 months back.
+function invoiceMonths(invs, today) {
+  const from = Date.UTC(new Date(today).getUTCFullYear(), new Date(today).getUTCMonth() - 35, 1);
+  const g = new Map();
+  for (const r of invs) {
+    if (r.state === 'Closed' || r.issueMs === null || r.issueMs < from || !(r.preVatN > 0)) continue;
+    const m = ar.fmt(r.issueMs).slice(3), sales = r.salesName || r.salesEmail || '(ไม่ระบุ)', seg = r.segment || 'Others', k = [m, sales, seg].join('|');
+    const o = g.get(k) || g.set(k, { m, sales, seg, n: 0, inv: 0, paid: 0 }).get(k);
+    o.n++; o.inv += r.preVatN; o.paid += r.preVatN * paidShare(r);
+  }
+  return [...g.values()].map((o) => ({ ...o, inv: round2(o.inv), paid: round2(o.paid) }));
+}
 function pipeline(reqs, invs, today, keep) {
   const up = (v) => String(v || '').trim().toUpperCase();
   const byReq = new Map(), byQt = new Map();
   const put = (m, k, r) => { if (k) { if (!m.has(k)) m.set(k, []); m.get(k).push(r); } };
   for (const r of invs) { if (r.state === 'Closed') continue; if (r.requestId) put(byReq, r.requestId, r); else put(byQt, up(r.qtNo), r); }
-  // Share of an INV's pre-VAT amount that has been collected (bank charges the company absorbed count as collected).
-  const got = (r) => (r.state === 'Paid' ? 1 : r.received > 0 && r.expectedFull > 0 ? Math.min(1, (r.received + (r.fee || 0)) / r.expectedFull) : 0);
+  const got = paidShare;
   const from = Date.UTC(new Date(today).getUTCFullYear(), new Date(today).getUTCMonth() - 11, 1);
   const out = [];
   for (const q of reqs) {
@@ -736,7 +750,7 @@ async function pipelineView(req, res, user) {
   const [rows, reqs, sees] = await Promise.all([hub.readTable('Invoices', { cache: 20e3 }), hub.readTable('Requests', { cache: 20e3 }), arSees(user)]);
   const today = ar.todayMs();
   const invs = rows.filter((r) => r.ivNo && sees(r)).map((r) => ({ ...ar.enrich(r, today), preVatN: ar.num(r.preVat) }));
-  res.status(200).json({ ok: true, pipeline: pipeline(reqs, invs, today, (q) => sees({ salesEmail: q.requestedBy, segment: q.segment })) });
+  res.status(200).json({ ok: true, pipeline: pipeline(reqs, invs, today, (q) => sees({ salesEmail: q.requestedBy, segment: q.segment })), invMonths: invoiceMonths(invs, today) });
 }
 
 async function arList(req, res, user) {

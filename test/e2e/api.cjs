@@ -839,6 +839,11 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
     ok(pl[2] && pl[2].inv === 100000 && pl[2].paid === 0, `QT 2: INV matched by QT number, invoiced capped at the QT total (${pl[2] && [pl[2].inv, pl[2].paid]})`);
     ok(pl[3] && pl[3].total === 50000 && pl[3].inv === 20000 && pl[3].paid === 0, `QT 3: amount invoiced before the app counts as invoiced (${pl[3] && [pl[3].total, pl[3].inv]})`);
     [s, j] = await call(ACCT, 'GET', '/api/invoice-requests?view=ar'); ok(s === 200 && j.pipeline === undefined, 'the AR page no longer carries the pipeline');
+    const mKey = mm + '/' + yy, sumIm = (d) => (d.invMonths || []).filter((x) => x.m === mKey && x.sales === 'Bee' && x.seg === 'B2B').reduce((o, x) => ({ n: o.n + x.n, inv: o.inv + x.inv, paid: o.paid + x.paid }), { n: 0, inv: 0, paid: 0 });
+    [s, j] = await call(ACCT, 'GET', '/api/invoice-requests?view=pipeline'); const base = sumIm(j);
+    { const cur = JSON.parse(fsx.readFileSync(F, 'utf8')); cur.Invoices.push(...[iv(5, { preVat: 10000, paidDate: day, paidAmount: 10700 }), iv(6, { preVat: 30000 }), iv(7, { preVat: 5000, docStatus: 'Replaced' }), iv(8, { preVat: 9000, issueDate: '01/01/2015' })].map((r) => T.Invoices.map((h) => r[h] ?? ''))); fsx.writeFileSync(F, JSON.stringify(cur)); }
+    [s, j] = await call(ACCT, 'GET', '/api/invoice-requests?view=pipeline'); const im2 = sumIm(j);
+    ok(im2.n - base.n === 2 && im2.inv - base.inv === 40000 && im2.paid - base.paid === 10000, `INVs by issue month: +2 INVs, +40,000 issued, +10,000 collected; replaced and 2015 INVs left out (${im2.n - base.n}, ${im2.inv - base.inv}, ${im2.paid - base.paid})`);
   }
 
   console.log('── 36. edit request closed as "INV cancelled, Sales asks for new INVs" (e.g. split into several)');

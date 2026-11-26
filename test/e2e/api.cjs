@@ -840,5 +840,30 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
     ok(pl[3] && pl[3].total === 50000 && pl[3].inv === 20000 && pl[3].paid === 0, `QT 3: amount invoiced before the app counts as invoiced (${pl[3] && [pl[3].total, pl[3].inv]})`);
     [s, j] = await call(ACCT, 'GET', '/api/invoice-requests?view=ar'); ok(s === 200 && j.pipeline === undefined, 'the AR page no longer carries the pipeline');
   }
+
+  console.log('── 36. edit request closed as "INV cancelled, Sales asks for new INVs" (e.g. split into several)');
+  { const fsx = require('fs'), F = '/tmp/sales-desk-e2e/db.json';
+    const T = require('./lib.cjs').T; const raw = JSON.parse(fsx.readFileSync(F, 'utf8'));
+    const rq = { requestId: 'REQ-RI-1', createdAt: '01/11/2026 09:00', requestedBy: BEE, salesName: 'Bee', segment: 'B2B', company: 'บริษัท แยกใบ จำกัด', status: 'iv_requested', peakQtNo: 'QO-RI-1', totalPreVat: 100000, qtApprovedAt: '01/11/2026 10:00' };
+    const vr = { ivRequestId: 'IVR-RI-1', createdAt: '02/11/2026 09:00', requestedBy: BEE, salesName: 'Bee', requestId: 'REQ-RI-1', qtNo: 'QO-RI-1', company: rq.company, amountPreVat: 100000, status: 'iv_issued', peakIvNo: 'IV-RI-1', peakIvId: 'ri1' };
+    const iv = { ivNo: 'IV-RI-1', issueDate: '02/11/2026', segment: 'B2B', salesEmail: BEE, salesName: 'Bee', company: rq.company, qtNo: 'QO-RI-1', requestId: 'REQ-RI-1', preVat: 100000, creditTermDays: 30, whtRate: '0', docStatus: 'Active', commitDate: '28/12/2099', dueDate: '28/12/2099', ivRequestId: 'IVR-RI-1', peakIvId: 'ri1' };
+    raw.Requests.push(T.Requests.map((h) => rq[h] ?? '')); raw.InvoiceRequests.push(T.InvoiceRequests.map((h) => vr[h] ?? '')); raw.Invoices.push(T.Invoices.map((h) => iv[h] ?? ''));
+    fsx.writeFileSync(F, JSON.stringify(raw));
+    setPeak((p) => { p.invoices.push({ id: 'ri1', code: 'IV-RI-1', status: 'Approve', isVoid: 0, contactCode: 'C1', issuedDate: '20261102', dueDate: '20261202', preTaxAmount: 100000, vatAmount: 7000, netAmount: 107000, remainAmount: 107000 }); });
+    const left = async () => { const [, d] = await call(BEE, 'GET', '/api/requests'); const q = (d.requests || []).find((x) => x.requestId === 'REQ-RI-1'); return q ? q.invoicedPreVat : null; };
+    ok(await left() === 100000, 'the QT is fully invoiced before');
+    [s, j] = await call(BEE, 'POST', '/api/invoice-requests', { action: 'edit', docType: 'INV', docNo: 'IV-RI-1', refId: 'IVR-RI-1', company: rq.company, detail: 'ขอแยก INV 4 ใบ ตามชื่อผู้เรียน' }); ok(s === 200, 'edit request made ' + (j.error || '')); const ed = j.editId;
+    [s, j] = await call(BEE, 'PATCH', '/api/invoice-requests', { action: 'edit_done', editId: ed, voidReissue: true }); ok(s === 403, 'sales cannot cancel');
+    [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { action: 'edit_done', editId: ed, voidReissue: true }); ok(s === 409 && /void/.test(j.error), 'still approved in PEAK → void it first: ' + j.error);
+    setPeak((p) => { p.invoices.find((x) => x.id === 'ri1').status = 'Draft'; });
+    [s, j] = await call(ACCT, 'PATCH', '/api/invoice-requests', { action: 'edit_done', editId: ed, voidReissue: true, note: 'ขอใหม่ 4 ใบ ใบละชื่อ' }); ok(s === 200 && j.reissue, 'voided in PEAK → cancelled: ' + (j.error || ''));
+    const a2 = arRow('IV-RI-1'), e2 = db().EditRequests.find((x) => x.editId === ed), v2 = ivr('IVR-RI-1');
+    ok(a2.docStatus === 'Cancelled', 'INV leaves the debt list as Cancelled');
+    ok(v2.status === 'iv_void' && /^รอขอ INV ใหม่/.test(v2.accountNote), 'its request is void and flagged for the QT card: ' + v2.accountNote);
+    ok(e2.status === 'done' && !e2.newDocNo && /ขอ INV ใหม่/.test(e2.accountNote) && /ใบละชื่อ/.test(e2.accountNote), 'edit request done, tells Sales to ask again');
+    ok(await left() === 0, 'the amount is back on the QT');
+    [s, j] = await call(BEE, 'GET', '/api/invoice-requests'); const mineIv = (j.requests || j.invoiceRequests || []).find((x) => x.ivRequestId === 'IVR-RI-1');
+    ok(mineIv && /^รอขอ INV ใหม่/.test(mineIv.accountNote || ''), 'the flag reaches the Sales page');
+  }
   done();
 })().catch((e) => { console.error('CRASH', e); ok(false, 'CRASH: the run stopped early: ' + e.message); done(); process.exitCode = 1; });

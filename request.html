@@ -1360,6 +1360,8 @@ function nextStep(q, ivs, replaced) {
   if (q.peakQtNo && pendEdit('QT', q.peakQtNo)) return W('ฝ่ายบัญชีแก้ QT ตามที่ขอ');
   const live = ivs.filter((v) => !['rejected', 'iv_void'].includes(v.status));
   if (qtLeft(q) <= 0.01) return W('ขอ INV ครบยอดแล้ว ติดตามต่อที่แท็บ "ใบแจ้งหนี้"');
+  // Accounting cancelled an INV of this QT for Sales to ask again (e.g. to split it): shown until the QT is fully invoiced.
+  if (ivs.some((v) => v.status === 'iv_void' && /^รอขอ INV ใหม่/.test(v.accountNote || ''))) return Y(`⚠️ รอขอ INV ใหม่: INV เดิมถูกยกเลิกตามคำขอแก้ไข กด "ขอ INV จาก QT นี้" (คงเหลือ ${fmt(qtLeft(q))})`);
   if (!live.length) return Y('ส่ง QT ให้ลูกค้า พอลูกค้ายอมรับแล้วกด "ขอ INV จาก QT นี้"');
   return Y(`ขอ INV งวดถัดไปได้ (คงเหลือ ${fmt(qtLeft(q))})`);
 }
@@ -1744,7 +1746,8 @@ function editForm(e) {
   const link = src && src.peakDocLink;
   return `<div class="pc-act" style="flex-wrap:wrap">
     ${link ? `<a class="btn btn-o btn-sm" href="${esc(e.docType === 'QT' ? peakEdit(link, 'quotation') : link)}" target="_blank" rel="noopener">เปิด ${esc(e.docNo)} ใน PEAK ↗</a>` : ''}
-    <select id="edm-mode-${id}" aria-label="ผลการแก้" onchange="edMode('${id}')"><option value="same">แก้ในเลขเดิม (${esc(e.docNo)})</option><option value="new">ออกเลขใหม่</option>${e.docType === 'INV' ? '<option value="void">ยกเลิกใบนี้ (มีใบอื่นแทนแล้ว)</option>' : ''}</select>
+    <select id="edm-mode-${id}" aria-label="ผลการแก้" onchange="edMode('${id}')"><option value="same">แก้ในเลขเดิม (${esc(e.docNo)})</option><option value="new">ออกเลขใหม่</option>${e.docType === 'INV' ? '<option value="void">ยกเลิกใบนี้ (มีใบอื่นแทนแล้ว)</option><option value="reissue">ยกเลิกใบนี้ ให้เซลขอ INV ใหม่</option>' : ''}</select>
+    <span id="edv-wrap-${id}" hidden><span class="small">ต้อง void ${esc(e.docNo)} ใน PEAK ก่อน · ยอดจะคืนเข้า QT ให้เซลขอ INV ใหม่ (เช่น แยกเป็นหลายใบ)</span></span>
     <span id="edr-wrap-${id}" hidden><input id="edr-${id}" type="text" maxlength="40" placeholder="เลข INV ที่ใช้แทน *" aria-label="เลข INV ที่ใช้แทน" style="width:190px"> <span class="small">ต้อง void ${esc(e.docNo)} ใน PEAK ก่อน</span></span>
     <span id="edn-wrap-${id}" hidden><input id="edn-${id}" type="text" maxlength="40" placeholder="เลขเอกสารใหม่" style="width:170px"> <input id="edl-${id}" type="text" maxlength="500" placeholder="ลิงก์เอกสารใหม่ใน PEAK *" style="width:240px"></span>
     ${e.docType === 'QT' && PEAK_LIVE ? '<span class="small">แก้ในเลขเดิม: ระบบดึงยอดและจำนวนผู้เรียนใหม่จาก PEAK ให้เอง</span>' : e.docType !== 'RT' ? `<span id="eda-wrap-${id}"><label class="small">ยอดก่อน VAT หลังแก้ (ไม่รวม VAT)</label> <input id="eda-${id}" type="number" step="0.01" value="${esc(String(amt || '').replace(/,/g, ''))}" style="width:130px"></span>` : ''}
@@ -1755,10 +1758,18 @@ function editForm(e) {
 function edMode(id) {
   const v = $('edm-mode-' + id).value;
   $('edn-wrap-' + id).hidden = v !== 'new'; $('edr-wrap-' + id).hidden = v !== 'void';
-  if ($('eda-wrap-' + id)) $('eda-wrap-' + id).hidden = v === 'void';
+  if ($('edv-wrap-' + id)) $('edv-wrap-' + id).hidden = v !== 'reissue';
+  if ($('eda-wrap-' + id)) $('eda-wrap-' + id).hidden = v === 'void' || v === 'reissue';
 }
 async function editAction(id, action) {
   const e = EDITS.find((x) => x.editId === id) || {};
+  if (action === 'edit_done' && $('edm-mode-' + id).value === 'reissue') {
+    const note = ($('edt-' + id).value || '').trim();
+    if (!(await ask({ title: `ยกเลิก ${e.docNo} ให้เซลขอใหม่?`, kind: 'danger', html: `<p>${esc(e.detail)}</p><p>ยกเลิก <b>${esc(e.docNo)}</b> และคืนยอดเข้า QT</p><p class="small">${esc(e.docNo)} จะออกจากยอดค้างรับและรายการติดตามหนี้ เซลจะได้รับแจ้งให้ขอ INV ใหม่จาก QT เดิม${note ? '' : ' · แนะนำให้ใส่หมายเหตุถึง Sales ว่าต้องขอใหม่แบบไหน'} · ต้อง void ${esc(e.docNo)} ใน PEAK ก่อน</p>` }))) return;
+    try { await withLoading('กำลังบันทึก…', async () => { await api('/api/invoice-requests', { method: 'PATCH', body: JSON.stringify({ action, editId: id, voidReissue: true, note }) }); await loadAll(); }); }
+    catch (err) { $('edm-' + id).innerHTML = `<span class="err-line">${esc(err.message)}</span>`; }
+    return;
+  }
   if (action === 'edit_done' && $('edm-mode-' + id).value === 'void') {
     const by = ($('edr-' + id).value || '').trim().toUpperCase();
     if (!by) { $('edm-' + id).innerHTML = '<span class="err-line">ใส่เลข INV ที่ใช้แทน</span>'; return; }

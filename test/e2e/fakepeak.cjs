@@ -60,6 +60,10 @@ global.fetch = async (url, opts = {}) => {
     iv.id = 'i' + (s.invoices.length + 1); iv.code = seq(s, 'IV'); iv.isVoid = 0; iv.resCode = '200'; iv.remainAmount = iv.netAmount;
     iv.documentLink = 'https://doc.peakaccount.com/invoice?emi=' + iv.id;
     s.invoices.push(iv); out = { PeakInvoices: { resCode: '200', invoices: [iv] } };
+  } else if (m === 'POST' && path === '/Invoices/void') {
+    const iv = s.invoices.find((x) => x.id === (body.PeakInvoices || {}).id);
+    if (!iv) { save(s); return json({ resCode: '400', resDesc: 'Bad Json Request : Missing Transaction Code or UUID' }); }
+    iv.status = 'Voided'; iv.isVoid = 1; s.voided = (s.voided || []).concat(iv.code); out = { resCode: '200', resDesc: 'Success' };
   } else if (m === 'POST' && path === '/Invoices/edit') {
     const b = body.PeakInvoices; const iv = s.invoices.find((x) => x.code === b.code);
     if (!iv) { save(s); return json({ PeakInvoices: { resCode: '404', resDesc: 'no invoice' } }); }

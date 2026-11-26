@@ -41,6 +41,13 @@ table.sum tr.tot td{font-weight:500;color:var(--head)}
 .srcm{display:inline-block;font-size:10.5px;border-radius:999px;padding:0 7px;margin-left:6px;border:1px solid var(--line);color:var(--muted);vertical-align:1px}
 .srcm.full{border-color:var(--ok-line);color:var(--ok-ink);background:var(--ok-bg)}.srcm.mix{border-color:color-mix(in srgb,var(--warn-ink) 35%,transparent);color:var(--warn-ink)}
 table.sum tr.cut td{text-align:center;font-size:11.5px;color:var(--muted);background:var(--panel-2);border-top:2px dashed var(--line2);padding:4px 8px}
+.act{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;align-items:center}
+.act button,.act a.b{font:inherit;font-size:12px;border:1px solid var(--line);background:var(--panel);color:var(--head);border-radius:999px;padding:3px 10px;cursor:pointer;min-height:28px;text-decoration:none;white-space:nowrap}
+.act button:hover,.act a.b:hover{border-color:var(--primary);color:var(--primary)}.act button.dg{color:var(--bad-ink);border-color:color-mix(in srgb,var(--bad-ink) 40%,transparent)}
+.act button.go{background:var(--primary);border-color:var(--primary);color:#fff}.act button[disabled]{opacity:.5;cursor:default}
+.act input{font:inherit;font-size:12.5px;padding:4px 8px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);color:inherit;min-height:28px;width:220px;max-width:100%}
+.act .w{flex-basis:100%;text-align:right;font-size:11.5px;color:var(--bad-ink);white-space:normal}
+table.sum td.ac{white-space:normal;min-width:230px}
 details.ck{border-top:1px solid var(--line);padding:8px 0}details.ck summary{cursor:pointer;font-size:13.5px;color:var(--head)}details.ck summary b{color:var(--warn-ink);font-weight:600;margin-left:6px}
 .pctl select{max-width:100%}
 details.how{font-size:12.5px;color:var(--muted);margin-top:8px}details.how summary{cursor:pointer}details.how ol{margin:6px 0 0 18px;line-height:1.8}
@@ -69,7 +76,7 @@ details.how{font-size:12.5px;color:var(--muted);margin-top:8px}details.how summa
   </div>
   <div class="card" id="pipe-none" hidden><div class="empty">ยังไม่มีข้อมูล QT</div></div>
   <div class="card" id="ck-card" hidden><h2>ตรวจข้อมูล: รายงานของ PEAK เทียบกับหน้าตามหนี้</h2>
-    <p class="hint" id="ck-hint"></p><div id="ck-body"></div>
+    <p class="hint" id="ck-hint"></p><div id="ck-msg" role="status" aria-live="polite"></div><div id="ck-body"></div>
   </div>
   <div class="card" id="up-card" hidden><h2>ข้อมูลจาก PEAK</h2>
     <p class="hint">ตาราง QT ใช้รายงานใบเสนอราคาและรายงานใบแจ้งหนี้ที่ export จาก PEAK เป็น Excel อัปโหลดใหม่ได้ทุกเมื่อเพื่อให้ตัวเลขเป็นปัจจุบัน ไม่ใช้โควตา PEAK API</p>
@@ -165,8 +172,8 @@ function renderPipe() {
   const ls = (PIPE_L === 'dup' ? dups : xs).filter((q) => (PIPE_L === 'dup' ? true : PIPE_L === 'stale' ? q.stale : PIPE_L === 'open' ? q.st !== 'lost' && q.inv < q.total - 1 : PIPE_L === 'wait' ? q.inv - q.paid - (q.unk || 0) > 1 : PIPE_L === 'lost' ? q.st === 'lost' : true))
     .sort((a, b) => (PIPE_L === 'wait' ? (b.inv - b.paid) - (a.inv - a.paid) : PIPE_L === 'open' ? (b.total - b.inv) - (a.total - a.inv) : b.total - a.total));
   document.querySelector('#pipe-list summary').textContent = `รายการ QT (${fmt0(xs.length)} ใบ)`;
-  $('pipe-rows').innerHTML = ls.length ? `<table class="sum"><tr><th>QT</th><th style="text-align:left">ลูกค้า</th><th style="text-align:left">เซล</th><th>วันที่ออก</th><th>ยอด QT</th><th>ออก INV แล้ว</th><th>เงินเข้าแล้ว</th><th style="text-align:left">สถานะ</th></tr>
-    ${ls.slice(0, 100).map((q) => { const [lab, c] = st(q); return `<tr><td class="mono">${q.link ? `<a class="doc" href="${esc(q.link)}" target="_blank" rel="noopener">${esc(q.qtNo)}</a>` : esc(q.qtNo)}</td><td style="text-align:left;white-space:normal">${esc(q.company)}</td><td style="text-align:left">${esc(shortName(q.sales))}</td><td>${esc(q.date)}</td><td>${fmt0(q.total)}</td><td>${fmt0(q.inv)}</td><td>${q.unk ? '<span class="small">ไม่ทราบ</span>' : fmt0(q.paid)}</td><td style="text-align:left"><span class="st ${c}">${lab}</span></td></tr>`; }).join('')}</table>${ls.length > 100 ? `<p class="small">แสดง 100 ใบที่ยอดสูงสุด จาก ${fmt0(ls.length)} ใบ เลือกเดือนหรือกลุ่มลูกค้าเพื่อดูให้แคบลง</p>` : ''}` : '<p class="small">ไม่มี QT ในเงื่อนไขนี้</p>';
+  $('pipe-rows').innerHTML = ls.length ? `<table class="sum"><tr><th>QT</th><th style="text-align:left">ลูกค้า</th><th style="text-align:left">เซล</th><th>วันที่ออก</th><th>ยอด QT</th><th>ออก INV แล้ว</th><th>เงินเข้าแล้ว</th><th style="text-align:left">สถานะ</th>${D.canUpload ? '<th></th>' : ''}</tr>
+    ${ls.slice(0, 100).map((q) => { const [lab, c] = st(q); return `<tr data-no="${esc(q.qtNo)}"><td class="mono">${q.link ? `<a class="doc" href="${esc(q.link)}" target="_blank" rel="noopener">${esc(q.qtNo)}</a>` : esc(q.qtNo)}</td><td style="text-align:left;white-space:normal">${esc(q.company)}</td><td style="text-align:left">${esc(shortName(q.sales))}</td><td>${esc(q.date)}</td><td>${fmt0(q.total)}</td><td>${fmt0(q.inv)}</td><td>${q.unk ? '<span class="small">ไม่ทราบ</span>' : fmt0(q.paid)}</td><td style="text-align:left"><span class="st ${c}">${lab}</span>${q.rv ? ' <span class="small">บัญชียืนยันแล้ว</span>' : ''}</td>${D.canUpload ? `<td class="ac">${q.stale ? `<div class="act">${B('qopen', 'ยังเปิดอยู่')}${B('qlost', 'ยืนยันว่าไม่ได้ปิด')}</div>` : q.rv ? `<div class="act">${B('qclear', 'ล้างผลตรวจ')}</div>` : ''}</td>` : ''}</tr>`; }).join('')}</table>${ls.length > 100 ? `<p class="small">แสดง 100 ใบที่ยอดสูงสุด จาก ${fmt0(ls.length)} ใบ เลือกเดือนหรือกลุ่มลูกค้าเพื่อดูให้แคบลง</p>` : ''}` : '<p class="small">ไม่มี QT ในเงื่อนไขนี้</p>';
 }
 $('pipe-m').onchange = (e) => { PIPE_M = e.target.value; renderPipe(); };
 $('pipe-g').onchange = (e) => { PIPE_G = e.target.value; renderPipe(); };
@@ -270,19 +277,74 @@ function renderChecks() {
   const cell = (x) => (x ? `${fmt0(x.preVat)}` : '–');
   const all = G.reduce((t, [k]) => t + c[k].length, 0);
   $('ck-body').innerHTML = all ? G.filter(([k]) => c[k].length).map(([k, title, tip]) => `<details class="ck"${k === 'peakOnly' || k === 'paidInPeak' ? ' open' : ''}><summary>${esc(title)} <b>${c[k].length} ใบ</b></summary><p class="small">${esc(tip)}</p>
-    <div class="wrap"><table class="sum"><tr><th>INV</th><th style="text-align:left">ลูกค้า</th><th>วันที่ออก</th><th>สถานะใน PEAK</th><th>ยอดใน PEAK</th><th>สถานะในหน้าตามหนี้</th><th>ยอดในหน้าตามหนี้</th></tr>
-    ${c[k].slice(0, 60).map((r) => `<tr><td class="mono">${esc(r.ivNo)}</td><td style="text-align:left;white-space:normal">${esc(r.company)}</td><td>${esc(r.date)}</td><td>${r.peak ? esc(r.peak.status) : '–'}</td><td>${cell(r.peak)}</td><td>${r.book ? esc(BOOK_ST[r.book.state] || r.book.state) + (r.cancelledInBook ? '' : r.book.paidDate ? ' ' + esc(r.book.paidDate) : '') : 'ไม่มี'}</td><td>${cell(r.book)}</td></tr>`).join('')}</table></div>${c[k].length > 60 ? `<p class="small">แสดง 60 จาก ${c[k].length} ใบ</p>` : ''}</details>`).join('')
+    <div class="wrap"><table class="sum"><tr><th>INV</th><th style="text-align:left">ลูกค้า</th><th>วันที่ออก</th><th>สถานะใน PEAK</th><th>ยอดใน PEAK</th><th>สถานะในหน้าตามหนี้</th><th>ยอดในหน้าตามหนี้</th><th>แก้ไข</th></tr>
+    ${c[k].slice(0, 60).map((r) => `<tr data-no="${esc(r.ivNo)}"><td class="mono">${esc(r.ivNo)}</td><td style="text-align:left;white-space:normal">${esc(r.company)}</td><td>${esc(r.date)}</td><td>${r.peak ? esc(r.peak.status) : '–'}</td><td>${cell(r.peak)}</td><td>${r.book ? esc(BOOK_ST[r.book.state] || r.book.state) + (r.cancelledInBook ? '' : r.book.paidDate ? ' ' + esc(r.book.paidDate) : '') : 'ไม่มี'}</td><td>${cell(r.book)}</td><td class="ac">${acts(k, r)}</td></tr>`).join('')}</table></div>${c[k].length > 60 ? `<p class="small">แสดง 60 จาก ${c[k].length} ใบ</p>` : ''}</details>`).join('')
     : '<p class="small">ไม่พบจุดที่ไม่ตรงกันระหว่าง PEAK กับหน้าตามหนี้</p>';
   const extra = [];
   if ((c.qtAmount || []).length) extra.push(`<details class="ck"><summary>QT ที่ PEAK ว่าออก INV ครบ แต่ยอด INV รวมไม่เท่ายอด QT <b>${c.qtAmount.length} ใบ</b></summary><p class="small">ตรวจว่า INV ออกเกิน ออกขาด หรืออ้างอิง QT ผิดใบ</p>
     <div class="wrap"><table class="sum"><tr><th>QT</th><th style="text-align:left">ลูกค้า</th><th>วันที่ออก</th><th>ยอด QT</th><th>ยอด INV รวม</th><th>ส่วนต่าง</th><th style="text-align:left">INV</th></tr>
     ${c.qtAmount.slice(0, 60).map((r) => `<tr><td class="mono">${esc(r.qtNo)}</td><td style="text-align:left;white-space:normal">${esc(r.company)}</td><td>${esc(r.date)}</td><td>${fmt0(r.total)}</td><td>${fmt0(r.invoiced)}</td><td>${fmt0(r.invoiced - r.total)}</td><td class="mono" style="text-align:left;white-space:normal">${esc(r.ivNos)}</td></tr>`).join('')}</table></div></details>`);
   if ((c.noQt || []).length) extra.push(`<details class="ck"><summary>INV ที่ไม่มีเลข QT อ้างอิง <b>${c.noQt.length} ใบ</b></summary><p class="small">ออกโดยไม่มี QT จริง หรือลืมใส่เลข QT ในช่องอ้างอิงของ PEAK · ใบกลุ่มนี้ไม่ถูกนับในตาราง QT</p>
-    <div class="wrap"><table class="sum"><tr><th>INV</th><th style="text-align:left">ลูกค้า</th><th>วันที่ออก</th><th>สถานะใน PEAK</th><th>ยอดก่อน VAT</th></tr>
-    ${c.noQt.slice(0, 60).map((r) => `<tr><td class="mono">${esc(r.ivNo)}</td><td style="text-align:left;white-space:normal">${esc(r.company)}</td><td>${esc(r.date)}</td><td>${r.peak ? esc(r.peak.status) : '–'}</td><td>${cell(r.peak)}</td></tr>`).join('')}</table></div></details>`);
+    <div class="wrap"><table class="sum"><tr><th>INV</th><th style="text-align:left">ลูกค้า</th><th>วันที่ออก</th><th>สถานะใน PEAK</th><th>ยอดก่อน VAT</th><th>แก้ไข</th></tr>
+    ${c.noQt.slice(0, 60).map((r) => `<tr data-no="${esc(r.ivNo)}"><td class="mono">${esc(r.ivNo)}</td><td style="text-align:left;white-space:normal">${esc(r.company)}</td><td>${esc(r.date)}</td><td>${r.peak ? esc(r.peak.status) : '–'}</td><td>${cell(r.peak)}</td><td class="ac">${acts('noQt', r)}</td></tr>`).join('')}</table></div></details>`);
+  if ((c.reviewed || []).length) extra.push(`<details class="ck"><summary>ตรวจแล้ว ไม่ต้องแก้ <b style="color:var(--ok-ink)">${c.reviewed.length} ใบ</b></summary><p class="small">ใบที่ฝ่ายบัญชีตรวจแล้วและบันทึกว่าไม่ต้องแก้ จะไม่ขึ้นในรายการข้างบนอีก แม้อัปโหลดรายงานใหม่</p>
+    <div class="wrap"><table class="sum"><tr><th>INV</th><th style="text-align:left">ลูกค้า</th><th>วันที่ออก</th><th style="text-align:left">ผู้ตรวจ · เวลา · หมายเหตุ</th><th></th></tr>
+    ${c.reviewed.slice(0, 100).map((r) => `<tr data-no="${esc(r.ivNo)}"><td class="mono">${esc(r.ivNo)}</td><td style="text-align:left;white-space:normal">${esc(r.company)}</td><td>${esc(r.date)}</td><td style="text-align:left;white-space:normal">${esc(r.note)}</td><td class="ac"><div class="act"><button type="button" data-act="undismiss">นำกลับมาตรวจ</button></div></td></tr>`).join('')}</table></div></details>`);
   $('ck-body').insertAdjacentHTML('beforeend', extra.join(''));
 }
 const BOOK_ST = { Paid: 'รับเงินแล้ว', Outstanding: 'ค้างรับ', Overdue: 'เกินกำหนด', Closed: 'ยกเลิก' };
+// What accounting can do about one line of the check. Anything that writes asks once more in the row itself.
+const B = (act, label, cls = '') => `<button type="button" data-act="${act}"${cls ? ` class="${cls}"` : ''}>${label}</button>`;
+function acts(k, r) {
+  const a = k === 'peakOnly' ? [r.cancelledInBook ? '' : B('import', 'นำเข้าหน้าตามหนี้'), B('void', 'Void ใน PEAK…', 'dg'), B('dismiss', 'ตรวจแล้ว ไม่ต้องแก้…')]
+    : k === 'bookOnly' ? [B('cancel', 'ยกเลิกในหน้าตามหนี้…')]
+    : k === 'paidInPeak' ? [B('pull', 'ดึงการรับเงินจาก PEAK')]
+    : k === 'paidInBook' ? ['<a class="b" href="/ar">ออกใบเสร็จที่หน้าตามหนี้ →</a>', B('dismiss', 'ตรวจแล้ว ไม่ต้องแก้…')]
+    : k === 'amount' ? [B('pull', 'อัปเดตจาก PEAK'), B('dismiss', 'ตรวจแล้ว ไม่ต้องแก้…')]
+    : k === 'noQt' ? [B('link', 'ผูกกับ QT…'), B('noqt', 'ไม่มี QT')]
+    : ['<span class="small">แก้เลขในชีต Invoices</span>'];
+  return `<div class="act">${a.filter(Boolean).join('')}</div>`;
+}
+// act → what it sends, and what it asks for first (ask: placeholder of the one input; need: the input is required).
+const ACTS = {
+  import: { send: (no) => ({ kind: 'import_book', ivNo: no }), done: 'นำเข้าหน้าตามหนี้แล้ว' },
+  pull: { refresh: true, done: 'อัปเดตจาก PEAK แล้ว' },
+  noqt: { send: (no) => ({ kind: 'link_qt', ivNo: no, qtNo: 'NONE' }), done: 'บันทึกว่าไม่มี QT แล้ว' },
+  undismiss: { send: (no) => ({ kind: 'undismiss', ivNo: no }), done: 'นำกลับมาในรายการตรวจแล้ว' },
+  void: { ask: 'เหตุผลที่ void *', need: true, go: 'ยืนยัน Void ใน PEAK', warn: 'Void ใน PEAK ย้อนกลับไม่ได้ ระบบจะตรวจก่อนว่าใบนี้ยังอนุมัติอยู่และไม่มีการรับชำระ', send: (no, v) => ({ kind: 'void_peak', ivNo: no, note: v }), done: 'Void ใน PEAK แล้ว' },
+  cancel: { ask: 'หมายเหตุ (ถ้ามี)', go: 'ยืนยันยกเลิกในหน้าตามหนี้', warn: 'ระบบจะตรวจกับ PEAK ก่อนว่าใบนี้ไม่ใช่ใบที่อนุมัติอยู่แล้ว ใบจะออกจากยอดค้างรับ', send: (no, v) => ({ kind: 'cancel_book', ivNo: no, note: v }), done: 'ยกเลิกในหน้าตามหนี้แล้ว' },
+  dismiss: { ask: 'ตรวจแล้วเป็นอย่างไร *', need: true, go: 'บันทึก', send: (no, v) => ({ kind: 'dismiss', ivNo: no, note: v }), done: 'บันทึกว่าตรวจแล้ว' },
+  link: { ask: 'เลข QT เช่น QO-20260300044 *', need: true, go: 'ผูกกับ QT นี้', send: (no, v) => ({ kind: 'link_qt', ivNo: no, qtNo: v }), done: 'ผูกกับ QT แล้ว' },
+  qopen: { qt: true, send: (no) => ({ kind: 'qt_review', qtNo: no, as: 'open' }), done: 'บันทึกว่ายังเปิดอยู่' },
+  qlost: { qt: true, send: (no) => ({ kind: 'qt_review', qtNo: no, as: 'lost' }), done: 'บันทึกว่าไม่ได้ปิด' },
+  qclear: { qt: true, send: (no) => ({ kind: 'qt_review', qtNo: no, as: '' }), done: 'ล้างผลการตรวจแล้ว' },
+};
+async function post(method, body) {
+  const r = await fetch('/api/invoice-requests', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const d = await r.json().catch(() => null);
+  if (!r.ok || !d || !d.ok) throw new Error((d && d.error) || `HTTP ${r.status}`);
+  return d;
+}
+async function runAct(act, no, value, cell) {
+  const A = ACTS[act], say = (cls, t) => { $('ck-msg').innerHTML = `<div class="msg ${cls}">${esc(t)}</div>`; };
+  cell.querySelectorAll('button,input').forEach((x) => { x.disabled = true; });
+  try {
+    const d = A.refresh ? await post('PATCH', { action: 'ar_refresh', ivNo: no }) : await post('POST', { action: 'sales_fix', ...A.send(no, value) });
+    say('ok', `${no}: ${A.done}${d.changes && d.changes.length ? ' · ' + d.changes.join(', ') : ''}`);
+    await load(true);
+  } catch (e) { say('err', `${no}: ${e.message}`); cell.querySelectorAll('button,input').forEach((x) => { x.disabled = false; }); }
+}
+document.addEventListener('click', (ev) => {
+  const b = ev.target.closest('.act button[data-act]'); if (!b) return;
+  const tr = b.closest('tr'), no = tr.dataset.no, cell = b.closest('td'), act = b.dataset.act, A = ACTS[act];
+  if (act === 'back') { cell.innerHTML = cell.dataset.was; return; }
+  if (act === 'go') { const A2 = ACTS[cell.dataset.act], v = (cell.querySelector('input') || {}).value || ''; if (A2.need && !v.trim()) { cell.querySelector('input').focus(); return; } runAct(cell.dataset.act, no, v.trim(), cell); return; }
+  if (!A.ask) { runAct(act, no, '', cell); return; }
+  cell.dataset.was = cell.innerHTML; cell.dataset.act = act;
+  cell.innerHTML = `<div class="act"><input type="text" maxlength="300" placeholder="${esc(A.ask)}" aria-label="${esc(A.ask)}"><button type="button" data-act="go" class="${act === 'void' ? 'dg' : 'go'}">${esc(A.go)}</button><button type="button" data-act="back">ยกเลิก</button>${A.warn ? `<span class="w">${esc(A.warn)}</span>` : ''}</div>`;
+  cell.querySelector('input').focus();
+});
+document.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && ev.target.matches('.act input')) { ev.preventDefault(); ev.target.closest('td').querySelector('button[data-act="go"]').click(); } });
 function renderUp() {
   const r = D.reports || {}, one = (x, t) => (x ? `<b>${t}:</b> ${fmt0(x.count)} ใบ · เอกสารวันที่ ${esc(x.from)} ถึง ${esc(x.to)} · อัปโหลดล่าสุด ${esc(x.at)}` : `<b>${t}:</b> ยังไม่ได้อัปโหลด`);
   $('up-card').hidden = !(D.canUpload || r.qt || r.inv);

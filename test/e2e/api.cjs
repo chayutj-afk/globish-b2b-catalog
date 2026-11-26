@@ -920,5 +920,52 @@ const seen = (r) => `${r.status}|${r.updatedAt || ''}`;
     ok(appQ.length > 0 && plQ && plQ.app === true && !X['QO-20260400003'].app && /^\d\d\/\d\d\/\d{4}$/.test(j.appSince || ''), `QTs asked for through the app are marked, the rest are not; the app started ${j.appSince}`);
     [s, j] = await call(LEAD, 'GET', '/api/invoice-requests?view=pipeline'); ok(s === 200 && j.checks === undefined && j.canUpload === false, 'the checks are for accounting and admins only');
   }
+
+  console.log('── 38. data-check card: accounting settles PEAK vs AR book, including a void in PEAK');
+  { const fix = (who, b) => call(who, 'POST', '/api/invoice-requests', { action: 'sales_fix', ...b });
+    const view = async () => (await call(ACCT, 'GET', '/api/invoice-requests?view=pipeline'))[1];
+    const has = (d, k, no) => ((d.checks || {})[k] || []).some((r) => (r.ivNo || r.qtNo) === no);
+    const I2 = (no, qt, status, pre) => ({ no, issue: '10/05/2026', until: '09/06/2026', ref: qt, sysRef: qt, status, company: 'บริษัท ตรวจข้อมูล จำกัด', taxId: '0105540006666', branch: '00000', product: 'Package01', novat: '0', vat0: '0', vat7: String(pre), total: String(pre * 1.07) });
+    [s, j] = await call(ACCT, 'POST', '/api/invoice-requests', { action: 'peak_report', kind: 'inv', rows: [I2('IV-20260500091', '', 'เกินเวลารับชำระ', 9100), I2('IV-20260500092', '', 'เกินเวลารับชำระ', 9200), I2('IV-20260500093', '', 'รอชำระ', 9300), I2('IV-20260500094', '', 'รอชำระ', 9400)] });
+    ok(s === 200, 'four more INVs in the report ' + (j.error || ''));
+    setPeak((p) => { for (const n of [91, 92, 93, 94]) p.invoices.push({ id: 'ck' + n, code: 'IV-202605000' + n, status: 'Approve', isVoid: 0, contactCode: 'C1', issuedDate: '20260510', dueDate: '20260609', preTaxAmount: 9000 + n * 100 - 9000, vatAmount: 0, netAmount: 9000, remainAmount: 9000, paymentAmount: n === 93 ? 500 : 0 }); });
+    let d = await view(); ok(has(d, 'peakOnly', 'IV-20260500091') && has(d, 'noQt', 'IV-20260500091'), 'they show as "in PEAK, not in the AR book" and "no QT"');
+    // import into the AR book
+    [s, j] = await fix(BEE, { kind: 'import_book', ivNo: 'IV-20260500091' }); ok(s === 403, 'sales cannot use the card');
+    [s, j] = await fix(ACCT, { kind: 'import_book', ivNo: 'IV-20260500091' }); ok(s === 200, 'a real debt is added to the AR book ' + (j.error || ''));
+    let a = arRow('IV-20260500091'); ok(a && a.docStatus === 'Active' && Number(a.preVat) === 9100 && a.peakIvId === 'ck91' && a.source === 'peak-report' && Number(a.creditTermDays) === 30, `AR row made from the report (${a && [a.docStatus, a.preVat, a.peakIvId, a.creditTermDays]})`);
+    d = await view(); ok(!has(d, 'peakOnly', 'IV-20260500091'), 'and it leaves the list');
+    [s, j] = await fix(ACCT, { kind: 'import_book', ivNo: 'IV-20260500091' }); ok(s === 409, 'not twice');
+    // void in PEAK
+    [s, j] = await fix(ACCT, { kind: 'void_peak', ivNo: 'IV-20260500092' }); ok(s === 400, 'a void needs a reason');
+    [s, j] = await fix(ACCT, { kind: 'void_peak', ivNo: 'IV-20260500091', note: 'x' }); ok(s === 409 && /หน้าติดตามหนี้/.test(j.error), 'an INV that is live in the AR book is not voided from here');
+    [s, j] = await fix(ACCT, { kind: 'void_peak', ivNo: 'IV-20260500093', note: 'ออกซ้ำ' }); ok(s === 409 && /รับชำระ/.test(j.error), 'an INV with a payment in PEAK is not voided: ' + j.error);
+    [s, j] = await fix(ACCT, { kind: 'void_peak', ivNo: 'IV-20260500092', note: 'ออกซ้ำกับใบอื่น' }); ok(s === 200 && j.voided === 'IV-20260500092', 'voided in PEAK ' + (j.error || ''));
+    ok((peak().voided || []).includes('IV-20260500092') && peak().invoices.find((x) => x.id === 'ck92').status === 'Voided', 'PEAK got the void call for that document');
+    ok(db().SyncLog.some((l) => l.event === 'peak_void' && l.reference === 'IV-20260500092' && /ออกซ้ำกับใบอื่น/.test(l.detail) && /acct@/.test(l.detail)), 'who voided and why is in the log');
+    d = await view(); ok(!has(d, 'peakOnly', 'IV-20260500092') && !db().PeakInvoices.some((r) => r.ivNo === 'IV-20260500092'), 'the voided INV is off the stored report');
+    [s, j] = await fix(ACCT, { kind: 'void_peak', ivNo: 'IV-20260500092', note: 'อีกครั้ง' }); ok(s === 404, 'not twice');
+    // looked at, nothing to change — survives a new upload
+    [s, j] = await fix(ACCT, { kind: 'dismiss', ivNo: 'IV-20260500094' }); ok(s === 400, 'a note is needed');
+    [s, j] = await fix(ACCT, { kind: 'dismiss', ivNo: 'IV-20260500094', note: 'รอ PO ลูกค้า' }); ok(s === 200, 'marked as checked');
+    [s, j] = await call(ACCT, 'POST', '/api/invoice-requests', { action: 'peak_report', kind: 'inv', rows: [I2('IV-20260500094', '', 'รอชำระ', 9400)] });
+    d = await view(); ok(!has(d, 'peakOnly', 'IV-20260500094') && has(d, 'reviewed', 'IV-20260500094'), 'it stays off the list after a new upload, and is listed as checked');
+    [s, j] = await fix(ACCT, { kind: 'undismiss', ivNo: 'IV-20260500094' }); d = await view(); ok(has(d, 'peakOnly', 'IV-20260500094'), 'and can be brought back');
+    // QT link
+    [s, j] = await fix(ACCT, { kind: 'link_qt', ivNo: 'IV-20260500094', qtNo: 'QO-29990100001' }); ok(s === 404, 'an unknown QT is refused');
+    [s, j] = await fix(ACCT, { kind: 'link_qt', ivNo: 'IV-20260500094', qtNo: 'qo-20260300004' }); ok(s === 200, 'linked to a QT ' + (j.error || ''));
+    d = await view(); const q4 = (d.pipeline || []).find((q) => q.qtNo === 'QO-20260300004'); ok(!has(d, 'noQt', 'IV-20260500094') && q4 && q4.inv === 8000 && q4.st === 'won', `the QT now counts the INV (capped at the QT total): ${q4 && [q4.inv, q4.st]}`);
+    [s, j] = await fix(ACCT, { kind: 'link_qt', ivNo: 'IV-20260500093', qtNo: 'NONE' }); d = await view(); ok(s === 200 && !has(d, 'noQt', 'IV-20260500093'), '"no QT" takes the INV off that list');
+    // verdict on a QT accepted long ago
+    [s, j] = await fix(ACCT, { kind: 'qt_review', qtNo: 'QO-20200100001', as: 'open' }); d = await view(); let qv = (d.pipeline || []).find((q) => q.qtNo === 'QO-20200100001');
+    ok(s === 200 && qv.st === 'open' && !qv.stale && qv.rv === 'open', 'accounting says it is still open → counted as open');
+    [s, j] = await fix(ACCT, { kind: 'qt_review', qtNo: 'QO-20200100001', as: 'lost' }); d = await view(); qv = (d.pipeline || []).find((q) => q.qtNo === 'QO-20200100001');
+    ok(qv.st === 'lost' && !qv.stale && qv.rv === 'lost', 'or confirms it is not closed');
+    // cancel in the AR book what PEAK no longer has
+    setPeak((p) => { p.invoices.find((x) => x.id === 'ck91').status = 'Draft'; });
+    [s, j] = await fix(ACCT, { kind: 'cancel_book', ivNo: 'IV-20260500091', note: 'void ใน PEAK แล้ว' }); ok(s === 200 && arRow('IV-20260500091').docStatus === 'Cancelled', 'no longer approved in PEAK → cancelled in the AR book ' + (j.error || ''));
+    [s, j] = await fix(ACCT, { kind: 'import_book', ivNo: 'IV-20260500093' }); ok(s === 200, 'another INV added to the AR book ' + (j.error || ''));
+    [s, j] = await fix(ACCT, { kind: 'cancel_book', ivNo: 'IV-20260500093' }); ok(s === 409 && /PEAK/.test(j.error), 'an INV still approved in PEAK is not cancelled in the AR book: ' + j.error);
+  }
   done();
 })().catch((e) => { console.error('CRASH', e); ok(false, 'CRASH: the run stopped early: ' + e.message); done(); process.exitCode = 1; });

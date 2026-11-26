@@ -739,6 +739,103 @@ async function peakReport(req, res, user) {
     linked: kind === 'inv' ? rows.filter((r) => r.qtNo).length : undefined });
 }
 
+// The data-check card on the sales page: accounting settles one disagreement between PEAK and the AR book.
+//   import_book  INV is live in PEAK, missing here → add it to the AR book (then filled in from PEAK)
+//   void_peak    INV is live in PEAK and should not exist → void it in PEAK (cannot be undone; the only place the app voids)
+//   cancel_book  INV is no longer an approved document in PEAK → cancel it in the AR book
+//   link_qt      INV has no QT number → say which QT it belongs to, or that it has none ('NONE'); kept in the app only
+//   qt_review    QT accepted long ago without an INV → still open / not closed
+//   dismiss      looked at, nothing to change (with a note); undismiss brings it back
+// Paid / amount differences use the existing "อัปเดตจาก PEAK" (ar_refresh).
+async function salesFix(req, res, user) {
+  checkOrigin(req);
+  if (!(isOp(user) || can(user, 'users'))) throw bad('เฉพาะฝ่ายบัญชีหรือผู้ดูแลระบบ', 403);
+  const peak = require('../lib/peak'), ps = require('../lib/peaksync');
+  const b = req.body || {}, kind = text(b.kind, 20), note = text(b.note, 300), at = hub.sheetDateTime(), who = user.name || user.email;
+  const upNo = (v) => String(v || '').trim().toUpperCase();
+  const live = () => { if (peak.mode() === 'off') throw bad('ยังไม่ได้เปิดการเชื่อมต่อ PEAK API', 503); };
+  const done = async (ref, detail, extra = {}) => { await hub.log('catalog', 'sales_fix', ref, `${user.email} · ${kind} · ${detail}`); res.status(200).json({ ok: true, kind, ...extra }); };
+
+  if (kind === 'qt_review') {
+    const qtNo = upNo(b.qtNo), as = b.as === 'open' || b.as === 'lost' ? b.as : '';
+    const q = (await hub.readTable('PeakQuotes')).find((x) => upNo(x.qtNo) === qtNo);
+    if (!q) throw bad(`ไม่พบ ${qtNo} ในรายงานใบเสนอราคา`, 404);
+    await hub.updateRow('PeakQuotes', q._row, { review: as ? `${as}|${who}|${at}` : '' });
+    return done(qtNo, as || 'cleared');
+  }
+  const ivNo = upNo(b.ivNo);
+  if (!/^[A-Z]{1,4}-?\d{6,}$/.test(ivNo)) throw bad('เลข INV ไม่ถูกต้อง');
+  const [pi, invs] = await Promise.all([hub.readTable('PeakInvoices'), hub.readTable('Invoices')]);
+  const p = pi.find((x) => upNo(x.ivNo) === ivNo), a = invs.find((x) => upNo(x.ivNo) === ivNo);
+  const closed = (x) => ['Cancelled', 'Replaced'].includes(x.docStatus);
+
+  if (kind === 'cancel_book') {
+    if (!a) throw bad(`ไม่พบ ${ivNo} ในหน้าติดตามหนี้`, 404);
+    if (closed(a)) throw bad(`${ivNo} ถูกยกเลิกในหน้าติดตามหนี้ไปแล้ว`, 409);
+    if (a.paidDate || a.rtNo || ar.num(a.paidAmount) > 0) throw bad(`${ivNo} มีการรับเงินหรือใบเสร็จแล้ว ยกเลิกจากตรงนี้ไม่ได้`, 409);
+    live();
+    const iv = await (a.peakIvId ? peak.getInvoice(a.peakIvId) : peak.findInvoiceByCode(ivNo)).catch(() => null);
+    if (ps.isApproved(iv)) throw bad(`${ivNo} ยังเป็นใบที่อนุมัติอยู่ใน PEAK จึงยกเลิกในหน้าติดตามหนี้ไม่ได้ (ถ้ารายงานที่อัปโหลดเก่า ให้ export ใหม่)`, 409);
+    await hub.updateRow('Invoices', a._row, { docStatus: 'Cancelled', note: [a.note, `ยกเลิกจากหน้าตรวจข้อมูล: ไม่ใช่ใบที่อนุมัติใน PEAK แล้ว (${at}) — ${who}${note ? ' · ' + note : ''}`].filter(Boolean).join(' · ').slice(0, 500) });
+    const r = a.ivRequestId ? (await hub.readTable('InvoiceRequests')).find((x) => x.ivRequestId === a.ivRequestId) : null;
+    if (r && !['rejected', 'iv_void'].includes(r.status)) await hub.updateRow('InvoiceRequests', r._row, { status: 'iv_void', accountNote: `INV ถูก void ใน PEAK (ตรวจจากหน้าตรวจข้อมูล) — ${who}`, updatedAt: at });
+    return done(ivNo, 'AR book → Cancelled');
+  }
+  if (!p) throw bad(`ไม่พบ ${ivNo} ในรายงานใบแจ้งหนี้ที่อัปโหลด`, 404);
+
+  if (kind === 'dismiss' || kind === 'undismiss') {
+    if (kind === 'dismiss' && !note) throw bad('ใส่หมายเหตุว่าตรวจแล้วเป็นอย่างไร');
+    await hub.updateRow('PeakInvoices', p._row, { review: kind === 'dismiss' ? `ok|${who}|${at}|${note}` : '' });
+    return done(ivNo, note || 'back on the list');
+  }
+  if (kind === 'link_qt') {
+    const qt = upNo(b.qtNo);
+    if (qt !== 'NONE') {
+      if (!/^QO-?\d{6,}$/.test(qt)) throw bad('ใส่เลข QT เช่น QO-20260300044');
+      const [pq, reqs] = await Promise.all([hub.readTable('PeakQuotes'), hub.readTable('Requests')]);
+      if (!pq.some((x) => upNo(x.qtNo) === qt) && !reqs.some((x) => upNo(x.peakQtNo) === qt)) throw bad(`ไม่พบ ${qt} ในรายงานใบเสนอราคาหรือในระบบ`, 404);
+    }
+    await hub.updateRow('PeakInvoices', p._row, { qtNo: qt });
+    if (qt !== 'NONE' && a && !a.qtNo) await hub.updateRow('Invoices', a._row, { qtNo: qt });
+    return done(ivNo, qt);
+  }
+  if (kind === 'import_book') {
+    if (a && !closed(a)) throw bad(`${ivNo} อยู่ในหน้าติดตามหนี้อยู่แล้ว`, 409);
+    if (a) throw bad(`${ivNo} ถูกยกเลิกไว้ในหน้าติดตามหนี้ ถ้ายังเป็นหนี้จริง ให้แก้สถานะเอกสารของใบนั้นในหน้าติดตามหนี้`, 409);
+    live();
+    const iv = await peak.findInvoiceByCode(ivNo);
+    if (!ps.isApproved(iv)) throw bad(`${ivNo} ไม่ใช่ใบที่อนุมัติอยู่ใน PEAK แล้ว (อาจถูก void) export รายงานใหม่แล้วอัปโหลดอีกครั้ง`, 409);
+    const sp = require('../lib/salespipe');
+    const issue = ar.parseDate(p.issueDate), due = ar.parseDate(p.dueDate), term = issue !== null && due !== null ? Math.max(0, Math.round((due - issue) / 86400e3)) : 30;
+    // Seller and customer group from the QT's request when the app knows it; otherwise the group is estimated.
+    const req0 = p.qtNo && upNo(p.qtNo) !== 'NONE' ? (await hub.readTable('Requests')).find((x) => upNo(x.peakQtNo) === upNo(p.qtNo)) : null;
+    await hub.appendRows('Invoices', [{ ivNo, issueDate: p.issueDate, segment: (req0 && req0.segment) || sp.guessSeg(p), salesEmail: (req0 && req0.requestedBy) || '', salesName: (req0 && req0.salesName) || '',
+      company: p.company, taxId: p.taxId, qtNo: p.qtNo && upNo(p.qtNo) !== 'NONE' ? upNo(p.qtNo) : '', requestId: (req0 && req0.requestId) || '', preVat: ar.num(p.preVat), creditTermDays: term, whtRate: '0',
+      docStatus: 'Active', commitDate: p.dueDate || p.issueDate, source: 'peak-report', peakIvId: iv.id, peakDocLink: iv.documentLink || '',
+      note: `นำเข้าจากรายงาน PEAK ที่หน้าตรวจข้อมูล (${at}) — ${who}${note ? ' · ' + note : ''}` }]);
+    // Payment, withholding tax, seller and customer group as PEAK has them.
+    let changes = [];
+    try { changes = (await refreshFromPeak(ivNo)).changes || []; } catch (e) { changes = ['อ่านรายละเอียดจาก PEAK ไม่ได้ กด "อัปเดตจาก PEAK" ที่หน้าติดตามหนี้อีกครั้ง']; }
+    return done(ivNo, `added to the AR book · ${changes.join(', ') || 'no change'}`, { changes });
+  }
+  if (kind === 'void_peak') {
+    if (!note) throw bad('ใส่เหตุผลที่ void');
+    if (a && !closed(a)) throw bad(`${ivNo} ยังใช้งานอยู่ในหน้าติดตามหนี้ ถ้าจะยกเลิก ให้ทำผ่านคำขอแก้ไขของใบนั้น`, 409);
+    live();
+    const iv = await peak.findInvoiceByCode(ivNo);
+    if (!iv || !iv.id) throw bad(`ไม่พบ ${ivNo} ใน PEAK`, 404);
+    if (!ps.isApproved(iv)) throw bad(`${ivNo} ไม่ใช่ใบที่อนุมัติอยู่ใน PEAK แล้ว (อาจถูก void ไปแล้ว)`, 409);
+    if (ar.num(iv.paymentAmount) > 0 || (iv.paidPayments || []).length) throw bad(`${ivNo} มีการรับชำระใน PEAK แล้ว void จากตรงนี้ไม่ได้ ให้จัดการการรับชำระใน PEAK ก่อน`, 409);
+    await peak.voidInvoice(iv.id);
+    // The INV is gone from PEAK's live documents: take it off the stored report so the check stops listing it.
+    await hub.replaceTable('PeakInvoices', pi.filter((x) => x !== p));
+    await Promise.all([hub.log('catalog', 'peak_void', ivNo, `${user.email} · void INV ใน PEAK จากหน้าตรวจข้อมูล · ${note}`),
+      notify.finance(`🗑️ Void INV ${ivNo} ใน PEAK แล้ว (จากหน้าตรวจข้อมูล) · ${notify.co(p.company)} · ยอดก่อน VAT ${money(ar.num(p.preVat))} · โดย ${who}\nเหตุผล: ${notify.why(note)}`)]);
+    return res.status(200).json({ ok: true, kind, voided: ivNo });
+  }
+  throw bad('ไม่รู้จักคำสั่ง');
+}
+
 async function arList(req, res, user) {
   if (!can(user, 'ar_view')) throw bad('ไม่มีสิทธิ์ดูหน้าติดตามหนี้', 403);
   // The home dashboard (?brief=1) may share a read for a few seconds; the work page always reads fresh.
@@ -1802,7 +1899,7 @@ async function inner(req, res) {
   try {
     const user = await requireUser(req);
     const act = String((req.body || {}).action || '');
-    if (req.method === 'POST') return await ({ legacy_import: importLegacy, peak_report: peakReport, receipt: createReceipt, edit: createEdit, pay_notice: createPayNotice }[act] || create)(req, res, user);
+    if (req.method === 'POST') return await ({ legacy_import: importLegacy, peak_report: peakReport, sales_fix: salesFix, receipt: createReceipt, edit: createEdit, pay_notice: createPayNotice }[act] || create)(req, res, user);
     if (req.method === 'PATCH' && act === 'qt_adopt') return await adoptQt(req, res, user);
     if (req.method === 'PATCH' && act === 'rt_find') { checkOrigin(req); return await rtFind(req, res, user); }
     if (req.method === 'PATCH') return await (act.startsWith('ar_') ? arUpdate : act.startsWith('rt_') ? updateReceipt : act.startsWith('edit_') ? updateEdit : act.startsWith('pay_') ? updatePayNotice : update)(req, res, user);
